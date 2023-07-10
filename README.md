@@ -1,4 +1,4 @@
-Repository of the indicators I made for cTrader
+Repository of the indicators I developed for cTrader
 
 Contains all 7 indicators available in [my profile](https://ctrader.com/users/profile/66439):
 
