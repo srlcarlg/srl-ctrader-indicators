@@ -28,18 +28,15 @@ namespace cAlgo
     public class VWAPMidasButtons : Indicator
     {
         public enum ConfigButtonsData
-        {
+        {
             Top_Right,
-            Top_Left,
+            Top_Left,
             Bottom_Right,
-            Bottom_Left,
-        }
+            Bottom_Left,
+        }
 
-        [Parameter("Buttons Color:", DefaultValue = Colors.LightBlue, Group = "==== VWAP Midas Buttons ====")]
-        public Colors RawBtnColor { get; set; }
-
-        [Parameter("Buttons Opacity:" , DefaultValue = 50, MinValue = 5, MaxValue = 100, Group = "==== VWAP Midas Buttons ====")]
-        public int BtnOpacity { get; set; }
+        [Parameter("Buttons Color:", DefaultValue = "98ADD8E6", Group = "==== VWAP Midas Buttons ====")]
+        public Color BtnColor { get; set; }
 
         [Parameter("Buttons Position:", DefaultValue = ConfigButtonsData.Top_Right, Group = "==== VWAP Midas Buttons ====")]
         public ConfigButtonsData ConfigButtonsInput { get; set; }
@@ -80,19 +77,15 @@ namespace cAlgo
         [Output("Bottom VWAP 5", LineColor = "Orange", LineStyle = LineStyle.Solid, PlotType = PlotType.Line)]
         public IndicatorDataSeries BottomVWAP_5 { get; set; }
 
-        private int[] btnIndexes = {0,0,0,0,0};
+        private readonly int[] btnIndexes = { 0, 0, 0, 0, 0 };
         private bool mouseIsActive;
         private bool btnIsActive;
         private Button currentBtn;
+        private readonly IDictionary<int, Button> ButtonsDict = new Dictionary<int, Button>();
         private ChartVerticalLine verticalLine;
-        private IDictionary<int, Button> allButtons = new Dictionary<int, Button>();
 
         protected override void Initialize()
         {
-            var btnOpacity = (int)(2.55 * BtnOpacity);
-            Color rawColor = Color.FromName(RawBtnColor.ToString());
-            var btnColor = Color.FromArgb(btnOpacity, rawColor.R, rawColor.G, rawColor.B);
-
             VerticalAlignment v_align = VerticalAlignment.Bottom;
             HorizontalAlignment h_align = HorizontalAlignment.Left;
             if (ConfigButtonsInput == ConfigButtonsData.Bottom_Right)
@@ -104,6 +97,7 @@ namespace cAlgo
                 v_align = VerticalAlignment.Top;
                 h_align = HorizontalAlignment.Right;
             }
+
             var wrapPanel = new WrapPanel
             {
                 HorizontalAlignment = h_align,
@@ -111,8 +105,8 @@ namespace cAlgo
                 Orientation = BtnOrientation,
             };
 
-            for (int i=1; i < 6; i++)
-                AddButton(wrapPanel, btnColor, i);
+            for (int i = 1; i < 6; i++)
+                AddButton(wrapPanel, BtnColor, i);
 
             Chart.AddControl(wrapPanel);
 
@@ -126,20 +120,20 @@ namespace cAlgo
         }
         private void AddButton(Panel panel, Color btnColor, int btnIndex)
         {
-            Button button = new Button
+            Button button = new()
             {
                 Text = "",
-                Padding = 0,
-                Width = 22,
-                Height = 22,
-                Margin = 2,
+                Padding = 0,
+                Width = 22,
+                Height = 22,
+                Margin = 2,
                 BackgroundColor = btnColor
-            };
+            };
 
-            button.Click += ButtonClick;
-            panel.AddChild(button);
-            allButtons.Add(btnIndex, button);
-        }
+            button.Click += ButtonClick;
+            panel.AddChild(button);
+            ButtonsDict.Add(btnIndex, button);
+        }
         private void ButtonClick(ButtonClickEventArgs obj)
         {
             if (obj.Button.Text != "")
@@ -148,8 +142,8 @@ namespace cAlgo
                 obj.Button.Text = "";
                 return;
             }
-            btnIsActive=true;
-            currentBtn= obj.Button;
+            btnIsActive = true;
+            currentBtn = obj.Button;
             obj.Button.IsEnabled = false;
             Chart.DrawStaticText("txt", "Select a bar for VWAP.", VerticalAlignment.Top, HorizontalAlignment.Center, Color.Orange);
         }
@@ -177,12 +171,12 @@ namespace cAlgo
             mouseIsActive = false;
 
             int btnIndex = 0;
-            for (int i=1; i < 6; i++)
+            for (int i = 1; i < 6; i++)
             {
-                if (allButtons[i] == currentBtn)
+                if (ButtonsDict[i] == currentBtn)
                 {
-                    allButtons[i].Text = $"{i}";
-                    allButtons[i].IsEnabled = true;
+                    ButtonsDict[i].Text = $"{i}";
+                    ButtonsDict[i].IsEnabled = true;
                     btnIndex = i;
                     break;
                 }
@@ -199,7 +193,7 @@ namespace cAlgo
                 sumLow += Bars.LowPrices[j] * Bars.TickVolumes[j];
                 sumVol += Bars.TickVolumes[j];
 
-                switch(btnIndex)
+                switch (btnIndex)
                 {
                     case 1:
                         TopVWAP[j] = sumHigh / sumVol;
@@ -229,17 +223,17 @@ namespace cAlgo
                 }
             }
 
-            for (int i=1; i < 6; i++)
+            for (int i = 1; i < 6; i++)
             {
-                if (i == 1 && btnIndexes[0] == 0 && allButtons[i].Text != "")
+                if (i == 1 && btnIndexes[0] == 0 && ButtonsDict[i].Text != "")
                     btnIndexes[0] = Bars.OpenTimes.GetIndexByTime(verticalLine.Time);
-                if (i == 2 && btnIndexes[1] == 0 && allButtons[i].Text != "")
+                if (i == 2 && btnIndexes[1] == 0 && ButtonsDict[i].Text != "")
                     btnIndexes[1] = Bars.OpenTimes.GetIndexByTime(verticalLine.Time);
-                if (i == 3 && btnIndexes[2] == 0 && allButtons[i].Text != "")
+                if (i == 3 && btnIndexes[2] == 0 && ButtonsDict[i].Text != "")
                     btnIndexes[2] = Bars.OpenTimes.GetIndexByTime(verticalLine.Time);
-                if (i == 4 && btnIndexes[3] == 0 && allButtons[i].Text != "")
+                if (i == 4 && btnIndexes[3] == 0 && ButtonsDict[i].Text != "")
                     btnIndexes[3] = Bars.OpenTimes.GetIndexByTime(verticalLine.Time);
-                if (i == 5 && btnIndexes[4] == 0 && allButtons[i].Text != "")
+                if (i == 5 && btnIndexes[4] == 0 && ButtonsDict[i].Text != "")
                     btnIndexes[4] = Bars.OpenTimes.GetIndexByTime(verticalLine.Time);
             }
 
@@ -256,18 +250,18 @@ namespace cAlgo
 
         private void UpdateVWAP(BarOpenedEventArgs obj)
         {
-            int[] btnActives = {0,0,0,0,0};
-            for (int i=1; i < 6; i++)
+            int[] btnActives = { 0, 0, 0, 0, 0 };
+            for (int i = 1; i < 6; i++)
             {
-                if (i == 1 && allButtons[i].Text != "")
+                if (i == 1 && ButtonsDict[i].Text != "")
                     btnActives[0] = 1;
-                if (i == 2 && allButtons[i].Text != "")
+                if (i == 2 && ButtonsDict[i].Text != "")
                     btnActives[1] = 1;
-                if (i == 3 && allButtons[i].Text != "")
+                if (i == 3 && ButtonsDict[i].Text != "")
                     btnActives[2] = 1;
-                if (i == 4 && allButtons[i].Text != "")
+                if (i == 4 && ButtonsDict[i].Text != "")
                     btnActives[3] = 1;
-                if (i == 5 && allButtons[i].Text != "")
+                if (i == 5 && ButtonsDict[i].Text != "")
                     btnActives[4] = 1;
             }
             if (btnActives[0] == 1)
@@ -365,8 +359,8 @@ namespace cAlgo
         private void ClearVWAP(int btnIndex)
         {
             for (int i = 0; i < Chart.BarsTotal; i++)
-            {
-                 switch(btnIndex)
+            {
+                switch (btnIndex)
                 {
                     case 1:
                         btnIndexes[0] = 0;
@@ -399,7 +393,7 @@ namespace cAlgo
                         BottomVWAP_5[i] = double.NaN;
                         break;
                 }
-            }
+            }
         }
         public override void Calculate(int index)
         {
