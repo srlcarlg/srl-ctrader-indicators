@@ -6,7 +6,7 @@ Contains all 7 indicators available in ~~[my profile](https://ctrader.com/users/
 - [Order Flow Ticks v2.0](https://ctrader.com/products/276)
 - [(Renko) Weis & Wyckoff System v2.0](https://ctrader.com/products/275)**
 - [TPO Profile v2.0](https://ctrader.com/products/274)
-- [VWAP Midas Buttons rev1](https://ctrader.com/products/365)
+- [Anchored VWAP Buttons rev1](https://ctrader.com/products/365)
 - [Renko Wicks](https://ctrader.com/products/362)
 - [VolumeRenkoRange](https://ctrader.com/products/366)
 
