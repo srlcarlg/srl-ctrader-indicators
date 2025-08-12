@@ -27,13 +27,16 @@ What's new in v2.0?
 -Should work with Mac OS users.
 
 What's new in rev. 1?
--Fix indicator's objects being randomly removed right after switching Panel settings
+-Fix => Indicator's objects being randomly removed right after switching Panel settings
+-Fix => Lookback doesn't load more historical data
+-Fix => Real-time profile differs from historical profile of the same period
+-Custom Format (k, M) for Big Numbers (n >= 1000)!
 -Change histograms side to Right (Delta Profile) in Normal+Delta mode
 -Bars Distribution => OHLC_No_Avg and Open
 -Buy vs Sell => Sum, Subtract and Divide total values of each side
 -Delta => Total, Min, Max, Subtract (min - max) Delta
 
-Last update => 10/08/2025
+Last update => 12/08/2025
 
 AUTHOR: srlcarlg
 
@@ -158,8 +161,10 @@ namespace cAlgo
         [Parameter("Show OHLC Bar?", DefaultValue = false, Group = "==== Other settings ====")]
         public bool ShowOHLC { get; set; }
 
-        [Parameter("Show Results(%)?", DefaultValue = true, Group = "==== Other settings ====")]
+        [Parameter("Show Results?", DefaultValue = true, Group = "==== Other settings ====")]
         public bool ShowResults { get; set; }
+        [Parameter("Format Results?", DefaultValue = true, Group = "==== Other settings ====")]
+        public bool FormatResults { get; set; }
 
         public enum BuySellResult_Data
         {
@@ -724,9 +729,10 @@ namespace cAlgo
                     {
                         ChartText Center;
                         double sum = Math.Round(VolumesRank.Values.Sum());
+                        string strValue = FormatResults ? FormatBigNumber(sum) : $"{sum}";
 
                         Color centerColor = (VolumeModeInput == VolumeModeData.Normal || VolumeModeInput == VolumeModeData.Normal_Delta) ? ColorOHLC : ColorGrandient_Min;
-                        Center = Chart.DrawText($"{iStart}BuySellResult", $"\n{sum}", Bars.OpenTimes[iStart], lowest, centerColor);
+                        Center = Chart.DrawText($"{iStart}NormalResult", $"\n{strValue}", Bars.OpenTimes[iStart], lowest, centerColor);
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
                         Center.FontSize = FontSizeResults - 1;
 
@@ -791,19 +797,21 @@ namespace cAlgo
                         Right.HorizontalAlignment = HorizontalAlignment.Right; Right.FontSize = FontSizeResults;
 
                         ChartText Center;
-                        double sum = volBuy + volSell;
-                        double subtract = volBuy - volSell;
+                        double sum = Math.Round(volBuy + volSell);
+                        double subtract = Math.Round(volBuy - volSell);
                         double divide = 0;
                         if (volBuy != 0 && volSell != 0)
-                            divide = volBuy / volSell;
+                            divide = Math.Round(volBuy / volSell, 3);
 
                         Color centerColor = Math.Round(percentBuy) > Math.Round(percentSell) ? BuyColor : SellColor;
                         if (BuySellResult_Input == BuySellResult_Data.Sum)
-                            Center = Chart.DrawText($"{iStart}BuySellResult", $"\n{Math.Round(sum)}", Bars.OpenTimes[iStart], lowest, centerColor);
-                        else if (BuySellResult_Input == BuySellResult_Data.Subtract)
-                            Center = Chart.DrawText($"{iStart}BuySellResult", $"\n{Math.Round(subtract)}", Bars.OpenTimes[iStart], lowest, centerColor);
+                            Center = Chart.DrawText($"{iStart}BuySellResult", $"\n{(FormatResults ? FormatBigNumber(sum) : sum)}", Bars.OpenTimes[iStart], lowest, centerColor);
+                        else if (BuySellResult_Input == BuySellResult_Data.Subtract) {
+                            string subtractFmtd = subtract > 0 ? FormatBigNumber(subtract) : $"-{FormatBigNumber(Math.Abs(subtract))}";
+                            Center = Chart.DrawText($"{iStart}BuySellResult", $"\n{(FormatResults ? subtractFmtd : subtract)}", Bars.OpenTimes[iStart], lowest, centerColor);
+                        }
                         else
-                            Center = Chart.DrawText($"{iStart}BuySellResult", $"\n{Math.Round(divide, 3)}", Bars.OpenTimes[iStart], lowest, centerColor);
+                            Center = Chart.DrawText($"{iStart}BuySellResult", $"\n{divide}", Bars.OpenTimes[iStart], lowest, centerColor);
 
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
                         Center.FontSize = FontSizeResults - 1;
@@ -867,17 +875,22 @@ namespace cAlgo
                         Right.HorizontalAlignment = HorizontalAlignment.Right; Right.FontSize = FontSizeResults;
 
                         ChartText Center, MinText, MaxText, SubText;
+                        double totalDelta = Math.Round(DeltaRank.Values.Sum());
                         double minDelta = Math.Round(MinMaxDelta[0]);
                         double maxDelta = Math.Round(MinMaxDelta[1]);
-                        double totalDelta = Math.Round(DeltaRank.Values.Sum());
-                        double subDelta = minDelta - maxDelta;
-
+                        double subDelta = Math.Round(minDelta - maxDelta);
+                        
+                        string totalDeltaFmtd = totalDelta > 0 ? FormatBigNumber(totalDelta) : $"-{FormatBigNumber(Math.Abs(totalDelta))}";
+                        string minDeltaFmtd = minDelta > 0 ? FormatBigNumber(minDelta) : $"-{FormatBigNumber(Math.Abs(minDelta))}";
+                        string maxDeltaFmtd = maxDelta > 0 ? FormatBigNumber(maxDelta) : $"-{FormatBigNumber(Math.Abs(maxDelta))}";
+                        string subDeltaFmtd = subDelta > 0 ? FormatBigNumber(subDelta) : $"-{FormatBigNumber(Math.Abs(subDelta))}";
+                        
                         Color centerColor = totalDelta > 0 ? BuyColor : SellColor;
                         Color subColor = subDelta > 0 ? BuyColor : SellColor;
-                        Center = Chart.DrawText($"{iStart}DeltaResult", $"\n{totalDelta}", Bars.OpenTimes[iStart], lowest, centerColor);
-                        MinText = Chart.DrawText($"{iStart}DeltaMinResult", $"\n\nMin: {minDelta}", Bars.OpenTimes[iStart], lowest, SellColor);
-                        MaxText = Chart.DrawText($"{iStart}DeltaMaxResult", $"\n\n\nMax: {maxDelta}", Bars.OpenTimes[iStart], lowest, BuyColor);
-                        SubText = Chart.DrawText($"{iStart}DeltaSubResult", $"\n\n\n\nSub: {subDelta}", Bars.OpenTimes[iStart], lowest, subColor);
+                        Center = Chart.DrawText($"{iStart}DeltaResult", $"\n{(FormatResults ? totalDeltaFmtd : totalDelta)}", Bars.OpenTimes[iStart], lowest, centerColor);
+                        MinText = Chart.DrawText($"{iStart}DeltaMinResult", $"\n\nMin: {(FormatResults ? minDeltaFmtd : minDelta)}", Bars.OpenTimes[iStart], lowest, SellColor);
+                        MaxText = Chart.DrawText($"{iStart}DeltaMaxResult", $"\n\n\nMax: {(FormatResults ? maxDeltaFmtd : maxDelta)}", Bars.OpenTimes[iStart], lowest, BuyColor);
+                        SubText = Chart.DrawText($"{iStart}DeltaSubResult", $"\n\n\n\nSub: {(FormatResults ? subDeltaFmtd : subDelta)}", Bars.OpenTimes[iStart], lowest, subColor);
                         
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
                         MinText.HorizontalAlignment = HorizontalAlignment.Center;
@@ -1038,11 +1051,12 @@ namespace cAlgo
         }
         private void VP_Bars(int index)
         {
-
             DateTime startTime = Bars.OpenTimes[index];
             DateTime endTime = Bars.OpenTimes[index + 1];
-
-            if (IsLastBar)
+            
+            // For real-time market
+            // Run conditional only in the last bar of repaint loop
+            if (IsLastBar && Bars.OpenTimes[index] == Bars.LastBar.OpenTime)
                 endTime = VOL_Bars.Last().OpenTime;
 
             for (int k = 0; k < VOL_Bars.Count; ++k)
@@ -1196,6 +1210,7 @@ namespace cAlgo
                     VolumesRank.Add(priceKey, vol);
                 else
                     VolumesRank[priceKey] += vol;
+                
                 bool condition = VolumeModeInput != VolumeModeData.Normal || VolumeModeInput != VolumeModeData.Gradient;
                 if (condition)
                     Add_BuySell(priceKey, vol, isBullish);
@@ -1255,7 +1270,9 @@ namespace cAlgo
             DateTime startTime = Bars.OpenTimes[index];
             DateTime endTime = Bars.OpenTimes[index + 1];
 
-            if (IsLastBar)
+            // For real-time market
+            // Run conditional only in the last bar of repaint loop
+            if (IsLastBar && Bars.OpenTimes[index] == Bars.LastBar.OpenTime)
                 endTime = TicksOHLC.Last().OpenTime;
 
             double prevTick = 0;
@@ -1334,6 +1351,35 @@ namespace cAlgo
                     prev_segmentValue = Segments[i];
                 }
             }
+        }
+        public static string FormatBigNumber(double num)
+        {
+            /*
+                123        ->  123
+                1234       ->  1,23k
+                12345      ->  12.35k
+                123456     ->  123.4k
+                1234567    ->  1.23M
+                12345678   ->  12.35M
+                123456789  ->  123.5M
+            */
+            if (num >= 100000000) {
+                return (num / 1000000D).ToString("0.#M");
+            }
+            if (num >= 1000000) {
+                return (num / 1000000D).ToString("0.##M");
+            }
+            if (num >= 100000) {
+                return (num / 1000D).ToString("0.#k");
+            }
+            if (num >= 10000) {
+                return (num / 1000D).ToString("0.##k");
+            }
+            if (num >= 1000) {
+                return (num / 1000D).ToString("0.##k");
+            }
+
+            return num.ToString("#,0");
         }
         private void DrawOnScreen(string Msg)
         {
@@ -1611,7 +1657,7 @@ namespace cAlgo
         {            
             // The chart should already be clear
             // No objects
-
+            
             int FirstIndex = Bars.OpenTimes.GetIndexByTime(LookBack_Bars.OpenTimes.FirstOrDefault());
 
             // Get Index of VOL Interval to continue only in Lookback
@@ -1968,13 +2014,16 @@ namespace cAlgo
             return checkBoxBorder;
         }
 
-        private void RecalculateOutsideWithMsg() {
+        private void RecalculateOutsideWithMsg(bool reloadHistory = false) {
             string currentMode = ModeBtn.Text;
             ModeBtn.Text = $"{currentMode}\nCalculating...";
             
             Outside.Chart.RemoveAllObjects();
             
             Outside.BeginInvokeOnMainThread(() => {
+                if (reloadHistory) {
+                    Outside.SetInterval(Outside.GetInterval());
+                }
                 Outside.ClearAndRecalculate();
                 ModeBtn.Text = currentMode;
             });
@@ -2066,7 +2115,9 @@ namespace cAlgo
             }
             if (lookBack > 0 && lookBack != Outside.GetLookback()) {
                 Outside.SetLookback(lookBack);
-                RecalculateOutsideWithMsg();
+                // Get more lookback/interval Bars if needed
+                // No delay in Panel
+                RecalculateOutsideWithMsg(true);
             }
         }
         private void ComboBoxSelectedEvent(ComboBoxSelectedItemChangedEventArgs obj)
@@ -2078,6 +2129,7 @@ namespace cAlgo
                     case "IntervalKey": {
                         string selected = comboBoxMap[key].SelectedItem;
                         if (selected != Outside.GetInterval().ShortName) {
+                            // Chart/Panel delay is allowed
                             Outside.SetInterval(StringToTimeframe(selected));
                             RecalculateOutsideWithMsg();
                         }

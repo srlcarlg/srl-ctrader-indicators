@@ -22,11 +22,12 @@ What's new in v2.0?
 -Should work with Mac OS users.
 
 What's new in rev. 1?
+-Custom Format (k, M) for Big Numbers (n >= 1000)!
 -Fix indicator's objects being randomly removed right after switching Panel settings
 -Fix Histogram Stretching in Profile View (all Modes) on weekend candles
 -Delta => Min, Max, Subtract (min - max) Delta
 
-Last update => 11/08/2025
+Last update => 12/08/2025
 
 Performance Tips!
 - Set 'Nº Bars' to 20+ or more if switching settings is taking too long
@@ -96,14 +97,20 @@ namespace cAlgo
         [Parameter("Fill Histogram?", DefaultValue = true, Group = "==== Visualization ====")]
         public bool FillHist { get; set; }
 
+        [Parameter("Show Side(total)?", DefaultValue = true, Group = "==== Visualization ====")]
+        public bool ShowSideTotalInput { get; set; }
+
         [Parameter("Show Numbers?", DefaultValue = true, Group = "==== Visualization ====")]
         public bool ShowNumbers { get; set; }
 
         [Parameter("Show Results?", DefaultValue = true, Group = "==== Visualization ====")]
         public bool ShowResults { get; set; }
-
-        [Parameter("Show Side(total)?", DefaultValue = true, Group = "==== Visualization ====")]
-        public bool ShowSideTotalInput { get; set; }
+        
+        [Parameter("Format Numbers?", DefaultValue = true, Group = "==== Visualization ====")]
+        public bool FormatBarNumbers { get; set; }
+                
+        [Parameter("Format Results?", DefaultValue = true, Group = "==== Visualization ====")]
+        public bool FormatResults { get; set; }
 
         [Parameter("[Renko] Show Wicks?", DefaultValue = true, Group = "==== Visualization ====")]
         public bool ShowWicks { get; set; }
@@ -231,7 +238,7 @@ namespace cAlgo
         public ResultsType_Data ResultsTypeInput { get; set; } = ResultsType_Data.Percentage;
 
         public bool ColorOnlyLarguestInput { get; set; } = true;
-        public bool ShowMinMaxDeltaInput { get; set; } = true;
+        public bool ShowMinMaxDeltaInput { get; set; } = false;
 
         // Params Panel
         private Border ParamBorder;
@@ -601,15 +608,17 @@ namespace cAlgo
 
                     if (ShowNumbers)
                     {
-                        ChartText C = Chart.DrawText($"{iStart}_{i}Center", $"{VolumesRank[priceKey]}", Bars.OpenTimes[iStart], priceKey, RtnbFixedColor);
+                        double value = VolumesRank[priceKey];
+                        ChartText C = Chart.DrawText($"{iStart}_{i}Center", $"{(FormatBarNumbers ? FormatBigNumber(value) : value)}", Bars.OpenTimes[iStart], priceKey, RtnbFixedColor);
                         C.HorizontalAlignment = HorizontalAlignment.Center;
                         C.FontSize = FontSizeNumbers;
                     }
                     if (ShowResults)
                     {
+                        double value = VolumesRank.Values.Sum();
                         ChartText Center;
                         Color dynResColor = ResultsColoringInput == ResultsColoringData.Fixed ? RtnbFixedColor : VolumeColor;
-                        Center = Chart.DrawText($"{iStart}SumCenter", $"\n{VolumesRank.Values.Sum()}", Bars.OpenTimes[iStart], lowest, dynResColor);
+                        Center = Chart.DrawText($"{iStart}SumCenter", $"\n{(FormatResults ? FormatBigNumber(value) : value)}", Bars.OpenTimes[iStart], lowest, dynResColor);
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
 
                         if (EnableFilter)
@@ -668,8 +677,11 @@ namespace cAlgo
 
                     if (ShowNumbers)
                     {
-                        ChartText L = Chart.DrawText($"{iStart}_{i}SellNumber", $"{VolumesRank_Down[priceKey]}", Bars.OpenTimes[iStart], priceKey, RtnbFixedColor);
-                        ChartText R = Chart.DrawText($"{iStart}_{i}BuyNumber", $"{VolumesRank_Up[priceKey]}", Bars.OpenTimes[iStart], priceKey, RtnbFixedColor);
+                        double downValue = VolumesRank_Down[priceKey];
+                        double upValue = VolumesRank_Up[priceKey];
+                        
+                        ChartText L = Chart.DrawText($"{iStart}_{i}SellNumber", $"{(FormatBarNumbers ? FormatBigNumber(downValue) : downValue)}", Bars.OpenTimes[iStart], priceKey, RtnbFixedColor);
+                        ChartText R = Chart.DrawText($"{iStart}_{i}BuyNumber", $"{(FormatBarNumbers ? FormatBigNumber(upValue) : upValue)}", Bars.OpenTimes[iStart], priceKey, RtnbFixedColor);
 
                         if (VolumeViewInput == VolumeViewData.Divided)
                         {
@@ -703,8 +715,11 @@ namespace cAlgo
                             int percentBuy = (volBuy * 100) / (volBuy + volSell);
                             int percentSell = (volSell * 100) / (volBuy + volSell);
 
-                            string dynStrBuy = selected == ResultsType_Data.Percentage ? $"\n{percentBuy}%" : selected == ResultsType_Data.Value ? $"\n{volBuy}" : $"\n{percentBuy}%\n({volBuy})";
-                            string dynStrSell = selected == ResultsType_Data.Percentage ? $"\n{percentSell}%" : selected == ResultsType_Data.Value ? $"\n{volSell}" : $"\n{percentSell}%\n({volSell})";
+                            string volBuyFmtd = FormatResults ? FormatBigNumber(volBuy) : $"{volBuy}";
+                            string volSellFmtd = FormatResults ? FormatBigNumber(volSell) : $"{volSell}";
+
+                            string dynStrBuy = selected == ResultsType_Data.Percentage ? $"\n{percentBuy}%" : selected == ResultsType_Data.Value ? $"\n{volBuyFmtd}" : $"\n{percentBuy}%\n({volBuyFmtd})";
+                            string dynStrSell = selected == ResultsType_Data.Percentage ? $"\n{percentSell}%" : selected == ResultsType_Data.Value ? $"\n{volSellFmtd}" : $"\n{percentSell}%\n({volSellFmtd})";
 
                             ChartText Left, Right;
                             Left = Chart.DrawText($"{iStart}SellSum", $"{dynStrSell}", Bars.OpenTimes[iStart], lowest, dynColorLeft);
@@ -725,12 +740,16 @@ namespace cAlgo
                             Right.FontSize = FontSizeResults;
                         }
 
+                        double sumValue = VolumesRank_Up.Values.Sum() + VolumesRank_Down.Values.Sum();
+                        double subtValue = VolumesRank_Up.Values.Sum() - VolumesRank_Down.Values.Sum();
                         string dynSpaceSum = (selected == ResultsType_Data.Percentage || selected == ResultsType_Data.Value) ? $"\n\n" : $"\n\n\n";
                         ChartText Center;
                         if (OperatorBuySellInput == OperatorBuySell_Data.Sum)
-                            Center = Chart.DrawText($"{iStart}SumCenter", $"{dynSpaceSum}{VolumesRank_Up.Values.Sum() + VolumesRank_Down.Values.Sum()}", Bars.OpenTimes[iStart], lowest, dynColorCenter);
-                        else
-                            Center = Chart.DrawText($"{iStart}SumCenter", $"{dynSpaceSum}{VolumesRank_Up.Values.Sum() - VolumesRank_Down.Values.Sum()}", Bars.OpenTimes[iStart], lowest, dynColorCenter);
+                            Center = Chart.DrawText($"{iStart}SumCenter", $"{dynSpaceSum}{(FormatResults ? FormatBigNumber(sumValue) : sumValue)}", Bars.OpenTimes[iStart], lowest, dynColorCenter);
+                        else {
+                            string subtValueFmtd = subtValue > 0 ? FormatBigNumber(subtValue) : $"-{FormatBigNumber(Math.Abs(subtValue))}";
+                            Center = Chart.DrawText($"{iStart}SumCenter", $"{dynSpaceSum}{(FormatResults ? subtValueFmtd : subtValue)}", Bars.OpenTimes[iStart], lowest, dynColorCenter);
+                        }
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
                         Center.FontSize = FontSizeResults;
 
@@ -827,10 +846,13 @@ namespace cAlgo
 
                     if (ShowNumbers)
                     {
+                        double deltaValue = DeltaRank[priceKey];
+                        string deltaValueFmtd = deltaValue > 0 ? FormatBigNumber(deltaValue) : $"-{FormatBigNumber(Math.Abs(deltaValue))}";
+
                         ChartText nbText;
                         if (DeltaRank[priceKey] > 0)
                         {
-                            nbText = Chart.DrawText($"{iStart}_{i}DynNumberDelta", $"{DeltaRank[priceKey]}", Bars.OpenTimes[iStart], priceKey, RtnbFixedColor);
+                            nbText = Chart.DrawText($"{iStart}_{i}DynNumberDelta", $"{(FormatBarNumbers ? deltaValueFmtd : deltaValue)}", Bars.OpenTimes[iStart], priceKey, RtnbFixedColor);
                             if (VolumeViewInput == VolumeViewData.Divided)
                                 nbText.HorizontalAlignment = HorizontalAlignment.Right;
                             else
@@ -840,7 +862,7 @@ namespace cAlgo
                         }
                         else if (DeltaRank[priceKey] < 0)
                         {
-                            nbText = Chart.DrawText($"{iStart}_{i}DynNumberDelta", $"{DeltaRank[priceKey]}", Bars.OpenTimes[iStart], priceKey, RtnbFixedColor);
+                            nbText = Chart.DrawText($"{iStart}_{i}DynNumberDelta", $"{(FormatBarNumbers ? deltaValueFmtd : deltaValue)}", Bars.OpenTimes[iStart], priceKey, RtnbFixedColor);
                             if (VolumeViewInput == VolumeViewData.Divided)
                                 nbText.HorizontalAlignment = HorizontalAlignment.Left;
                             else
@@ -849,7 +871,7 @@ namespace cAlgo
                         }
                         else
                         {
-                            nbText = Chart.DrawText($"{iStart}_{i}DynNumberDelta", $"{DeltaRank[priceKey]}", Bars.OpenTimes[iStart], priceKey, RtnbFixedColor);
+                            nbText = Chart.DrawText($"{iStart}_{i}DynNumberDelta", $"{(FormatBarNumbers ? deltaValueFmtd : deltaValue)}", Bars.OpenTimes[iStart], priceKey, RtnbFixedColor);
                             nbText.HorizontalAlignment = HorizontalAlignment.Center;
                             nbText.FontSize = FontSizeNumbers;
                         }
@@ -876,8 +898,11 @@ namespace cAlgo
                             try { percentBuy = (deltaBuy * 100) / (deltaBuy + Math.Abs(deltaSell)); } catch { };
                             try { percentSell = (deltaSell * 100) / (deltaBuy + Math.Abs(deltaSell)); } catch { }
 
-                            string dynStrBuy = selected == ResultsType_Data.Percentage ? $"\n{percentBuy}%" : selected == ResultsType_Data.Value ? $"\n{deltaBuy}" : $"\n{percentBuy}%\n({deltaBuy})";
-                            string dynStrSell = selected == ResultsType_Data.Percentage ? $"\n{percentSell}%" : selected == ResultsType_Data.Value ? $"\n{deltaSell}" : $"\n{percentSell}%\n({deltaSell})";
+                            string deltaBuyFmtd = FormatResults ? FormatBigNumber(deltaBuy) : $"{deltaBuy}";
+                            string deltaSellFmtd = FormatResults ? FormatBigNumber(deltaSell) : $"{deltaSell}";
+
+                            string dynStrBuy = selected == ResultsType_Data.Percentage ? $"\n{percentBuy}%" : selected == ResultsType_Data.Value ? $"\n{deltaBuyFmtd}" : $"\n{percentBuy}%\n({deltaBuyFmtd})";
+                            string dynStrSell = selected == ResultsType_Data.Percentage ? $"\n{percentSell}%" : selected == ResultsType_Data.Value ? $"\n{deltaSellFmtd}" : $"\n{percentSell}%\n({deltaSellFmtd})";
 
                             ChartText Left, Right;
                             Left = Chart.DrawText($"{iStart}SumDeltaSell", $"{dynStrSell}", Bars.OpenTimes[iStart], lowest, dynColorLeft);
@@ -888,9 +913,12 @@ namespace cAlgo
                             Right.FontSize = FontSizeResults;
                         }
 
+                        double sumValue = DeltaRank.Values.Sum();
+                        string sumValueFmtd = sumValue > 0 ? FormatBigNumber(sumValue) : $"-{FormatBigNumber(Math.Abs(sumValue))}";
+
                         ChartText Center;
                         string dynSpaceSum = (selected == ResultsType_Data.Percentage || selected == ResultsType_Data.Value) ? $"\n\n" : $"\n\n\n";
-                        Center = Chart.DrawText($"{iStart}SumDeltaCenter", $"{dynSpaceSum}{DeltaRank.Values.Sum()}", Bars.OpenTimes[iStart], lowest, dynColorCenter);
+                        Center = Chart.DrawText($"{iStart}SumDeltaCenter", $"{dynSpaceSum}{(FormatResults ? sumValueFmtd : sumValue)}", Bars.OpenTimes[iStart], lowest, dynColorCenter);
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
                         Center.FontSize = FontSizeResults;
 
@@ -899,13 +927,15 @@ namespace cAlgo
                         else
                             CumulDeltaRank[iStart] = DeltaRank.Values.Sum();
 
-                        int CumulDelta = CumulDeltaRank.Keys.Count <= 1 ? CumulDeltaRank[iStart] : (CumulDeltaRank[iStart] + CumulDeltaRank[iStart - 1]);
+                        int cumulDelta = CumulDeltaRank.Keys.Count <= 1 ? CumulDeltaRank[iStart] : (CumulDeltaRank[iStart] + CumulDeltaRank[iStart - 1]);
                         int prevCumulDelta = CumulDeltaRank.Keys.Count <= 2 ? CumulDeltaRank[iStart] : (CumulDeltaRank[iStart - 1] + CumulDeltaRank[iStart - 2]);
 
-                        Color compareCD = CumulDelta > prevCumulDelta ? BuyColor : CumulDelta < prevCumulDelta ? SellColor : SellLargeColor;
+                        Color compareCD = cumulDelta > prevCumulDelta ? BuyColor : cumulDelta < prevCumulDelta ? SellColor : SellLargeColor;
                         Color dynColorCD = ResultsColoringInput == ResultsColoringData.Fixed ? SellLargeColor : compareCD;
 
-                        ChartText CD = Chart.DrawText($"{iStart}CD", $"\n{CumulDelta}\n", Bars.OpenTimes[iStart], highest, dynColorCD);
+                        string cumulDeltaFmtd = cumulDelta > 0 ? FormatBigNumber(cumulDelta) : $"-{FormatBigNumber(Math.Abs(cumulDelta))}";
+
+                        ChartText CD = Chart.DrawText($"{iStart}CD", $"\n{(FormatResults ? cumulDeltaFmtd : cumulDelta)}\n", Bars.OpenTimes[iStart], highest, dynColorCD);
                         CD.HorizontalAlignment = HorizontalAlignment.Center;
                         CD.VerticalAlignment = VerticalAlignment.Top;
                         CD.FontSize = FontSizeResults;
@@ -939,11 +969,15 @@ namespace cAlgo
                             ChartText MinText, MaxText, SubText;
                             double minDelta = Math.Round(MinMaxDelta[0]);
                             double maxDelta = Math.Round(MinMaxDelta[1]);
-                            double subDelta = minDelta - maxDelta;
+                            double subDelta = Math.Round(minDelta - maxDelta);
 
-                            MinText = Chart.DrawText($"{iStart}MinDeltaCenter", $"\n{dynSpaceSum}min:{minDelta}", Bars.OpenTimes[iStart], lowest, dynColorCenter);
-                            MaxText = Chart.DrawText($"{iStart}MaxDeltaCenter", $"\n\n{dynSpaceSum}max:{maxDelta}", Bars.OpenTimes[iStart], lowest, dynColorCenter);
-                            SubText = Chart.DrawText($"{iStart}SubDeltaCenter", $"\n\n\n{dynSpaceSum}sub:{subDelta}", Bars.OpenTimes[iStart], lowest, dynColorCenter);
+                            string minDeltaFmtd = minDelta > 0 ? FormatBigNumber(minDelta) : $"-{FormatBigNumber(Math.Abs(minDelta))}";
+                            string maxDeltaFmtd = maxDelta > 0 ? FormatBigNumber(maxDelta) : $"-{FormatBigNumber(Math.Abs(maxDelta))}";
+                            string subDeltaFmtd = subDelta > 0 ? FormatBigNumber(subDelta) : $"-{FormatBigNumber(Math.Abs(subDelta))}";
+
+                            MinText = Chart.DrawText($"{iStart}MinDeltaCenter", $"\n{dynSpaceSum}min:{(FormatResults ? minDeltaFmtd : minDelta)}", Bars.OpenTimes[iStart], lowest, dynColorCenter);
+                            MaxText = Chart.DrawText($"{iStart}MaxDeltaCenter", $"\n\n{dynSpaceSum}max:{(FormatResults ? maxDeltaFmtd : maxDelta)}", Bars.OpenTimes[iStart], lowest, dynColorCenter);
+                            SubText = Chart.DrawText($"{iStart}SubDeltaCenter", $"\n\n\n{dynSpaceSum}sub:{(FormatResults ? subDeltaFmtd : subDelta)}", Bars.OpenTimes[iStart], lowest, dynColorCenter);
 
                             MinText.HorizontalAlignment = HorizontalAlignment.Center;
                             MaxText.HorizontalAlignment = HorizontalAlignment.Center;
@@ -1072,6 +1106,36 @@ namespace cAlgo
             }
 
             return isBullish ? min : max;
+        }
+
+        public static string FormatBigNumber(double num)
+        {
+            /*
+                123        ->  123
+                1234       ->  1,23k
+                12345      ->  12.35k
+                123456     ->  123.4k
+                1234567    ->  1.23M
+                12345678   ->  12.35M
+                123456789  ->  123.5M
+            */
+            if (num >= 100000000) {
+                return (num / 1000000D).ToString("0.#M");
+            }
+            if (num >= 1000000) {
+                return (num / 1000000D).ToString("0.##M");
+            }
+            if (num >= 100000) {
+                return (num / 1000D).ToString("0.#k");
+            }
+            if (num >= 10000) {
+                return (num / 1000D).ToString("0.##k");
+            }
+            if (num >= 1000) {
+                return (num / 1000D).ToString("0.##k");
+            }
+
+            return num.ToString("#,0");
         }
 
         private void DrawOnScreen(string msg)
