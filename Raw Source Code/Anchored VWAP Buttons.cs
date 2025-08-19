@@ -6,7 +6,7 @@
 Just a Anchored VWAP with 5 Buttons in just 1 indicator
 
 What's new in rev.1?
--Added Diary, Weekly, Monthly VWAPs
+-Added Daily, Weekly, Monthly VWAPs
 -Added STD to any VWAP (one STD per instance)
 -Great refactor
 
