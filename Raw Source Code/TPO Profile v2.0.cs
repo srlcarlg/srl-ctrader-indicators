@@ -24,9 +24,10 @@ What's new in v2.0?
 -Should work with Mac OS users.
 
 What's new in rev. 1?
--Fix indicator's objects being randomly removed right after switching Panel settings
+-Row Height in Pips!
+-Fix => Indicator's objects being randomly removed right after switching Panel settings
 
-Last update => 11/08/2025
+Last update => 14/08/2025
 
 AUTHOR: srlcarlg
 
@@ -36,6 +37,7 @@ AUTHOR: srlcarlg
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using cAlgo.API;
@@ -332,14 +334,10 @@ namespace cAlgo
 
             void SetHeightPips(double digits5, double digits2)
             {
-                if (Symbol.Digits == 5)
+                if (Symbol.Digits == 5 || Symbol.Digits == 1)
                     HeightPips = digits5;
-                else if (Symbol.Digits == 2)
-                {
+                else
                     HeightPips = digits2;
-                    if (Symbol.PipSize == 0.1)
-                        HeightPips /= 2;
-                }
             }
             // ============================================================================
 
@@ -396,7 +394,7 @@ namespace cAlgo
             {
                 LookBack = Lookback,
                 ModeTPO = ModeTPOInput,
-                RowHeight = rowHeight,
+                RowHeight = HeightPips,
                 Interval = LookBack_TF,
                 KeepPOC = KeepPOC,
                 ExtendedPOC = ExtendPOC,
@@ -1117,6 +1115,16 @@ namespace cAlgo
                 TPO(index, indexStart, true);
             }
 
+            // Repaint current profile
+            for (int i=indexStart; i <= Bars.Count; i++)
+            {
+                if (i == indexStart) {
+                    TPOsRank.Clear();
+                    previousLetter_Index = 0;
+                }
+
+                TPO(i, indexStart, true);
+            }
             configHasChanged = true;
             if (ExtendPOC) {
                 ExtendPOCNow();
@@ -1255,7 +1263,7 @@ namespace cAlgo
 
             var Lookback_Input = CreateInputWithLabel("Lookback", FirstParams.LookBack.ToString(), LookBack_InputKey);
             grid.AddChild(Lookback_Input, 1, 0);
-            var RowHeightInput = CreateInputWithLabel("Row Height", FirstParams.RowHeight.ToString("0.############################"), RowHeight_InputKey);
+            var RowHeightInput = CreateInputWithLabel("Row(pips)", FirstParams.RowHeight.ToString("0.############################", CultureInfo.InvariantCulture), RowHeight_InputKey);
             grid.AddChild(RowHeightInput, 1, 2);
             var IntervalInput = CreateComboBoxWithLabel("Interval", Interval_InputKey);
             grid.AddChild(IntervalInput, 1, 4);
@@ -1475,7 +1483,7 @@ namespace cAlgo
                 switch (key)
                 {
                     case "LookBackKey": textInputMap[key].Text = indicatorParams.LookBack.ToString(); break;
-                    case "RowHeightKey": textInputMap[key].Text = indicatorParams.RowHeight.ToString("0.############################"); break;
+                    case "RowHeightKey": textInputMap[key].Text = indicatorParams.RowHeight.ToString("0.############################", CultureInfo.InvariantCulture); break;
                 }
             }
             foreach (var key in comboBoxMap.Keys)
@@ -1493,13 +1501,17 @@ namespace cAlgo
         private void TextChangedEvent(TextChangedEventArgs obj)
         {
             int lookBack = GetValueFromInput(LookBack_InputKey, -1);
-            double rowHeight = GetDoubleFromInput(RowHeight_InputKey, -1);
+            double rowPips = GetDoubleFromInput(RowHeight_InputKey, -1);
+            
+            if (rowPips != -1 && rowPips > 0) {
+                double rowHeight = Outside.Symbol.PipSize * rowPips;
 
-            if (rowHeight != -1 && rowHeight > 0 && rowHeight != Outside.GetRowHeight()) {
-                Outside.SetRowHeight(rowHeight);
-                RecalculateOutsideWithMsg();
+                if (rowHeight != Outside.GetRowHeight()) {
+                    Outside.SetRowHeight(rowHeight);
+                    RecalculateOutsideWithMsg();   
+                }
             }
-            if ((lookBack == -1 || lookBack > 0) && lookBack != Outside.GetLookback()) {
+            if (lookBack > 0 && lookBack != Outside.GetLookback()) {
                 Outside.SetLookback(lookBack);
                 RecalculateOutsideWithMsg();
             }
@@ -1560,7 +1572,7 @@ namespace cAlgo
         }
         private double GetDoubleFromInput(string inputKey, int defaultValue)
         {
-            return double.TryParse(textInputMap[inputKey].Text, out double value) ? value : defaultValue;
+            return double.TryParse(textInputMap[inputKey].Text, NumberStyles.Number, CultureInfo.InvariantCulture, out double value) ? value : defaultValue;
         }
         private static TimeFrame StringToTimeframe(string inputTF)
         {

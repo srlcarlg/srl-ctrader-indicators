@@ -22,12 +22,13 @@ What's new in v2.0?
 -Should work with Mac OS users.
 
 What's new in rev. 1?
+-Row Height in Pips!
 -Custom Format (k, M) for Big Numbers (n >= 1000)!
--Fix indicator's objects being randomly removed right after switching Panel settings
--Fix Histogram Stretching in Profile View (all Modes) on weekend candles
--Delta => Min, Max, Subtract (min - max) Delta
+-Fix => Indicator's objects being randomly removed right after switching Panel settings
+-Fix => Histogram Stretching in Profile View (all Modes) on weekend candles
+-Delta => Min, Max, Subtract (min - max)
 
-Last update => 12/08/2025
+Last update => 14/08/2025
 
 Performance Tips!
 - Set 'Nº Bars' to 20+ or more if switching settings is taking too long
@@ -46,6 +47,7 @@ using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
 using static cAlgo.OrderFlowTicksV20;
+using System.Threading;
 
 namespace cAlgo
 {
@@ -111,6 +113,15 @@ namespace cAlgo
                 
         [Parameter("Format Results?", DefaultValue = true, Group = "==== Visualization ====")]
         public bool FormatResults { get; set; }
+        
+        public enum FormatMaxDigits_Data
+        {
+            Zero,
+            One,
+            Two,
+        }
+        [Parameter("Format Max Digits:", DefaultValue = FormatMaxDigits_Data.One, Group = "==== Visualization ====")]
+        public FormatMaxDigits_Data FormatMaxDigits_Input { get; set; }
 
         [Parameter("[Renko] Show Wicks?", DefaultValue = true, Group = "==== Visualization ====")]
         public bool ShowWicks { get; set; }
@@ -284,13 +295,13 @@ namespace cAlgo
                 if (Chart.TimeFrame >= TimeFrame.Minute && Chart.TimeFrame <= TimeFrame.Minute4)
                     SetHeightPips(0.3, 5);
                 else if (Chart.TimeFrame >= TimeFrame.Minute5 && Chart.TimeFrame <= TimeFrame.Minute10)
-                    SetHeightPips(1, 10);
+                    SetHeightPips(0.5, 10);
                 else if (Chart.TimeFrame >= TimeFrame.Minute15 && Chart.TimeFrame <= TimeFrame.Hour8)
                 {
                     if (Chart.TimeFrame >= TimeFrame.Minute15 && Chart.TimeFrame < TimeFrame.Minute30)
-                        SetHeightPips(2, 15);
+                        SetHeightPips(1, 15);
                     if (Chart.TimeFrame >= TimeFrame.Minute30 && Chart.TimeFrame <= TimeFrame.Hour)
-                        SetHeightPips(4, 30);
+                        SetHeightPips(2, 30);
                     else if (Chart.TimeFrame >= TimeFrame.Hour4 && Chart.TimeFrame <= TimeFrame.Hour8)
                         SetHeightPips(6, 50);
                 }
@@ -313,14 +324,10 @@ namespace cAlgo
 
             void SetHeightPips(double digits5, double digits2)
             {
-                if (Symbol.Digits == 5)
+                if (Symbol.Digits == 5 || Symbol.Digits == 1)
                     heightPips = digits5;
-                else if (Symbol.Digits == 2)
-                {
+                else
                     heightPips = digits2;
-                    if (Symbol.PipSize == 0.1)
-                        heightPips /= 2;
-                }
             }
 
             if (EnableFilter)
@@ -377,7 +384,7 @@ namespace cAlgo
                 NBars = Lookback,
                 VolMode = VolumeModeInput,
                 VolView = VolumeViewInput,
-                RowHeight = rowHeight,
+                RowHeight = heightPips,
                 ResultType = ResultsTypeInput,
                 OperatorBuySell = OperatorBuySellInput,
                 OnlyLargestDivided = ColorOnlyLarguestInput,
@@ -625,11 +632,10 @@ namespace cAlgo
                         {
                             DynamicSeries[iStart] = VolumesRank.Values.Sum();
 
-                            // ====== Dynamic Series Filter ======
-                            double DynamicFilter = DynamicSeries[iStart] / MADynamic.Result[iStart];
-                            double DynamicLarge = DynamicFilter >= Filter_Ratio ? DynamicSeries[iStart] : 0;
+                            // ====== Strength Filter ======
+                            double volumeStrength  = DynamicSeries[iStart] / MADynamic.Result[iStart];
+                            Color dynBarColor = volumeStrength >= Filter_Ratio ? ColorLargeResult : dynResColor;
 
-                            Color dynBarColor = DynamicLarge >= 2 ? ColorLargeResult : dynResColor;
                             Center.Color = dynBarColor;
                             if (ColoringBars && dynBarColor == ColorLargeResult)
                                 Chart.SetBarFillColor(iStart, ColorLargeResult);
@@ -683,16 +689,9 @@ namespace cAlgo
                         ChartText L = Chart.DrawText($"{iStart}_{i}SellNumber", $"{(FormatBarNumbers ? FormatBigNumber(downValue) : downValue)}", Bars.OpenTimes[iStart], priceKey, RtnbFixedColor);
                         ChartText R = Chart.DrawText($"{iStart}_{i}BuyNumber", $"{(FormatBarNumbers ? FormatBigNumber(upValue) : upValue)}", Bars.OpenTimes[iStart], priceKey, RtnbFixedColor);
 
-                        if (VolumeViewInput == VolumeViewData.Divided)
-                        {
-                            L.HorizontalAlignment = HorizontalAlignment.Left;
-                            R.HorizontalAlignment = HorizontalAlignment.Right;
-                        }
-                        else
-                        {
-                            L.HorizontalAlignment = HorizontalAlignment.Right;
-                            R.HorizontalAlignment = HorizontalAlignment.Left;
-                        }
+                        L.HorizontalAlignment = HorizontalAlignment.Left;
+                        R.HorizontalAlignment = HorizontalAlignment.Right;
+
                         L.FontSize = FontSizeNumbers;
                         R.FontSize = FontSizeNumbers;
                     }
@@ -725,16 +724,8 @@ namespace cAlgo
                             Left = Chart.DrawText($"{iStart}SellSum", $"{dynStrSell}", Bars.OpenTimes[iStart], lowest, dynColorLeft);
                             Right = Chart.DrawText($"{iStart}BuySum", $"{dynStrBuy}", Bars.OpenTimes[iStart], lowest, dynColorRight);
 
-                            if (VolumeViewInput == VolumeViewData.Divided)
-                            {
-                                Left.HorizontalAlignment = HorizontalAlignment.Left;
-                                Right.HorizontalAlignment = HorizontalAlignment.Right;
-                            }
-                            else
-                            {
-                                Left.HorizontalAlignment = HorizontalAlignment.Right;
-                                Right.HorizontalAlignment = HorizontalAlignment.Left;
-                            }
+                            Left.HorizontalAlignment = HorizontalAlignment.Left;
+                            Right.HorizontalAlignment = HorizontalAlignment.Right;
 
                             Left.FontSize = FontSizeResults;
                             Right.FontSize = FontSizeResults;
@@ -760,11 +751,10 @@ namespace cAlgo
                             else
                                 DynamicSeries[iStart] = VolumesRank_Up.Values.Sum() - VolumesRank_Down.Values.Sum();
 
-                            // ====== Dynamic Series Filter ======
-                            double DynamicFilter = DynamicSeries[iStart] / MADynamic.Result[iStart];
-                            double DynamicLarge = DynamicFilter >= Filter_Ratio ? DynamicSeries[iStart] : 0;
+                            // ====== Strength Filter ======
+                            double bsStrength = DynamicSeries[iStart] / MADynamic.Result[iStart];
+                            Color dynBarColor = bsStrength >= Filter_Ratio ? ColorLargeResult : dynColorCenter;
 
-                            Color dynBarColor = DynamicLarge >= 2 ? ColorLargeResult : dynColorCenter;
                             Center.Color = dynBarColor;
                             if (ColoringBars && dynBarColor == ColorLargeResult)
                                 Chart.SetBarFillColor(iStart, ColorLargeResult);
@@ -942,24 +932,21 @@ namespace cAlgo
 
                         if (EnableFilter)
                         {
-                            CumulDeltaSeries[iStart] = Math.Abs(CumulDeltaRank[iStart]);
-                            DynamicSeries[iStart] = Math.Abs(DeltaRank.Values.Sum());
+                            DynamicSeries[iStart] = Math.Abs(sumValue);
 
-                            // ====== Dynamic Series Filter ======
-                            double DynamicFilter = DynamicSeries[iStart] / MADynamic.Result[iStart];
-                            double DynamicLarge = DynamicFilter >= Filter_Ratio ? DynamicSeries[iStart] : 0;
-
-                            Color dynBarColor = DynamicLarge >= 2 ? ColorLargeResult : dynColorCenter;
+                            // ====== Strength Filter ======
+                            double deltaLargeStrength = DynamicSeries[iStart] / MADynamic.Result[iStart];
+                            Color dynBarColor = deltaLargeStrength >= Filter_Ratio ? ColorLargeResult : dynColorCenter;
+                            
                             Center.Color = dynBarColor;
                             if (ColoringBars && dynBarColor == ColorLargeResult)
                                 Chart.SetBarFillColor(iStart, ColorLargeResult);
 
                             if (ColoringCD)
                             {
-                                // ====== Cumul Delta Filter ======
-                                double CumulDeltaFilter = CumulDeltaSeries[iStart] / MACumulDelta.Result[iStart];
-                                double CumulDeltaLarge = CumulDeltaFilter > Filter_Ratio ? CumulDeltaSeries[iStart] : 0;
-                                Color dynCDColor = CumulDeltaLarge > 2 ? ColorLargeResult : dynColorCD;
+                                // ====== Cumul Delta Strength ======
+                                double cumulDeltaStrength = CumulDeltaSeries[iStart] / MACumulDelta.Result[iStart];
+                                Color dynCDColor = cumulDeltaStrength > Filter_Ratio ? ColorLargeResult : dynColorCD;
                                 CD.Color = dynCDColor;
                             }
                         }
@@ -1108,31 +1095,36 @@ namespace cAlgo
             return isBullish ? min : max;
         }
 
-        public static string FormatBigNumber(double num)
+        public string FormatBigNumber(double num)
         {
             /*
+                MaxDigits = 2
                 123        ->  123
-                1234       ->  1,23k
+                1234       ->  1.23k
                 12345      ->  12.35k
-                123456     ->  123.4k
+                123456     ->  123.45k
                 1234567    ->  1.23M
                 12345678   ->  12.35M
-                123456789  ->  123.5M
+                123456789  ->  123.56M
             */
+            FormatMaxDigits_Data selected = FormatMaxDigits_Input;
+            string digitsThousand = selected == FormatMaxDigits_Data.Two ? "0.##k" : selected == FormatMaxDigits_Data.One ? "0.#k" : "0.k";
+            string digitsMillion = selected == FormatMaxDigits_Data.Two ? "0.##M" : selected == FormatMaxDigits_Data.One ? "0.#M" : "0.M";
+            
             if (num >= 100000000) {
-                return (num / 1000000D).ToString("0.#M");
+                return (num / 1000000D).ToString(digitsMillion);
             }
             if (num >= 1000000) {
-                return (num / 1000000D).ToString("0.##M");
+                return (num / 1000000D).ToString(digitsMillion);
             }
             if (num >= 100000) {
-                return (num / 1000D).ToString("0.#k");
+                return (num / 1000D).ToString(digitsThousand);
             }
             if (num >= 10000) {
-                return (num / 1000D).ToString("0.##k");
+                return (num / 1000D).ToString(digitsThousand);
             }
             if (num >= 1000) {
-                return (num / 1000D).ToString("0.##k");
+                return (num / 1000D).ToString(digitsThousand);
             }
 
             return num.ToString("#,0");
@@ -1228,6 +1220,10 @@ namespace cAlgo
         {
             // The chart should already be clear
             // No objects and bar colors
+
+            // The plot (sometimes in some options, like Volume View) is too fast, slow down a bit.
+            Thread.Sleep(200);
+
             int index;
             if (Lookback != -1 && Lookback > 0)
                 index = Bars.OpenTimes.GetIndexByTime(Server.Time)-Lookback;
@@ -1369,7 +1365,7 @@ namespace cAlgo
             var BarsToShow_Input = CreateInputWithLabel("Nº Bars", FirstParams.NBars.ToString(), BarsToShow_InputKey);
             grid.AddChild(BarsToShow_Input, 1, 0);
 
-            var RowHeightInput = CreateInputWithLabel("Row Height", FirstParams.RowHeight.ToString("0.############################"), RowHeight_InputKey);
+            var RowHeightInput = CreateInputWithLabel("Row(pips)", FirstParams.RowHeight.ToString("0.############################", CultureInfo.InvariantCulture), RowHeight_InputKey);
             grid.AddChild(RowHeightInput, 1, 2);
 
             ResultTypePanel = CreateComboBoxWithLabel("Result Type", ResultType_InputKey);
@@ -1672,7 +1668,7 @@ namespace cAlgo
                 switch (key)
                 {
                     case "BarsToShowKey": textInputMap[key].Text = indicatorParams.NBars.ToString(); break;
-                    case "RowHeightKey": textInputMap[key].Text = indicatorParams.RowHeight.ToString("0.############################"); break;
+                    case "RowHeightKey": textInputMap[key].Text = indicatorParams.RowHeight.ToString("0.############################", CultureInfo.InvariantCulture); break;
                 }
             }
             foreach (var key in comboBoxMap.Keys)
@@ -1691,12 +1687,16 @@ namespace cAlgo
         }
         private void TextChangedEvent(TextChangedEventArgs obj)
         {
-            int nBars = GetValueFromInput(BarsToShow_InputKey, -1);
-            double rowHeight = GetDoubleFromInput(RowHeight_InputKey, -1);
+            int nBars = GetValueFromInput(BarsToShow_InputKey, -2);
+            double rowPips = GetDoubleFromInput(RowHeight_InputKey, -1);
+            
+            if (rowPips != -1 && rowPips > 0) {
+                double rowHeight = Outside.Symbol.PipSize * rowPips;
 
-            if (rowHeight != -1 && rowHeight > 0 && rowHeight != Outside.GetRowHeight()) {
-                Outside.SetRowHeight(rowHeight);
-                RecalculateOutsideWithMsg();
+                if (rowHeight != Outside.GetRowHeight()) {
+                    Outside.SetRowHeight(rowHeight);
+                    RecalculateOutsideWithMsg();   
+                }
             }
             if ((nBars == -1 || nBars > 0) && nBars != Outside.GetLookback()) {
                 Outside.SetLookback(nBars);
@@ -1776,7 +1776,7 @@ namespace cAlgo
         }
         private double GetDoubleFromInput(string inputKey, int defaultValue)
         {
-            return double.TryParse(textInputMap[inputKey].Text, out double value) ? value : defaultValue;
+            return double.TryParse(textInputMap[inputKey].Text, NumberStyles.Number, CultureInfo.InvariantCulture, out double value) ? value : defaultValue;
         }
         private bool GetValueFromCheckbox(string inputKey, bool defaultValue)
         {

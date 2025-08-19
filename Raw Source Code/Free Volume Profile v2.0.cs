@@ -30,13 +30,14 @@ What's new in rev. 1?
 -Fix => Indicator's objects being randomly removed right after switching Panel settings
 -Fix => Lookback doesn't load more historical data
 -Fix => Real-time profile differs from historical profile of the same period
+-Row Height in Pips!
 -Custom Format (k, M) for Big Numbers (n >= 1000)!
 -Change histograms side to Right (Delta Profile) in Normal+Delta mode
 -Bars Distribution => OHLC_No_Avg and Open
 -Buy vs Sell => Sum, Subtract and Divide total values of each side
 -Delta => Total, Min, Max, Subtract (min - max) Delta
 
-Last update => 12/08/2025
+Last update => 14/08/2025
 
 AUTHOR: srlcarlg
 
@@ -163,8 +164,18 @@ namespace cAlgo
 
         [Parameter("Show Results?", DefaultValue = true, Group = "==== Other settings ====")]
         public bool ShowResults { get; set; }
+
         [Parameter("Format Results?", DefaultValue = true, Group = "==== Other settings ====")]
         public bool FormatResults { get; set; }
+        
+        public enum FormatMaxDigits_Data
+        {
+            Zero,
+            One,
+            Two,
+        }
+        [Parameter("Format Max Digits:", DefaultValue = FormatMaxDigits_Data.One, Group = "==== Other settings ====")]
+        public FormatMaxDigits_Data FormatMaxDigits_Input { get; set; }
 
         public enum BuySellResult_Data
         {
@@ -256,7 +267,6 @@ namespace cAlgo
 
         private double HeightPips = 4;
         private double rowHeight = 0;
-        private double drawHeight = 0;
         private double prevPrice;
         private double[] priceVA_LHP = { 0, 0, 0 };
 
@@ -401,14 +411,10 @@ namespace cAlgo
 
             void SetHeightPips(double digits5, double digits2)
             {
-                if (Symbol.Digits == 5)
+                if (Symbol.Digits == 5 || Symbol.Digits == 1)
                     HeightPips = digits5;
-                else if (Symbol.Digits == 2)
-                {
+                else
                     HeightPips = digits2;
-                    if (Symbol.PipSize == 0.1)
-                        HeightPips /= 2;
-                }
             }
             string[] timesBased = { "Minute", "Hour", "Daily", "Day" };
             if (!timesBased.Any(BarsVOLSource_TF.Name.ToString().Contains))
@@ -471,7 +477,6 @@ namespace cAlgo
 
             // Ex: 4 pips to VOL Distribuition(rowHeight)
             rowHeight = Symbol.PipSize * HeightPips;
-            drawHeight = Symbol.PipSize * (HeightPips / 2);
 
             DrawOnScreen("Calculating...");
             string nonTimeBased = !timesBased.Any(Chart.TimeFrame.ToString().Contains) ? "Ticks/Renko/Range with 100% Histogram Width \n sometimes is recommended" : "";
@@ -510,7 +515,7 @@ namespace cAlgo
             {
                 LookBack = Lookback,
                 VolMode = VolumeModeInput,
-                RowHeight = rowHeight,
+                RowHeight = HeightPips,
                 Interval = LookBack_TF,
                 KeepPOC = KeepPOC,
                 ExtendedPOC = ExtendPOC,
@@ -566,7 +571,7 @@ namespace cAlgo
                 {
                     POCsLines[tl].Time2 = Bars.OpenTimes[index];
                     string dynDate = LookBack_TF == TimeFrame.Daily ? POCsLines[tl].Time1.Date.AddDays(1).ToString().Replace("00:00:00", "") : POCsLines[tl].Time1.Date.ToString();
-                    Chart.DrawText($"POC{POCsLines[tl].Time1}", $"{dynDate}", Bars.OpenTimes[index], POCsLines[tl].Y2 + drawHeight, ColorPOC);
+                    Chart.DrawText($"POC{POCsLines[tl].Time1}", $"{dynDate}", Bars.OpenTimes[index], POCsLines[tl].Y2 + (rowHeight / 2), ColorPOC);
                 }
             }
 
@@ -601,7 +606,7 @@ namespace cAlgo
             {
                 isLive = true;
                 // "Repaint" if the price moves half of rowHeight
-                if (Bars.ClosePrices[index] >= (prevPrice + drawHeight) || Bars.ClosePrices[index] <= (prevPrice - drawHeight) || configHasChanged)
+                if (Bars.ClosePrices[index] >= (prevPrice + (rowHeight / 2)) || Bars.ClosePrices[index] <= (prevPrice - (rowHeight / 2)) || configHasChanged)
                 {
                     for (int i = indexStart; i <= index; i++)
                     {
@@ -791,8 +796,8 @@ namespace cAlgo
                         double percentSell = (volSell * 100) / (volBuy + volSell);
 
                         ChartText Left, Right;
-                        Left = Chart.DrawText($"{iStart}BuySum", $"{Math.Round(percentBuy)}%", Bars.OpenTimes[iStart], lowest, BuyColor);
-                        Right = Chart.DrawText($"{iStart}SellSum", $"{Math.Round(percentSell)}%", Bars.OpenTimes[iStart], lowest, SellColor);
+                        Left = Chart.DrawText($"{iStart}SellSum", $"{Math.Round(percentSell)}%", Bars.OpenTimes[iStart], lowest, SellColor);
+                        Right = Chart.DrawText($"{iStart}BuySum", $"{Math.Round(percentBuy)}%", Bars.OpenTimes[iStart], lowest, BuyColor); 
                         Left.HorizontalAlignment = HorizontalAlignment.Left; Left.FontSize = FontSizeResults;
                         Right.HorizontalAlignment = HorizontalAlignment.Right; Right.FontSize = FontSizeResults;
 
@@ -1352,31 +1357,36 @@ namespace cAlgo
                 }
             }
         }
-        public static string FormatBigNumber(double num)
+        public string FormatBigNumber(double num)
         {
             /*
+                MaxDigits = 2
                 123        ->  123
-                1234       ->  1,23k
+                1234       ->  1.23k
                 12345      ->  12.35k
-                123456     ->  123.4k
+                123456     ->  123.45k
                 1234567    ->  1.23M
                 12345678   ->  12.35M
-                123456789  ->  123.5M
+                123456789  ->  123.56M
             */
+            FormatMaxDigits_Data selected = FormatMaxDigits_Input;
+            string digitsThousand = selected == FormatMaxDigits_Data.Two ? "0.##k" : selected == FormatMaxDigits_Data.One ? "0.#k" : "0.k";
+            string digitsMillion = selected == FormatMaxDigits_Data.Two ? "0.##M" : selected == FormatMaxDigits_Data.One ? "0.#M" : "0.M";
+            
             if (num >= 100000000) {
-                return (num / 1000000D).ToString("0.#M");
+                return (num / 1000000D).ToString(digitsMillion);
             }
             if (num >= 1000000) {
-                return (num / 1000000D).ToString("0.##M");
+                return (num / 1000000D).ToString(digitsMillion);
             }
             if (num >= 100000) {
-                return (num / 1000D).ToString("0.#k");
+                return (num / 1000D).ToString(digitsThousand);
             }
             if (num >= 10000) {
-                return (num / 1000D).ToString("0.##k");
+                return (num / 1000D).ToString(digitsThousand);
             }
             if (num >= 1000) {
-                return (num / 1000D).ToString("0.##k");
+                return (num / 1000D).ToString(digitsThousand);
             }
 
             return num.ToString("#,0");
@@ -1518,7 +1528,7 @@ namespace cAlgo
             downKeys.Sort();
             downKeys.Reverse();
 
-            double[] withoutVA = { priceLVOL - (rowHeight * 2), priceLVOL + drawHeight, priceLVOL };
+            double[] withoutVA = { priceLVOL - (rowHeight * 2), priceLVOL + (rowHeight / 2), priceLVOL };
             if (upKeys.Count == 0 || downKeys.Count == 0)
                 return withoutVA;
 
@@ -1690,7 +1700,25 @@ namespace cAlgo
                 }
                 VolumeProfile(indexStart, index);
             }
+               
+            // Repaint current profile
+            for (int i = indexStart; i <= Bars.Count; i++)
+            {
+                if (i == indexStart)
+                {
+                    Segments.Clear();
+                    VolumesRank.Clear();
+                    VolumesRank_Up.Clear();
+                    VolumesRank_Down.Clear();
+                    DeltaRank.Clear();
+                    double[] resetDelta = {0, 0};
+                    MinMaxDelta = resetDelta;
+                    RectanglesToColor.Clear();
+                }
 
+                VolumeProfile(indexStart, i);
+            }
+            
             configHasChanged = true;
             if (ExtendPOC) {
                 ExtendPOCNow();
@@ -1700,8 +1728,6 @@ namespace cAlgo
         public void SetRowHeight(double number)
         {
             rowHeight = number;
-            drawHeight = number/2;
-
         }
         public void SetLookback(int number)
         {
@@ -1751,7 +1777,7 @@ namespace cAlgo
                 {
                     POCsLines[tl].Time2 = Bars.LastBar.OpenTime;
                     string dynDate = LookBack_TF == TimeFrame.Daily ? POCsLines[tl].Time1.Date.AddDays(1).ToString().Replace("00:00:00", "") : POCsLines[tl].Time1.Date.ToString();
-                    Chart.DrawText($"POC{POCsLines[tl].Time1}", $"{dynDate}", Bars.LastBar.OpenTime, POCsLines[tl].Y2 + drawHeight, ColorPOC);
+                    Chart.DrawText($"POC{POCsLines[tl].Time1}", $"{dynDate}", Bars.LastBar.OpenTime, POCsLines[tl].Y2 + (rowHeight / 2), ColorPOC);
                 }
             }
         }
@@ -1852,7 +1878,7 @@ namespace cAlgo
 
             var Lookback_Input = CreateInputWithLabel("Lookback", FirstParams.LookBack.ToString(), LookBack_InputKey);
             grid.AddChild(Lookback_Input, 1, 0);
-            var RowHeightInput = CreateInputWithLabel("Row Height", FirstParams.RowHeight.ToString("0.############################"), RowHeight_InputKey);
+            var RowHeightInput = CreateInputWithLabel("Row(pips)", FirstParams.RowHeight.ToString("0.############################", CultureInfo.InvariantCulture), RowHeight_InputKey);
             grid.AddChild(RowHeightInput, 1, 2);
             var IntervalInput = CreateComboBoxWithLabel("Interval", Interval_InputKey);
             grid.AddChild(IntervalInput, 1, 4);
@@ -2089,7 +2115,7 @@ namespace cAlgo
                 switch (key)
                 {
                     case "LookBackKey": textInputMap[key].Text = indicatorParams.LookBack.ToString(); break;
-                    case "RowHeightKey": textInputMap[key].Text = indicatorParams.RowHeight.ToString("0.############################"); break;
+                    case "RowHeightKey": textInputMap[key].Text = indicatorParams.RowHeight.ToString("0.############################", CultureInfo.InvariantCulture); break;
                 }
             }
             foreach (var key in comboBoxMap.Keys)
@@ -2107,11 +2133,15 @@ namespace cAlgo
         private void TextChangedEvent(TextChangedEventArgs obj)
         {
             int lookBack = GetValueFromInput(LookBack_InputKey, -1);
-            double rowHeight = GetDoubleFromInput(RowHeight_InputKey, -1);
+            double rowPips = GetDoubleFromInput(RowHeight_InputKey, -1);
+            
+            if (rowPips != -1 && rowPips > 0) {
+                double rowHeight = Outside.Symbol.PipSize * rowPips;
 
-            if (rowHeight != -1 && rowHeight > 0 && rowHeight != Outside.GetRowHeight()) {
-                Outside.SetRowHeight(rowHeight);
-                RecalculateOutsideWithMsg();
+                if (rowHeight != Outside.GetRowHeight()) {
+                    Outside.SetRowHeight(rowHeight);
+                    RecalculateOutsideWithMsg();   
+                }
             }
             if (lookBack > 0 && lookBack != Outside.GetLookback()) {
                 Outside.SetLookback(lookBack);
@@ -2177,7 +2207,7 @@ namespace cAlgo
         }
         private double GetDoubleFromInput(string inputKey, int defaultValue)
         {
-            return double.TryParse(textInputMap[inputKey].Text, out double value) ? value : defaultValue;
+            return double.TryParse(textInputMap[inputKey].Text, NumberStyles.Number, CultureInfo.InvariantCulture, out double value) ? value : defaultValue;
         }
         private static TimeFrame StringToTimeframe(string inputTF)
         {
