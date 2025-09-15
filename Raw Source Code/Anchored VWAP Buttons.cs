@@ -1,16 +1,16 @@
 /*
 --------------------------------------------------------------------------------------------------------------------------------
-                      Anchored VWAP Buttons 
+                      Anchored VWAP Buttons
                           revision 1
 
 Just a Anchored VWAP with 5 Buttons in just 1 indicator
 
 What's new in rev.1?
 -Added Daily, Weekly, Monthly VWAPs
--Added STD to any VWAP (one STD per instance)
+-Added StdDev to any VWAP (one StdDev per instance)
 -Great refactor
 
-Last update => 09/08/2025
+Last update => 15/09/2025
 
 Usage:
 Create VWAP: Click on the button and select the bar for the VWAP
@@ -21,10 +21,10 @@ AUTHOR: srlcarlg
 ----------------------------------------------------------------------------------------------------------------------------
 */
 
-using System;
-using System.Collections.Generic;
 using cAlgo.API;
 using cAlgo.API.Internals;
+using System;
+using System.Collections.Generic;
 
 namespace cAlgo
 {
@@ -33,13 +33,15 @@ namespace cAlgo
 
     [Cloud("Upper Deviation 1", "Upper Deviation 3")]
     [Cloud("Lower Deviation 1", "Lower Deviation 3")]
-    
-    [Indicator(IsOverlay = true, AccessRights = AccessRights.None)]
+
+    [Indicator(IsOverlay = true, AutoRescale = false, AccessRights = AccessRights.None)]
     public class AnchoredVWAPButtons : Indicator
     {
-        public enum ConfigButtonsData
+        public enum ConfigButtons_Data
         {
+
             Top_Left,
+            Top_Center,
             Top_Right,
             Center_Left,
             Center_Right,
@@ -49,11 +51,10 @@ namespace cAlgo
         }
         [Parameter("Buttons Color:", DefaultValue = "98ADD8E6", Group = "==== Anchored VWAP Buttons ====")]
         public Color BtnColor { get; set; }
-        [Parameter("Buttons Position:", DefaultValue = ConfigButtonsData.Top_Right, Group = "==== Anchored VWAP Buttons ====")]
-        public ConfigButtonsData ConfigButtonsInput { get; set; }
+        [Parameter("Buttons Position:", DefaultValue = ConfigButtons_Data.Top_Right, Group = "==== Anchored VWAP Buttons ====")]
+        public ConfigButtons_Data ConfigButtons_Input { get; set; }
         [Parameter("Buttons Orientation:", DefaultValue = Orientation.Horizontal, Group = "==== Anchored VWAP Buttons ====")]
         public Orientation BtnOrientation { get; set; }
-
 
         [Parameter("Show Daily", DefaultValue = false, Group = "==== DWM VWAPs ====")]
         public bool ShowDaily { get; set; }
@@ -64,21 +65,21 @@ namespace cAlgo
         [Parameter("Remove Interval Line (first bar)", DefaultValue = true, Group = "==== DWM VWAPs ====")]
         public bool RemoveIntervalLine { get; set; }
 
-        public enum STDSource_Data
+        public enum StdDevSource_Data
         {
             Anchored,
             Daily,
             Weekly,
             Monthly
         }
-        [Parameter("STD Source", DefaultValue = STDSource_Data.Daily, Group = "==== STD VWAP ====")]
-        public STDSource_Data STDSource_Input { get; set; }
-        [Parameter("First Multiplier", DefaultValue = 1.0, Group = "==== STD VWAP ====")]
-        public double STD1_Input { get; set; }
-        [Parameter("Second Multiplier", DefaultValue = 2.0, Group = "==== STD VWAP ====")]
-        public double STD2_Input { get; set; }
-        [Parameter("Third Multiplier", DefaultValue = 3.0, Group = "==== STD VWAP ====")]
-        public double STD3_Input { get; set; }
+        [Parameter("StdDev Source", DefaultValue = StdDevSource_Data.Anchored, Group = "==== StdDev VWAP ====")]
+        public StdDevSource_Data StdDevSource_Input { get; set; }
+        [Parameter("First Multiplier", DefaultValue = 1.0, Group = "==== StdDev VWAP ====")]
+        public double StdDev1_Input { get; set; }
+        [Parameter("Second Multiplier", DefaultValue = 2.0, Group = "==== StdDev VWAP ====")]
+        public double StdDev2_Input { get; set; }
+        [Parameter("Third Multiplier", DefaultValue = 3.0, Group = "==== StdDev VWAP ====")]
+        public double StdDev3_Input { get; set; }
 
 
         [Output("Daily VWAP", LineColor = "FFFFFF33", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
@@ -89,18 +90,18 @@ namespace cAlgo
         public IndicatorDataSeries MonthlyVWAP { get; set; }
 
         [Output("Upper Deviation 1", LineColor = "7400BFFF", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
-        public IndicatorDataSeries TopSTD_1 { get; set; }
+        public IndicatorDataSeries TopStdDev_1 { get; set; }
         [Output("Upper Deviation 2", LineColor = "7400BFFF", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
-        public IndicatorDataSeries TopSTD_2 { get; set; }
+        public IndicatorDataSeries TopStdDev_2 { get; set; }
         [Output("Upper Deviation 3", LineColor = "7400BFFF", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
-        public IndicatorDataSeries TopSTD_3 { get; set; }
+        public IndicatorDataSeries TopStdDev_3 { get; set; }
 
         [Output("Lower Deviation 1", LineColor = "74DC143C", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
-        public IndicatorDataSeries BottomSTD_1 { get; set; }
+        public IndicatorDataSeries BottomStdDev_1 { get; set; }
         [Output("Lower Deviation 2", LineColor = "74DC143C", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
-        public IndicatorDataSeries BottomSTD_2 { get; set; }
+        public IndicatorDataSeries BottomStdDev_2 { get; set; }
         [Output("Lower Deviation 3", LineColor = "74DC143C", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
-        public IndicatorDataSeries BottomSTD_3 { get; set; }
+        public IndicatorDataSeries BottomStdDev_3 { get; set; }
 
 
         [Output("Top VWAP", LineColor = "A000BFFF", LineStyle = LineStyle.Solid, PlotType = PlotType.Line)]
@@ -152,43 +153,60 @@ namespace cAlgo
         public IndicatorDataSeries CumulVol_D;
         public IndicatorDataSeries CumulVol_W;
         public IndicatorDataSeries CumulVol_M;
-        
+
         private Bars Daily_Bars;
         private Bars Weekly_Bars;
         private Bars Monthly_Bars;
 
         protected override void Initialize()
         {
-            VerticalAlignment v_align = VerticalAlignment.Bottom;
-            HorizontalAlignment h_align = HorizontalAlignment.Left;
+            VerticalAlignment vAlign = VerticalAlignment.Bottom;
+            HorizontalAlignment hAlign = HorizontalAlignment.Right;
 
-            if (ConfigButtonsInput == ConfigButtonsData.Bottom_Right)
-                h_align = HorizontalAlignment.Right;
-            else if (ConfigButtonsInput == ConfigButtonsData.Top_Left)
-                v_align = VerticalAlignment.Top;
-            else if (ConfigButtonsInput == ConfigButtonsData.Top_Right) {
-                v_align = VerticalAlignment.Top;
-                h_align = HorizontalAlignment.Right;
-            }  else if (ConfigButtonsInput == ConfigButtonsData.Center_Right) {
-                v_align = VerticalAlignment.Center;
-                h_align = HorizontalAlignment.Right;
-            } else if (ConfigButtonsInput == ConfigButtonsData.Center_Left) {
-                v_align = VerticalAlignment.Center;
-                h_align = HorizontalAlignment.Left;
-            } else if (ConfigButtonsInput == ConfigButtonsData.Bottom_Center) {
-                v_align = VerticalAlignment.Bottom;
-                h_align = HorizontalAlignment.Center;
+            switch (ConfigButtons_Input)
+            {
+                case ConfigButtons_Data.Bottom_Left:
+                    hAlign = HorizontalAlignment.Left;
+                    break;
+                case ConfigButtons_Data.Top_Left:
+                    vAlign = VerticalAlignment.Top;
+                    hAlign = HorizontalAlignment.Left;
+                    break;
+                case ConfigButtons_Data.Top_Right:
+                    vAlign = VerticalAlignment.Top;
+                    hAlign = HorizontalAlignment.Right;
+                    break;
+                case ConfigButtons_Data.Center_Right:
+                    vAlign = VerticalAlignment.Center;
+                    hAlign = HorizontalAlignment.Right;
+                    break;
+                case ConfigButtons_Data.Center_Left:
+                    vAlign = VerticalAlignment.Center;
+                    hAlign = HorizontalAlignment.Left;
+                    break;
+                case ConfigButtons_Data.Top_Center:
+                    vAlign = VerticalAlignment.Top;
+                    hAlign = HorizontalAlignment.Center;
+                    break;
+                case ConfigButtons_Data.Bottom_Center:
+                    vAlign = VerticalAlignment.Bottom;
+                    hAlign = HorizontalAlignment.Center;
+                    break;
             }
 
             var wrapPanel = new WrapPanel
             {
-                HorizontalAlignment = h_align,
-                VerticalAlignment = v_align,
+                HorizontalAlignment = hAlign,
+                VerticalAlignment = vAlign,
                 Orientation = BtnOrientation,
             };
 
-            for (int i = 0; i < 5; i++)
-                AddButton(wrapPanel, BtnColor, i);
+            // For Loop slowdown indicator startup
+            AddButton(wrapPanel, BtnColor, 0);
+            AddButton(wrapPanel, BtnColor, 1);
+            AddButton(wrapPanel, BtnColor, 2);
+            AddButton(wrapPanel, BtnColor, 3);
+            AddButton(wrapPanel, BtnColor, 4);
 
             Chart.AddControl(wrapPanel);
             Chart.MouseMove += DrawVerticalLine;
@@ -241,9 +259,9 @@ namespace cAlgo
             btnIsActive = true;
             currentBtn = obj.Button;
             obj.Button.IsEnabled = false;
-            Chart.DrawStaticText("txt", "Select a bar for VWAP.", VerticalAlignment.Top, HorizontalAlignment.Center, Color.Orange);
-            if (STDSource_Input == STDSource_Data.Anchored)
-                Chart.DrawStaticText("txt1", "\nOnly the first button[0] will have the Standard Deviation.", VerticalAlignment.Top, HorizontalAlignment.Center, Color.Orange);
+            Chart.DrawStaticText("txt", "Select a bar for VWAP.", VerticalAlignment.Top, HorizontalAlignment.Center, Color.LightBlue);
+            if (StdDevSource_Input == StdDevSource_Data.Anchored)
+                Chart.DrawStaticText("txt1", "\nOnly the first button[0] will have the Standard Deviation.", VerticalAlignment.Top, HorizontalAlignment.Center, Color.LightBlue);
         }
         public void DrawVerticalLine(ChartMouseEventArgs obj)
         {
@@ -296,9 +314,9 @@ namespace cAlgo
                     TopVWAP_Series[j] = sumHigh / sumVol;
                     MiddleVWAP_Series[j] = sumHL2 / sumVol;
                     BottomVWAP_Series[j] = sumLow / sumVol;
-                    // Only ONE Anchored STD VWAP
-                    if (STDSource_Input == STDSource_Data.Anchored && btnIndex == 0)
-                        STD_VWAP(indexStart, j, MiddleVWAP_Series);
+                    // Only ONE Anchored StdDev VWAP
+                    if (StdDevSource_Input == StdDevSource_Data.Anchored && btnIndex == 0)
+                        StdDev_VWAP(indexStart, j, MiddleVWAP_Series);
                 }
 
                 switch (btnIndex)
@@ -316,10 +334,10 @@ namespace cAlgo
 
             if (verticalLine != null)
             {
-                Chart.DrawStaticText("txt", "", VerticalAlignment.Top, HorizontalAlignment.Center, Color.Orange);
+                Chart.DrawStaticText("txt", "", VerticalAlignment.Top, HorizontalAlignment.Center, Color.LightBlue);
                 Chart.RemoveObject("VerticalLine");
                 Chart.RemoveObject("txt");
-                if (STDSource_Input == STDSource_Data.Anchored)
+                if (StdDevSource_Input == StdDevSource_Data.Anchored)
                     Chart.RemoveObject("txt1");
                 verticalLine = null;
                 btnIsActive = false;
@@ -353,12 +371,12 @@ namespace cAlgo
                     MiddleVWAP_Series[j] = sumHL2 / sumVol;
                     BottomVWAP_Series[j] = sumLow / sumVol;
 
-                    // Only ONE Anchored STD VWAP
-                    if (STDSource_Input == STDSource_Data.Anchored && btnIndex == 0)
-                        STD_VWAP(buttonsStartIndexes[btnIndex], j, MiddleVWAP_Series);
+                    // Only ONE Anchored StdDev VWAP
+                    if (StdDevSource_Input == StdDevSource_Data.Anchored && btnIndex == 0)
+                        StdDev_VWAP(buttonsStartIndexes[btnIndex], j, MiddleVWAP_Series);
                 }
             }
-            
+
             if (btnActives[0])
                 UpdtVWAP(0, TopVWAP, MiddleVWAP, BottomVWAP);
             if (btnActives[1])
@@ -380,19 +398,20 @@ namespace cAlgo
                 MiddleVWAP_Series[i] = double.NaN;
                 BottomVWAP_Series[i] = double.NaN;
 
-                // Only ONE Anchored STD VWAP
-                if (STDSource_Input == STDSource_Data.Anchored && btnIndex == 0)
+                // Only ONE Anchored StdDev VWAP
+                if (StdDevSource_Input == StdDevSource_Data.Anchored && btnIndex == 0)
                 {
-                    TopSTD_1[i] = double.NaN;
-                    TopSTD_2[i] = double.NaN;
-                    TopSTD_3[i] = double.NaN;
+                    TopStdDev_1[i] = double.NaN;
+                    TopStdDev_2[i] = double.NaN;
+                    TopStdDev_3[i] = double.NaN;
 
-                    BottomSTD_1[i] = double.NaN;
-                    BottomSTD_2[i] = double.NaN;
-                    BottomSTD_3[i] = double.NaN;
+                    BottomStdDev_1[i] = double.NaN;
+                    BottomStdDev_2[i] = double.NaN;
+                    BottomStdDev_3[i] = double.NaN;
                 }
             }
-            for (int i = 0; i < Chart.BarsTotal; i++)
+
+            for (int i = buttonsStartIndexes[btnIndex]; i < Chart.BarsTotal; i++)
             {
                 switch (btnIndex)
                 {
@@ -410,22 +429,22 @@ namespace cAlgo
                 Bars TF_Bars = Daily_Bars;
                 int TF_idx = TF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
                 int indexStart = Bars.OpenTimes.GetIndexByTime(TF_Bars.OpenTimes[TF_idx]);
-                
+
                 DWM_VWAP(index, indexStart, CumulPriceVol_D, CumulVol_D, DailyVWAP);
 
-                if (STDSource_Input == STDSource_Data.Daily)
-                    STD_VWAP(indexStart, index, DailyVWAP);
+                if (StdDevSource_Input == StdDevSource_Data.Daily)
+                    StdDev_VWAP(indexStart, index, DailyVWAP);
             }
 
             if (ShowWeekly) {
                 Bars TF_Bars = Weekly_Bars;
                 int TF_idx = TF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
                 int indexStart = Bars.OpenTimes.GetIndexByTime(TF_Bars.OpenTimes[TF_idx]);
-                
+
                 DWM_VWAP(index, indexStart, CumulPriceVol_W, CumulVol_W, WeeklyVWAP);
 
-                if (STDSource_Input == STDSource_Data.Weekly)
-                    STD_VWAP(indexStart, index, WeeklyVWAP);
+                if (StdDevSource_Input == StdDevSource_Data.Weekly)
+                    StdDev_VWAP(indexStart, index, WeeklyVWAP);
             }
 
             if (ShowMonthly) {
@@ -434,42 +453,49 @@ namespace cAlgo
                 int indexStart = Bars.OpenTimes.GetIndexByTime(TF_Bars.OpenTimes[TF_idx]);
 
                 DWM_VWAP(index, indexStart, CumulPriceVol_M, CumulVol_M, MonthlyVWAP);
-                
-                if (STDSource_Input == STDSource_Data.Monthly)
-                    STD_VWAP(indexStart, index, MonthlyVWAP);
+
+                if (StdDevSource_Input == StdDevSource_Data.Monthly)
+                    StdDev_VWAP(indexStart, index, MonthlyVWAP);
             }
         }
         private void DWM_VWAP(int index, int indexStart, IndicatorDataSeries CumulPriceVol_Series, IndicatorDataSeries CumulVol_Series, IndicatorDataSeries VWAP_Series) {
                 CumulPriceVol_Series[index] = (Bars.MedianPrices[index] * Bars.TickVolumes[index]) + CumulPriceVol_Series[index - 1];
                 CumulVol_Series[index] = Bars.TickVolumes[index] + CumulVol_Series[index - 1];
-                
                 VWAP_Series[index] = CumulPriceVol_Series[index] / CumulVol_Series[index];
-                
+
                 if (index == indexStart)
                 {
                     CumulPriceVol_Series[index] = Bars.MedianPrices[index] * Bars.TickVolumes[index];
                     CumulVol_Series[index] = Bars.TickVolumes[index];
+                    VWAP_Series[index] = CumulPriceVol_Series[index] / CumulVol_Series[index];
                     if (RemoveIntervalLine)
                         VWAP_Series[index] = double.NaN;
                 }
         }
-        private void STD_VWAP(int indexStart, int index, IndicatorDataSeries series) {
+        private void StdDev_VWAP(int indexStart, int index, IndicatorDataSeries series) {
             double squaredErrors = 0;
-            for (int i = index; i >= indexStart; --i)
+            int count = 0;
+            for (int i = indexStart; i <= index; i++)
             {
-                squaredErrors += Math.Pow(Bars.ClosePrices[i] - series[index], 2.0);
+                double diff = Bars.MedianPrices[i] - series[index];
+                squaredErrors += diff * diff;
+                count++;
             }
 
-            squaredErrors /= index - indexStart + 1;
-            squaredErrors = Math.Sqrt(squaredErrors);
+            if (count == 0)
+                return;
 
-            TopSTD_1[index] = squaredErrors * STD1_Input + series[index];
-            TopSTD_2[index] = squaredErrors * STD2_Input + series[index];
-            TopSTD_3[index] = squaredErrors * STD3_Input + series[index];
-            
-            BottomSTD_1[index] = series[index] - squaredErrors * STD1_Input;
-            BottomSTD_2[index] = series[index] - squaredErrors * STD2_Input;
-            BottomSTD_3[index] = series[index] - squaredErrors * STD3_Input;
+            // Sample => (Period - 1) / Population => Period
+            double variance = squaredErrors / (count - 1);
+            double stdDev = Math.Sqrt(variance);
+
+            TopStdDev_1[index] = stdDev * StdDev1_Input + series[index];
+            TopStdDev_2[index] = stdDev * StdDev2_Input + series[index];
+            TopStdDev_3[index] = stdDev * StdDev3_Input + series[index];
+
+            BottomStdDev_1[index] = series[index] - stdDev * StdDev1_Input;
+            BottomStdDev_2[index] = series[index] - stdDev * StdDev2_Input;
+            BottomStdDev_3[index] = series[index] - stdDev * StdDev3_Input;
         }
     }
 }

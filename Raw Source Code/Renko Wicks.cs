@@ -1,70 +1,91 @@
 /*
 --------------------------------------------------------------------------------------------------------------------------------
                       Renko Wicks
-Renko Wicks applies tick volume logic on non-time based charts.
+                      revision 1
 
-Uses Ticks Data like my other indicator 'Volume for Renko/Range', with a similar logic but focused on the renko price, so:
-BullWick = Minimum price existing during the formation of a bar (between of OpenTime and CloseTime)
-BearWick = Maximum price existing during the formation of a bar (between OpenTime and CloseTime)
+Renko Wicks applies tick volume logic on Price-Based charts.
 
-This uses Ticks Data to correctly calculate Wicks, just like Candles or others Time-Based Charts.
+Uses Tick Data to make the calculation of wicks
+UpWick = Lowest price existing during the formation of a bar (between of OpenTime and CloseTime)
+DownWick = Highest price existing during the formation of a bar (between OpenTime and CloseTime)
 
-For Better Performance, Recompile it on cTrader with .NET 6.0 instead .NET 4.x.
+What's new in rev.1?
+-Includes all "Order Flow Aggregated" related improvements
+    - High-performance GetWicks()
+    - Asynchronous Tick Data Collection
 
 AUTHOR: srlcarlg
 ----------------------------------------------------------------------------------------------------------------------------
 */
-using System;
-using System.Globalization;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using cAlgo.API;
-using cAlgo.API.Collections;
-using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
+using System;
+using System.Linq;
+using System.Globalization;
 
 namespace cAlgo
 {
     [Indicator(IsOverlay = true, AccessRights = AccessRights.None)]
     public class RenkoWicks : Indicator
     {
-        public enum LoadFromData
-        {
-            Today,
-            Yesterday,
+        public enum LoadTickFrom_Data
+        {
+            Today,
+            Yesterday,
+            Before_Yesterday,
             One_Week,
             Two_Week,
             Monthly,
             Custom
-        }
-        [Parameter("Load From:", DefaultValue = LoadFromData.Today, Group = "==== Renko Wicks ====")]
-        public LoadFromData LoadFromInput { get; set; }
-        
-        [Parameter("Custom (dd/mm/yyyy):", DefaultValue = "00/00/0000", Group = "==== Renko Wicks ====")]
+        }
+        [Parameter("Load From:", DefaultValue = LoadTickFrom_Data.Today, Group = "==== Tick Volume Settings ====")]
+        public LoadTickFrom_Data LoadTickFrom_Input { get; set; }
+
+        public enum LoadTickStrategy_Data
+        {
+            At_Startup_Sync,
+            On_ChartStart_Sync,
+            On_ChartEnd_Async
+        }
+        [Parameter("Load Type:", DefaultValue = LoadTickStrategy_Data.On_ChartEnd_Async, Group = "==== Tick Volume Settings ====")]
+        public LoadTickStrategy_Data LoadTickStrategy_Input { get; set; }
+
+        [Parameter("Custom (dd/mm/yyyy):", DefaultValue = "00/00/0000", Group = "==== Tick Volume Settings ====")]
         public string StringDate { get; set; }
-        
-        [Parameter("Nº Bars to Show:", DefaultValue = -1, MinValue = -1, Group = "==== Renko Wicks ====")]
-        public int Lookback { get; set; }
-        
+
+        public enum LoadTickNotify_Data
+        {
+            Minimal,
+            Detailed,
+        }
+        [Parameter("Notifications Type:", DefaultValue = LoadTickNotify_Data.Minimal, Group = "==== Tick Volume Settings ====")]
+        public LoadTickNotify_Data LoadTickNotify_Input { get; set; }
+
+
         [Parameter("Wicks Thickness:", DefaultValue = 1, MaxValue = 5, Group = "==== Renko Wicks ====")]
         public int Thickness { get; set; }
-        
-        // ==============
-        private Bars _TicksOHLC;
-        private DateTime FromDateTime;
-        private VerticalAlignment V_Align = VerticalAlignment.Top;
-        private HorizontalAlignment H_Align = HorizontalAlignment.Center;
-        
-        private IndicatorDataSeries AllWicks;
-        
+
+        // Tick Volume
+        public readonly string NOTIFY_CAPTION = "Renko Wicks";
+        private DateTime firstTickTime;
+        private DateTime fromDateTime;
+        private Bars TicksOHLC;
+        private int lastTick_Wicks = 0;
+        private ProgressBar syncTickProgressBar = null;
+        PopupNotification asyncTickPopup = null;
+        private bool loadingAsyncTicks = false;
+        private bool loadingTicksComplete = false;
+
+        // Timer
+        private class TimerHandler {
+            public bool isAsyncLoading = false;
+        }
+        private readonly TimerHandler timerHandler = new();
+
         private bool WrongTF = false;
-        private Color BullColor;
-        private Color BearColor;
-        private List<double> currentPriceWicks = new List<double>();
-        private List<ChartTrendLine> TrendLinesWicks = new List<ChartTrendLine>();
-        // ==============
-        
+        private Color UpColor;
+        private Color DownColor;
+
         protected override void Initialize()
         {
             // ===== Verify Timeframe =====
@@ -75,211 +96,401 @@ namespace cAlgo
                 WrongTF = true;
                 return;
             }
-        
-            AllWicks = CreateDataSeries();        
-        
-            // First Ticks Data and BarOpened/ObjectsRemoved events
-            _TicksOHLC = MarketData.GetBars(TimeFrame.Tick);
-            Bars.BarOpened += ResetCurrentWick;
-            Chart.ColorsChanged += SetTrendLinesColor;
-            
-            BullColor = Chart.ColorSettings.BullOutlineColor;
-            BearColor = Chart.ColorSettings.BearOutlineColor;
-            
-            if (LoadFromInput == LoadFromData.Custom)
+
+            // First Ticks Data
+            TicksOHLC = MarketData.GetBars(TimeFrame.Tick);
+
+            UpColor = Chart.ColorSettings.BullOutlineColor;
+            DownColor = Chart.ColorSettings.BearOutlineColor;
+
+            if (LoadTickStrategy_Input != LoadTickStrategy_Data.At_Startup_Sync)
             {
-                // ==== Get datetime to load from: dd/mm/yyyy ====                
-                if (DateTime.TryParseExact(StringDate, "dd/mm/yyyy", new CultureInfo("en-US"), DateTimeStyles.None,  out FromDateTime))
-                {
-                    if (FromDateTime > Server.Time.Date)  {
-                        // for Log
-                        FromDateTime = Server.Time.Date;
-                        Print($"Invalid DateTime '{StringDate}'. Using '{FromDateTime}'");
-                    }
+                if (LoadTickStrategy_Input == LoadTickStrategy_Data.On_ChartStart_Sync) {
+                    StackPanel panel = new() {
+                        Width = 200,
+                        Orientation = Orientation.Vertical,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    syncTickProgressBar = new ProgressBar { IsIndeterminate = true, Height = 12 };
+                    panel.AddChild(syncTickProgressBar);
+                    Chart.AddControl(panel);
                 }
-                else {
-                    // for Log
-                    FromDateTime = Server.Time.Date;
-                    Print($"Invalid DateTime '{StringDate}'. Using '{FromDateTime}'");
-                }
-                
+                VolumeInitialize(true);
             }
             else
-            {
-                DateTime LastBarTime = Bars.LastBar.OpenTime.Date;
-                if (LoadFromInput == LoadFromData.Today)
-                    FromDateTime = LastBarTime.Date;
-                else if (LoadFromInput == LoadFromData.Yesterday)
-                    FromDateTime = LastBarTime.AddDays(-1);
-                else if (LoadFromInput == LoadFromData.One_Week)
-                    FromDateTime = LastBarTime.AddDays(-5);
-                else if (LoadFromInput == LoadFromData.Two_Week)
-                    FromDateTime = LastBarTime.AddDays(-10);
-                else if (LoadFromInput == LoadFromData.Monthly)
-                    FromDateTime = LastBarTime.AddMonths(-1);
-            }
-           
-            // ==== Check if existing ticks data on the chart really needs more data ====
-            var FirstTickTime = _TicksOHLC.OpenTimes.FirstOrDefault();  
-            if (FirstTickTime >= FromDateTime) {   
-                LoadMoreTicks(FromDateTime);
-                DrawOnScreen("Data Collection Finished \n Calculating...");
-            }
-            else {
-                Print($"Using existing tick data from '{FirstTickTime}'");  
-                DrawOnScreen($"Using existing tick data from '{FirstTickTime}' \n Calculating...");
-            }
+                VolumeInitialize();
+
+            Timer.Start(TimeSpan.FromSeconds(0.5));
+
+            DrawOnScreen("Loading Ticks Data... \n or \n Calculating...");
         }
-        
+
         public override void Calculate(int index)
-        { 
+        {
             if (WrongTF)
                 return;
-                
-            // ==== Removing Messages ====
+
+            // Tick Data Collection on chart
+            bool isOnChart = LoadTickStrategy_Input != LoadTickStrategy_Data.At_Startup_Sync;
+            if (isOnChart && !loadingTicksComplete)
+                LoadMoreTicksOnChart();
+
+            bool isOnChartAsync = LoadTickStrategy_Input == LoadTickStrategy_Data.On_ChartEnd_Async;
+            if (isOnChartAsync && !loadingTicksComplete)
+                return;
+
+            // Removing Messages
             if (!IsLastBar)
                 DrawOnScreen("");
-            else
-                currentPriceWicks.Add(Bars.ClosePrices[index]);
-            
-            if (index < (Bars.OpenTimes.GetIndexByTime(Server.Time)-Lookback) && (Lookback != -1 && Lookback > 0))
-                return;
-                
-            // ==============
-            var CurrentTimeBar = Bars.OpenTimes[index];
-            var PreviousTimeBar = Bars.OpenTimes[index - 1];
-            var PrevOpen = Bars.OpenPrices[index - 1];
-            
-            bool isBullish = (Bars.ClosePrices[index - 1] > Bars.OpenPrices[index - 1]);
-            bool currentIsBullish = (Bars.ClosePrices[index] > Bars.OpenPrices[index]);
-            bool Gap = Bars.OpenTimes[index - 1] == Bars.OpenTimes[index - 2];
-            // ==============
-            
-            AllWicks[index - 1] = GetWicks(PreviousTimeBar, CurrentTimeBar, isBullish);
-            
-            // ==== HISTORICAL BULL WICK ====           
+
+            double highest = Bars.HighPrices[index];
+            double lowest = Bars.LowPrices[index];
+            double open = Bars.OpenPrices[index];
+
+            bool isBullish = Bars.ClosePrices[index] > Bars.OpenPrices[index];
+            bool prevIsBullish = Bars.ClosePrices[index - 1] > Bars.OpenPrices[index - 1];
+            bool priceGap = Bars.OpenTimes[index] == Bars[index - 1].OpenTime || Bars[index - 2].OpenTime == Bars[index - 1].OpenTime;
+            DateTime currentOpenTime = Bars.OpenTimes[index];
+            DateTime nextOpenTime = Bars.OpenTimes[index + 1];
+
+            double[] wicks = GetWicks(currentOpenTime, nextOpenTime);
+            if (IsLastBar) {
+                lowest = wicks[0];
+                highest = wicks[1];
+                open = Bars.ClosePrices[index - 1];
+            } else {
+                if (isBullish)
+                    lowest = wicks[0];
+                else
+                    highest = wicks[1];
+            }
+
             if (isBullish)
             {
-                if (AllWicks[index - 1] < PrevOpen && !Gap)
-                {
-                    var trendBull = Chart.DrawTrendLine("BullWick_" + (index - 1), PreviousTimeBar, AllWicks[index - 1], PreviousTimeBar, Bars.OpenPrices[index - 1], Chart.ColorSettings.BullOutlineColor);
-                    trendBull.Thickness = Thickness;
-                    trendBull.Comment = "BullWick";
-                    TrendLinesWicks.Add(trendBull);
+                if (lowest < open && !priceGap) {
+                    if (IsLastBar && !prevIsBullish && Bars.ClosePrices[index] > open)
+                        open = Bars.OpenPrices[index];
+                    ChartTrendLine trendlineUp = Chart.DrawTrendLine($"UpWick_{index}", currentOpenTime, open, currentOpenTime, lowest, UpColor);
+                    trendlineUp.Thickness = Thickness;
+                    Chart.RemoveObject($"DownWick_{index}");
                 }
             }
-            // ==== HISTORICAL BEAR WICK ====
             else
             {
-                if (AllWicks[index - 1] > PrevOpen && !Gap)
-                {
-                    var trendBear = Chart.DrawTrendLine("BearWick_" + (index - 1) , PreviousTimeBar, AllWicks[index - 1], PreviousTimeBar, Bars.OpenPrices[index - 1], Chart.ColorSettings.BearOutlineColor);
-                    trendBear.Thickness = Thickness;
-                    trendBear.Comment = "BearWick";
-                    TrendLinesWicks.Add(trendBear);
+                if (highest > open && !priceGap) {
+                    if (IsLastBar && prevIsBullish && Bars.ClosePrices[index] < open)
+                        open = Bars.OpenPrices[index];
+                    ChartTrendLine trendlineDown = Chart.DrawTrendLine($"DownWick_{index}", currentOpenTime, open, currentOpenTime, highest, DownColor);
+                    trendlineDown.Thickness = Thickness;
+                    Chart.RemoveObject($"UpWick_{index}");
                 }
-            }
-            
-            // ==== CURRENT BULL WICK ====
-            if (currentIsBullish)
-            {
-                if (currentPriceWicks.Count == 0)
-                    return;
-                    
-                AllWicks[index] = currentPriceWicks.Min();
-                var currentTrendBull = Chart.DrawTrendLine("currentPriceLines", CurrentTimeBar, AllWicks[index], CurrentTimeBar, currentPriceWicks.Max(), Chart.ColorSettings.BullOutlineColor);
-                currentTrendBull.Thickness = Thickness;
-            }
-            // ==== CURRENT BEAR WICK ====
-            else
-            {
-                if (currentPriceWicks.Count == 0)
-                    return;
-                    
-                AllWicks[index] = currentPriceWicks.Max();
-                var currentTrendBear = Chart.DrawTrendLine("currentPriceLines", CurrentTimeBar, AllWicks[index], CurrentTimeBar, currentPriceWicks.Min(), Chart.ColorSettings.BearOutlineColor);
-                currentTrendBear.Thickness = Thickness;
             }
         }
-        
+
         // ========= Functions Area ==========
-        private double GetWicks(DateTime startTime, DateTime endTime, bool isBullish)
+        private double[] GetWicks(DateTime startTime, DateTime endTime)
         {
             double min = Int32.MaxValue;
             double max = 0;
-                        
-            for (int tickIndex = 0; tickIndex < _TicksOHLC.Count; tickIndex++)
-            {
-                Bar tickBar = _TicksOHLC[tickIndex];
 
-                if (tickBar.OpenTime < startTime || tickBar.OpenTime > endTime)
-                {
-                    if (tickBar.OpenTime > endTime)
-                        break;
-                    else
-                        continue;
+            if (IsLastBar)
+                endTime = TicksOHLC.LastBar.OpenTime;
+
+            for (int tickIndex = lastTick_Wicks; tickIndex < TicksOHLC.Count; tickIndex++)
+            {
+                Bar tickBar = TicksOHLC[tickIndex];
+
+                if (tickBar.OpenTime < startTime || tickBar.OpenTime > endTime) {
+                    if (tickBar.OpenTime > endTime) { lastTick_Wicks = tickIndex; break; }
+                    else continue;
                 }
 
-                if (isBullish && tickBar.Close < min)
-                    min = tickBar.Close;       
-                else if (!isBullish && tickBar.Close > max)
+                if (tickBar.Close < min)
+                    min = tickBar.Close;
+                else if (tickBar.Close > max)
                     max = tickBar.Close;
             }
-            
-            return isBullish ? min : max;
+
+            double[] toReturn = { min, max };
+            return toReturn;
         }
-        // ========= ========== ==========
-        private void LoadMoreTicks(DateTime FromDateTime)
+        private void DrawOnScreen(string msg)
         {
-            bool msg = false;
-            
-            while (_TicksOHLC.OpenTimes.FirstOrDefault() > FromDateTime)
+            Chart.DrawStaticText("txt", $"{msg}", VerticalAlignment.Top, HorizontalAlignment.Center, Color.LightBlue);
+        }
+
+        private void Recalculate() {
+            int startIndex = Bars.OpenTimes.GetIndexByTime(TicksOHLC.OpenTimes.FirstOrDefault());
+            for (int index = startIndex; index < Bars.Count; index++)
             {
-                if (!msg) {
-                    Print($"Loading from '{_TicksOHLC.OpenTimes.Reverse().Last()}' to '{FromDateTime}'...");
-                    msg = true;
+                double highest = Bars.HighPrices[index];
+                double lowest = Bars.LowPrices[index];
+                double open = Bars.OpenPrices[index];
+
+                bool isBullish = Bars.ClosePrices[index] > Bars.OpenPrices[index];
+                bool priceGap = Bars.OpenTimes[index] == Bars[index - 1].OpenTime || Bars[index - 2].OpenTime == Bars[index - 1].OpenTime;
+                DateTime currentOpenTime = Bars.OpenTimes[index];
+                DateTime nextOpenTime = Bars.OpenTimes[index + 1];
+
+                double[] wicks = GetWicks(currentOpenTime, nextOpenTime);
+                if (IsLastBar) {
+                    lowest = wicks[0];
+                    highest = wicks[1];
+                    open = Bars.ClosePrices[index - 1];
+                } else {
+                    if (isBullish)
+                        lowest = wicks[0];
+                    else
+                        highest = wicks[1];
                 }
 
-                int loadedCount = _TicksOHLC.LoadMoreHistory();
-                Print("Loaded {0} Ticks, Current Tick Date: {1}", loadedCount, _TicksOHLC.OpenTimes.FirstOrDefault());
-                if (loadedCount == 0)
-                    break;
-            }
-            Print("Data Collection Finished, First Tick from: {0}", _TicksOHLC.OpenTimes.FirstOrDefault());
-        }
-        // ========= ========== ==========
-        private void ResetCurrentWick(BarOpenedEventArgs obj)
-        {
-            currentPriceWicks.Clear();
-            Chart.RemoveObject("currentPriceLines");
-        }
-        // ========= ========== ==========
-        private void DrawOnScreen(string Msg)
-        {
-            Chart.DrawStaticText("txt", $"{Msg}", V_Align, H_Align, Color.Orange);
-        }
-        // ========= ========== ==========
-        private void SetTrendLinesColor(ChartColorEventArgs obj)
-        {
-            if (obj.Chart.ColorSettings.BullOutlineColor != BullColor) 
-            {
-                for (int wickIndex = 0; wickIndex < TrendLinesWicks.Count; wickIndex++)
+                if (isBullish)
                 {
-                    if (TrendLinesWicks[wickIndex].Comment == "BullWick")
-                        TrendLinesWicks[wickIndex].Color = obj.Chart.ColorSettings.BullOutlineColor;
+                    if (lowest < open && !priceGap) {
+                        ChartTrendLine trendlineUp = Chart.DrawTrendLine($"UpWick_{index}", currentOpenTime, open, currentOpenTime, lowest, UpColor);
+                        trendlineUp.Thickness = Thickness;
+                        Chart.RemoveObject($"DownWick_{index}");
+                    }
                 }
-                BullColor = obj.Chart.ColorSettings.BullOutlineColor;
-            }
-            
-            if (obj.Chart.ColorSettings.BearOutlineColor != BearColor)
-            {
-                for (int wickIndex = 0; wickIndex < TrendLinesWicks.Count; wickIndex++)
+                else
                 {
-                    if (TrendLinesWicks[wickIndex].Comment == "BearWick")
-                        TrendLinesWicks[wickIndex].Color = obj.Chart.ColorSettings.BearOutlineColor;
+                    if (highest > open && !priceGap) {
+                        ChartTrendLine trendlineDown = Chart.DrawTrendLine($"DownWick_{index}", currentOpenTime, open, currentOpenTime, highest, DownColor);
+                        trendlineDown.Thickness = Thickness;
+                        Chart.RemoveObject($"UpWick_{index}");
+                    }
                 }
-                BearColor = obj.Chart.ColorSettings.BearOutlineColor;
             }
         }
+        // *********** VOLUME RENKO/RANGE ***********
+        /*
+            Original source code by srlcarlg (me) (https://ctrader.com/algos/indicators/show/3045)
+            Uses Ticks Data to make the calculation of volume, just like Candles.
+
+            Refactored in Order Flow Ticks v2.0 revision 1.5
+            Improved in Order Flow Aggregated v2.0
+        */
+        private void VolumeInitialize(bool onlyDate = false)
+        {
+            DateTime lastBarDate = Bars.LastBar.OpenTime.Date;
+
+            if (LoadTickFrom_Input == LoadTickFrom_Data.Custom) {
+                // ==== Get datetime to load from: dd/mm/yyyy ====
+                if (DateTime.TryParseExact(StringDate, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out fromDateTime)) {
+                    if (fromDateTime > lastBarDate) {
+                        fromDateTime = lastBarDate;
+                        Notifications.ShowPopup(
+                            NOTIFY_CAPTION,
+                            $"Invalid DateTime '{StringDate}'. \nUsing '{fromDateTime.ToShortDateString()}",
+                            PopupNotificationState.Error
+                        );
+                    }
+                } else {
+                    fromDateTime = lastBarDate;
+                    Notifications.ShowPopup(
+                        NOTIFY_CAPTION,
+                        $"Invalid DateTime '{StringDate}'. \nUsing '{fromDateTime.ToShortDateString()}",
+                        PopupNotificationState.Error
+                    );
+                }
+            }
+            else {
+                fromDateTime = LoadTickFrom_Input switch {
+                    LoadTickFrom_Data.Yesterday => MarketData.GetBars(TimeFrame.Daily).LastBar.OpenTime.Date,
+                    LoadTickFrom_Data.Before_Yesterday => MarketData.GetBars(TimeFrame.Daily).Last(1).OpenTime.Date,
+                    LoadTickFrom_Data.One_Week => MarketData.GetBars(TimeFrame.Weekly).LastBar.OpenTime.Date,
+                    LoadTickFrom_Data.Two_Week => MarketData.GetBars(TimeFrame.Weekly).Last(1).OpenTime.Date,
+                    LoadTickFrom_Data.Monthly => MarketData.GetBars(TimeFrame.Monthly).LastBar.OpenTime.Date,
+                    _ => lastBarDate,
+                };
+            }
+
+            if (onlyDate) {
+                DrawStartVolumeLine();
+                return;
+            }
+
+            // ==== Check if existing ticks data on the chart really needs more data ====
+            firstTickTime = TicksOHLC.OpenTimes.FirstOrDefault();
+            if (firstTickTime >= fromDateTime) {
+
+                PopupNotification progressPopup = null;
+                bool notifyIsMinimal = LoadTickNotify_Input == LoadTickNotify_Data.Minimal;
+                if (notifyIsMinimal)
+                    progressPopup = Notifications.ShowPopup(
+                        NOTIFY_CAPTION,
+                        $"[{Symbol.Name}] Loading Tick Data Synchronously...",
+                        PopupNotificationState.InProgress
+                    );
+
+                while (TicksOHLC.OpenTimes.FirstOrDefault() > fromDateTime)
+                {
+                    int loadedCount = TicksOHLC.LoadMoreHistory();
+                    if (LoadTickNotify_Input == LoadTickNotify_Data.Detailed) {
+                        Notifications.ShowPopup(
+                            NOTIFY_CAPTION,
+                            $"[{Symbol.Name}] Loaded {loadedCount} Ticks. \nCurrent Tick Date: {TicksOHLC.OpenTimes.FirstOrDefault()}",
+                            PopupNotificationState.Partial
+                        );
+                    }
+                    if (loadedCount == 0)
+                        break;
+                }
+
+                if (notifyIsMinimal)
+                    progressPopup.Complete(PopupNotificationState.Success);
+                else {
+                    Notifications.ShowPopup(
+                        NOTIFY_CAPTION,
+                        $"[{Symbol.Name}] Synchronous Tick Data Collection Finished.",
+                        PopupNotificationState.Success
+                    );
+                }
+            }
+
+            DrawStartVolumeLine();
+        }
+
+        private void DrawStartVolumeLine() {
+            try {
+                DateTime firstTickDate = TicksOHLC.OpenTimes.FirstOrDefault();
+                ChartVerticalLine lineInfo = Chart.DrawVerticalLine("VolumeStart", firstTickDate, Color.Red);
+                lineInfo.LineStyle = LineStyle.Lines;
+                ChartText textInfo = Chart.DrawText("VolumeStartText", "Tick Volume Data \n ends here", firstTickDate, Bars.HighPrices[Bars.OpenTimes.GetIndexByTime(firstTickDate)], Color.Red);
+                textInfo.HorizontalAlignment = HorizontalAlignment.Right;
+                textInfo.VerticalAlignment = VerticalAlignment.Top;
+                textInfo.FontSize = 8;
+            } catch { };
+        }
+        private void DrawFromDateLine() {
+            try {
+                ChartVerticalLine lineInfo = Chart.DrawVerticalLine("FromDate", fromDateTime, Color.Yellow);
+                lineInfo.LineStyle = LineStyle.Lines;
+                ChartText textInfo = Chart.DrawText("FromDateText", "Target Tick Data", fromDateTime, Bars.HighPrices[Bars.OpenTimes.GetIndexByTime(fromDateTime)], Color.Yellow);
+                textInfo.HorizontalAlignment = HorizontalAlignment.Left;
+                textInfo.VerticalAlignment = VerticalAlignment.Center;
+                textInfo.FontSize = 8;
+            } catch { };
+        }
+
+        private void LoadMoreTicksOnChart()
+        {
+            firstTickTime = TicksOHLC.OpenTimes.FirstOrDefault();
+            if (firstTickTime > fromDateTime)
+            {
+                bool notifyIsMinimal = LoadTickNotify_Input == LoadTickNotify_Data.Minimal;
+                PopupNotification progressPopup = null;
+
+                if (LoadTickStrategy_Input == LoadTickStrategy_Data.On_ChartStart_Sync) {
+
+                    if (notifyIsMinimal)
+                        progressPopup = Notifications.ShowPopup(
+                            NOTIFY_CAPTION,
+                            $"[{Symbol.Name}] Loading Tick Data Synchronously...",
+                            PopupNotificationState.InProgress
+                        );
+
+                    // "Freeze" the Chart at the beginning of Calculate()
+                    while (TicksOHLC.OpenTimes.FirstOrDefault() > fromDateTime)
+                    {
+                        int loadedCount = TicksOHLC.LoadMoreHistory();
+                        if (LoadTickNotify_Input == LoadTickNotify_Data.Detailed) {
+                            Notifications.ShowPopup(
+                                NOTIFY_CAPTION,
+                                $"[{Symbol.Name}] Loaded {loadedCount} Ticks. \nCurrent Tick Date: {TicksOHLC.OpenTimes.FirstOrDefault()}",
+                                PopupNotificationState.Partial
+                            );
+                        }
+                        if (loadedCount == 0)
+                            break;
+                    }
+
+                    if (notifyIsMinimal)
+                        progressPopup.Complete(PopupNotificationState.Success);
+                    else
+                    {
+                        Notifications.ShowPopup(
+                            NOTIFY_CAPTION,
+                            $"[{Symbol.Name}] Synchronous Tick Data Collection Finished.",
+                            PopupNotificationState.Success
+                        );
+                    }
+                    unlockChart();
+                }
+                else {
+                    if (IsLastBar && !loadingAsyncTicks)
+                        timerHandler.isAsyncLoading = true;
+                }
+            }
+            else
+                unlockChart();
+
+
+            void unlockChart() {
+                if (syncTickProgressBar != null) {
+                    syncTickProgressBar.IsIndeterminate = false;
+                    syncTickProgressBar.IsVisible = false;
+                }
+                syncTickProgressBar = null;
+                loadingTicksComplete = true;
+                DrawStartVolumeLine();
+            }
+        }
+
+        protected override void OnTimer()
+        {
+            if (timerHandler.isAsyncLoading)
+            {
+                if (!loadingAsyncTicks)
+                {
+                    string volumeLineInfo = "=> Zoom out and follow the Vertical Line";
+                    asyncTickPopup = Notifications.ShowPopup(
+                        NOTIFY_CAPTION,
+                        $"[{Symbol.Name}] Loading Tick Data Asynchronously every 0.5 second...\n{volumeLineInfo}",
+                        PopupNotificationState.InProgress
+                    );
+                    // Draw target date.
+                    DrawFromDateLine();
+                }
+
+                if (!loadingTicksComplete)
+                {
+                    TicksOHLC.LoadMoreHistoryAsync((_) =>
+                    {
+                        DateTime currentDate = _.Bars.FirstOrDefault().OpenTime;
+
+                        DrawStartVolumeLine();
+
+                        if (currentDate <= fromDateTime)
+                        {
+
+                            if (asyncTickPopup.State != PopupNotificationState.Success)
+                                asyncTickPopup.Complete(PopupNotificationState.Success);
+
+                            if (LoadTickNotify_Input == LoadTickNotify_Data.Detailed)
+                            {
+                                Notifications.ShowPopup(
+                                    NOTIFY_CAPTION,
+                                    $"[{Symbol.Name}] Asynchronous Tick Data Collection Finished.",
+                                    PopupNotificationState.Success
+                                );
+                            }
+
+                            loadingTicksComplete = true;
+                        }
+                    });
+
+                    loadingAsyncTicks = true;
+                }
+                else
+                {
+                    Timer.Stop();
+                    DrawOnScreen("");
+                    Recalculate();
+                    timerHandler.isAsyncLoading = false;
+                }
+            }
+        }
+
     }
 }
