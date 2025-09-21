@@ -10,7 +10,6 @@ It also has the features of Order Flow Ticks
 *Normal/Gradient Mode = Volume Profile with Fixed/Gradient Color
 *Buy vs Sell Mode = The name explains itself
 *Delta Mode = Volume Delta Profile
-*Normal+Delta Mode = Volume + Delta
 
 The Volume Calculation(in Bars Volume Source)
 is exported, with adaptations, from the BEST VP I have see/used for MT4/MT5,
@@ -21,23 +20,13 @@ All parameters are self-explanatory.
 
 .NET 6.0+ is Required
 
-What's new in v2.0?
--Added Params Panel for quickly switch between settings (volume modes, row height, interval, etc) and most importantly, more user-friendly.
--Refactor to only use Colors API.
--Should work with Mac OS users.
+What's new in rev. 1? (after ODF_AGG)
+- Rewritten using related improvements of ODF_AGG/Volume Profile.
+- High-Performance VP_Bars
+- Concurrent Live VP Update
+- Show Any or All (Mini-VPs/Daily/Weekly/Monthly) Profiles at once!
 
-What's new in rev. 1?
--Fix => Indicator's objects being randomly removed right after switching Panel settings
--Fix => Lookback doesn't load more historical data
--Fix => Real-time profile differs from historical profile of the same period
--Row Height in Pips!
--Custom Format (k, M) for Big Numbers (n >= 1000)!
--Change histograms side to Right (Delta Profile) in Normal+Delta mode
--Bars Distribution => OHLC_No_Avg and Open
--Buy vs Sell => Sum, Subtract and Divide total values of each side
--Delta => Total, Min, Max, Subtract (min - max) Delta
-
-Last update => 14/08/2025
+Last update => 21/09/2025
 
 AUTHOR: srlcarlg
 
@@ -45,20 +34,23 @@ AUTHOR: srlcarlg
 ----------------------------------------------------------------------------------------------------------------------------
 */
 
+using cAlgo.API;
+using cAlgo.API.Indicators;
+using static cAlgo.FreeVolumeProfileV20;
 using System;
 using System.Globalization;
-using System.Collections.Generic;
 using System.Linq;
-using cAlgo.API;
-using cAlgo.API.Internals;
-using static cAlgo.FreeVolumeProfileV20;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace cAlgo
 {
     [Indicator(IsOverlay = true, TimeZone = TimeZones.UTC, AccessRights = AccessRights.None)]
     public class FreeVolumeProfileV20 : Indicator
     {
-        public enum PanelAlignData
+        public enum PanelAlign_Data
         {
             Top_Left,
             Top_Center,
@@ -69,132 +61,77 @@ namespace cAlgo
             Bottom_Center,
             Bottom_Right,
         }
-        [Parameter("Panel Position:", DefaultValue = PanelAlignData.Bottom_Right, Group = "==== Volume Profile v2.0 ====")]
-        public PanelAlignData PanelAlignInput { get; set; }
+        [Parameter("Panel Position:", DefaultValue = PanelAlign_Data.Bottom_Left, Group = "==== Volume Profile v2.0 ====")]
+        public PanelAlign_Data PanelAlign_Input { get; set; }
 
-        public enum VolumeSourceData
+        public enum StorageKeyConfig_Data
         {
-            Ticks,
-            Bars,
+            Symbol_Timeframe,
+            Broker_Symbol_Timeframe
         }
-        [Parameter("Volume Source:", DefaultValue = VolumeSourceData.Bars, Group = "==== Volume Profile v2.0 ====")]
-        public VolumeSourceData VolumeSourceInput { get; set; }
+        [Parameter("Storage By:", DefaultValue = StorageKeyConfig_Data.Broker_Symbol_Timeframe, Group = "==== Volume Profile v2.0 ====")]
+        public StorageKeyConfig_Data StorageKeyConfig_Input { get; set; }
 
-
-        public enum ConfigRowData
+        public enum RowConfig_Data
         {
-            Predefined,
+            ATR,
             Custom,
         }
-        [Parameter("Config:", DefaultValue = ConfigRowData.Predefined, Group = "==== Config ====")]
-        public ConfigRowData ConfigRowInput { get; set; }
+        [Parameter("Row Config:", DefaultValue = RowConfig_Data.ATR, Group = "==== Volume Profile v2.0 ====")]
+        public RowConfig_Data RowConfig_Input { get; set; }
 
-        [Parameter("Custom Interval:", DefaultValue = "Daily", Group = "==== Config ====")]
-        public TimeFrame CustomInterval { get; set; }
-
-        [Parameter("Custom Row Height:", DefaultValue = 1, MinValue = 0.2, Group = "==== Config ====")]
-        public double CustomHeight { get; set; }
+        [Parameter("Custom Row(pips):", DefaultValue = 0.2, MinValue = 0.2, Group = "==== Volume Profile v2.0 ====")]
+        public double CustomHeightInPips { get; set; }
 
 
-        [Parameter("[Bars]Source:", DefaultValue = "Minute", Group = "==== Volume Source ====")]
-        public TimeFrame BarsVOLSource_TF { get; set; }
+        [Parameter("ATR Period:", DefaultValue = 5, MinValue = 1, Group = "==== ATR Row Config ====")]
+        public int ATRPeriod { get; set; }
 
-        public enum DistributionData
+        [Parameter("Row Detail(%):", DefaultValue = 60, MinValue = 20, MaxValue = 100, Group = "==== ATR Row Config ====")]
+        public int RowDetailATR { get; set; }
+
+        [Parameter("Replace Loaded Row?", DefaultValue = false, Group = "==== ATR Row Config ====")]
+        public bool ReplaceByATR { get; set; }
+
+
+        public enum UpdateVPStrategy_Data
         {
-            OHLC,
-            OHLC_No_Avg,
-            Open,
-            High,
-            Low,
-            Close,
-            Uniform_Distribution,
-            Uniform_Presence,
-            Parabolic_Distribution,
-            Triangular_Distribution,
+            Concurrent,
+            SameThread_MayFreeze
         }
-        [Parameter("[Bars]Distribution:", DefaultValue = DistributionData.OHLC, Group = "==== Volume Source ====")]
-        public DistributionData DistributionInput { get; set; }
+        [Parameter("[VP] Update Strategy", DefaultValue = UpdateVPStrategy_Data.Concurrent, Group = "==== Specific Parameters ====")]
+        public UpdateVPStrategy_Data UpdateVPStrategy_Input { get; set; }
 
-        public enum LoadFromData
+        public enum LoadBarsStrategy_Data
         {
-            According_to_Lookback,
-            Today,
-            Yesterday,
-            One_Week,
-            Custom
+            Sync,
+            Async
         }
-        [Parameter("[Ticks]Load From:", DefaultValue = LoadFromData.Today, Group = "==== Volume Source ====")]
-        public LoadFromData LoadFromInput { get; set; }
+        [Parameter("[Source] Load Type:", DefaultValue = LoadBarsStrategy_Data.Async, Group = "==== Specific Parameters ====")]
+        public LoadBarsStrategy_Data LoadBarsStrategy_Input { get; set; }
 
-        [Parameter("[Ticks]Custom (dd/mm/yyyy):", DefaultValue = "00/00/0000", Group = "==== Volume Source ====")]
-        public string StringDate { get; set; }
-
-
-        public enum HistWidthData
-        {
-            _15,
-            _30,
-            _50,
-            _70,
-            _100
-        }
-        [Parameter("Histogram Width(%)", DefaultValue = HistWidthData._50, Group = "==== Histogram Settings ====")]
-        public HistWidthData HistWidthInput { get; set; }
-
-        public enum HistSideData
-        {
-            Left,
-            Right,
-        }
-        [Parameter("Histogram Side", DefaultValue = HistSideData.Left, Group = "==== Histogram Settings ====")]
-        public HistSideData HistogramSideInput { get; set; }
-
-        [Parameter("Fill Histogram?", DefaultValue = true, Group = "==== Histogram Settings ====")]
-        public bool FillHist { get; set; }
-
-        [Parameter("[Gradient] Opacity:", DefaultValue = 60, MinValue = 5, MaxValue = 100, Group = "==== Histogram Settings ====")]
+        [Parameter("[Gradient] Opacity:", DefaultValue = 60, MinValue = 5, MaxValue = 100, Group = "==== Specific Parameters ====")]
         public int OpacityHistInput { get; set; }
 
 
-        [Parameter("Extended VAs?", DefaultValue = false, Group = "==== Other settings ====")]
-        public bool ExtendVA { get; set; }
+        [Parameter("Font Size Results:", DefaultValue = 10, MinValue = 1, MaxValue = 80, Group = "==== Results ====")]
+        public int FontSizeResults { get; set; }
 
-        [Parameter("Show OHLC Bar?", DefaultValue = false, Group = "==== Other settings ====")]
-        public bool ShowOHLC { get; set; }
-
-        [Parameter("Show Results?", DefaultValue = true, Group = "==== Other settings ====")]
-        public bool ShowResults { get; set; }
-
-        [Parameter("Format Results?", DefaultValue = true, Group = "==== Other settings ====")]
+        [Parameter("Format Results?", DefaultValue = true, Group = "==== Results ====")]
         public bool FormatResults { get; set; }
-        
+
         public enum FormatMaxDigits_Data
         {
             Zero,
             One,
             Two,
         }
-        [Parameter("Format Max Digits:", DefaultValue = FormatMaxDigits_Data.One, Group = "==== Other settings ====")]
+        [Parameter("Format Max Digits:", DefaultValue = FormatMaxDigits_Data.One, Group = "==== Results ====")]
         public FormatMaxDigits_Data FormatMaxDigits_Input { get; set; }
 
-        public enum BuySellResult_Data
-        {
-            Sum,
-            Subtract,
-            Divide
-        }
-        [Parameter("[Buy_Sell] Show Total:", DefaultValue = BuySellResult_Data.Divide, Group = "==== Other settings ====")]
-        public BuySellResult_Data BuySellResult_Input { get; set; }
 
-        [Parameter("Font Size Results:", DefaultValue = 10, MinValue = 1, MaxValue = 80, Group = "==== Other settings ====")]
-        public int FontSizeResults { get; set; }
-
-
-        [Parameter("Normal Color:", DefaultValue = "#99808080", Group = "==== Colors Histogram ====")]
+        [Parameter("Normal Color", DefaultValue = "#B287CEEB", Group = "==== Colors Histogram ====")]
         public Color HistColor  { get; set; }
-
-        [Parameter("Normal Color inside VA:", DefaultValue = "#CC00BFFF", Group = "==== Colors Histogram ====")]
-        public Color HistColorVA  { get; set; }
 
         [Parameter("Gradient Color Min. Vol:", DefaultValue = "RoyalBlue", Group = "==== Colors Histogram ====")]
         public Color ColorGrandient_Min { get; set; }
@@ -210,6 +147,25 @@ namespace cAlgo
 
         [Parameter("OHLC Bar Color:", DefaultValue = "Gray", Group = "==== Colors Histogram ====")]
         public Color ColorOHLC { get; set; }
+
+
+        [Parameter("Weekly Color:", DefaultValue = "#B2FFD700", Group = "==== WM Profiles ====")]
+        public Color WeeklyColor { get; set; }
+
+        [Parameter("Monthly Color:", DefaultValue = "#920071C1", Group = "==== WM Profiles ====")]
+        public Color MonthlyColor { get; set; }
+
+        [Parameter("Weekly Gradient Min. Vol:", DefaultValue = "#FFFF9900", Group = "==== WM Profiles ====")]
+        public Color WeeklyGrandient_Min { get; set; }
+
+        [Parameter("Weekly Color Max. Vol:", DefaultValue = "#FFE42226", Group = "==== WM Profiles ====")]
+        public Color WeeklyGrandient_Max { get; set; }
+
+        [Parameter("Monthly Gradient Min. Vol:", DefaultValue = "#FF090979", Group = "==== WM Profiles ====")]
+        public Color MonthlyGrandient_Min { get; set; }
+
+        [Parameter("Monthly Color Max. Vol:", DefaultValue = "#FF33C1F3", Group = "==== WM Profiles ====")]
+        public Color MonthlyGrandient_Max { get; set; }
 
 
         [Parameter("Color POC:", DefaultValue = "D0FFD700", Group = "==== Point of Control ====")]
@@ -244,64 +200,292 @@ namespace cAlgo
         [Parameter("Developed for cTrader/C#", DefaultValue = "by srlcarlg", Group = "==== Credits ====")]
         public string Credits { get; set; }
 
-        private readonly VerticalAlignment V_Align = VerticalAlignment.Top;
-        private readonly HorizontalAlignment H_Align = HorizontalAlignment.Center;
-
-        private List<double> Segments = new();
-        private readonly IDictionary<double, double> VolumesRank = new Dictionary<double, double>();
-        private readonly IDictionary<double, double> VolumesRank_Up = new Dictionary<double, double>();
-        private readonly IDictionary<double, double> VolumesRank_Down = new Dictionary<double, double>();
-        private readonly IDictionary<double, double> DeltaRank = new Dictionary<double, double>();
-        private double[] MinMaxDelta = { 0, 0 };
-
-        private readonly List<ChartTrendLine> POCsLines = new();
-        private readonly List<ChartTrendLine> VALines = new();
-
-        private readonly IDictionary<int, ChartRectangle> RectanglesToColor = new Dictionary<int, ChartRectangle>();
-
-        private DateTime FromDateTime;
-        private TimeFrame LookBack_TF;
-        private Bars LookBack_Bars;
-        private Bars TicksOHLC;
-        private Bars VOL_Bars;
-
-        private double HeightPips = 4;
-        private double rowHeight = 0;
-        private double prevPrice;
-        private double[] priceVA_LHP = { 0, 0, 0 };
-
-        private bool isLive = false;
-        private bool Wrong = false;
-        private bool configHasChanged = false;
-
-        private int cleanedIndex;
-
         // Moved from cTrader Input to Params Panel
-        public int Lookback { get; set; } = 5;
-        public enum VolumeModeData
+        public int Lookback { get; set; } = 2;
+        public enum VolumeMode_Data
         {
             Normal,
-            Gradient,
             Buy_Sell,
             Delta,
             Normal_Delta
         }
-        public VolumeModeData VolumeModeInput { get; set; } = VolumeModeData.Gradient;
+        public VolumeMode_Data VolumeMode_Input { get; set; } = VolumeMode_Data.Normal;
+
+        public enum VPInterval_Data
+        {
+            Daily,
+            Weekly,
+            Monthly
+        }
+        public VPInterval_Data VPInterval_Input { get; set; } = VPInterval_Data.Daily;
+
+        // ==== Volume Profile ====
+        public bool EnableVP { get; set; } = false;
+
+        public enum UpdateProfile_Data
+        {
+            EveryTick_CPU_Workout,
+            ThroughSegments_Balanced,
+            Through_2_Segments_Best,
+        }
+        public UpdateProfile_Data UpdateProfile_Input { get; set; } = UpdateProfile_Data.Through_2_Segments_Best;
+        public bool FillHist_VP { get; set; } = true;
+
+        public enum HistSide_Data
+        {
+            Left,
+            Right,
+        }
+        public HistSide_Data HistogramSide_Input { get; set; } = HistSide_Data.Left;
+
+        public enum HistWidth_Data
+        {
+            _15,
+            _30,
+            _50,
+            _70,
+            _100
+        }
+        public HistWidth_Data HistogramWidth_Input { get; set; } = HistWidth_Data._70;
+
+        public bool EnableWeeklyProfile { get; set; } = false;
+        public bool EnableMonthlyProfile { get; set; } = false;
+        public bool EnableGradient { get; set; } = true;
+
+        public enum Distribution_Data
+        {
+            OHLC,
+            OHLC_No_Avg,
+            Open,
+            High,
+            Low,
+            Close,
+            Uniform_Distribution,
+            Uniform_Presence,
+            Parabolic_Distribution,
+            Triangular_Distribution,
+        }
+        public Distribution_Data Distribution_Input { get; set; } = Distribution_Data.OHLC_No_Avg;
+        public bool ShowOHLC { get; set; } = false;
+
+        // ==== Intraday Profiles ====
+        public bool ShowIntradayProfile { get; set; } = false;
+        public int OffsetBarsInput { get; set; } = 2;
+        public TimeFrame OffsetTimeframeInput { get; set; } = TimeFrame.Hour;
+        public bool FillIntradaySpace { get; set; }
+
+
+        // ==== Mini VPs ====
+        public bool EnableMiniProfiles { get; set; } = true;
+        public TimeFrame MiniVPs_Timeframe { get; set; } = TimeFrame.Hour4;
+        public bool ShowMiniResults { get; set; } = true;
+
+
+        // ==== VA + POC ====
         public bool ShowVA { get; set; } = false;
+        public int PercentVA { get; set; } = 65;
         public bool KeepPOC { get; set; } = true;
         public bool ExtendPOC { get; set; } = false;
+        public bool ExtendVA { get; set; } = false;
+        public int ExtendCount { get; set; } = 1;
+
+        // ==== Results ====
+        public bool ShowResults { get; set; } = true;
+
+        public enum OperatorBuySell_Data
+        {
+            Sum,
+            Subtraction,
+        }
+        public OperatorBuySell_Data OperatorBuySell_Input { get; set; } = OperatorBuySell_Data.Subtraction;
+
+        public bool ShowMinMaxDelta { get; set; } = false;
+        public bool ShowOnlySubtDelta { get; set; } = true;
+
+        public TimeFrame VOL_Timeframe { get; set; } = TimeFrame.Minute;
+        // Always Monthly
+        public enum SegmentsInterval_Data
+        {
+            Daily,
+            Weekly,
+            Monthly
+        }
+        public SegmentsInterval_Data SegmentsInterval_Input = SegmentsInterval_Data.Monthly;
+
+        // ======================================================
+
+        public readonly string NOTIFY_CAPTION = "Free Volume Profile \n    v2.0";
+
+        private readonly VerticalAlignment V_Align = VerticalAlignment.Top;
+        private readonly HorizontalAlignment H_Align = HorizontalAlignment.Center;
+
+        // Segments
+        private class SegmentsExtremumInfo
+        {
+            public double LastHighest;
+            public double LastLowest;
+        }
+        // intKey is the intervalIndex
+        // value is the last updated Highest/Lowest
+        private readonly IDictionary<int, SegmentsExtremumInfo> segmentInfo = new Dictionary<int, SegmentsExtremumInfo>();
+        private List<double> Segments_VP = new();
+
+        // Volume Profile Bars
+        private IDictionary<double, double> VP_VolumesRank = new Dictionary<double, double>();
+        private IDictionary<double, double> VP_VolumesRank_Up = new Dictionary<double, double>();
+        private IDictionary<double, double> VP_VolumesRank_Down = new Dictionary<double, double>();
+        private IDictionary<double, double> VP_VolumesRank_Subt = new Dictionary<double, double>();
+        private IDictionary<double, double> VP_DeltaRank = new Dictionary<double, double>();
+        private double[] VP_MinMaxDelta = { 0, 0 };
+
+        // Weekly, Monthly and Mini VPs
+        public class VolumeRankType
+        {
+            public IDictionary<double, double> Normal { get; set; } = new Dictionary<double, double>();
+            public IDictionary<double, double> Up { get; set; } = new Dictionary<double, double>();
+            public IDictionary<double, double> Down { get; set; } = new Dictionary<double, double>();
+            public IDictionary<double, double> Delta { get; set;  } = new Dictionary<double, double>();
+            public double[] MinMaxDelta { get; set; } = new double[2];
+        }
+        private readonly VolumeRankType MonthlyRank = new();
+        private readonly VolumeRankType WeeklyRank = new();
+        private readonly VolumeRankType miniVPsRank = new();
+
+        private Bars MiniVPs_Bars;
+        private Bars DailyBars;
+        private Bars WeeklyBars;
+        private Bars MonthlyBars;
+
+        public enum ExtraProfiles {
+            No,
+            MiniVP,
+            Weekly,
+            Monthly,
+        }
+
+        // Its a annoying behavior that happens even in Candles Chart (Time-Based) on any symbol/broker.
+        // where it's jump/pass +1 index when .GetIndexByTime is used... the exactly behavior of Price-Based Charts
+        // Seems to happen only in Lower Timeframes (<=´Daily)
+        // So, to ensure that it works flawless, an additional verification is needed.
+        public class CleanedIndex {
+            public int _VP_Interval = 0;
+            public int _Mini = 0;
+        }
+        private readonly CleanedIndex lastCleaned = new();
+
+        // Concurrent Live VP Update
+        private readonly object _lockSource = new();
+        private readonly object _lockBars = new();
+        private readonly object _lock = new();
+        private readonly object _weeklyLock = new();
+        private readonly object _monthlyLock = new();
+        private readonly object _miniLock = new();
+
+        private CancellationTokenSource cts;
+        private Task liveVP_Task;
+        private Task weeklyVP_Task;
+        private Task monthlyVP_Task;
+        private Task miniVP_Task;
+        private bool liveVP_UpdateIt = false;
+
+        public class LiveVPIndex {
+            public int VP { get; set; }
+            public int Mini { get; set; }
+            public int Weekly { get; set; }
+            public int Monthly { get; set; }
+        }
+        private readonly LiveVPIndex liveVP_StartIndexes = new();
+        private List<Bar> Bars_List = new();
+        private DateTime[] BarTimes_Array = Array.Empty<DateTime>();
+
+        // High-Performance VP_Bars()
+        public class LastBarIndex {
+            public int _Mini = 0;
+            public int _MiniStart = 0;
+            public int _Weekly = 0;
+            public int _WeeklyStart = 0;
+            public int _Monthly = 0;
+            public int _MonthlyStart = 0;
+        }
+        private readonly LastBarIndex lastBar_ExtraVPs = new();
+
+        private int lastBar_VP = 0;
+        private int lastBar_VPStart = 0;
+        private Bars VOL_Bars;
+
+        // Shared rowHeight
+        private double heightPips = 4;
+        private double rowHeight = 0;
+        public double heightATR = 4;
+
+        // Some required utils
+        private bool configHasChanged = false;
+        private bool isUpdateVP = false;
+        private bool isEndChart = false;
+        private double prevUpdatePrice;
+        public bool isPriceBased_Chart = false;
+        public bool isRenkoChart = false;
+
+        // Timer
+        private class TimerHandler {
+            public bool isAsyncLoading = false;
+        }
+        private readonly TimerHandler timerHandler = new();
+
+        PopupNotification asyncBarsPopup = null;
+        private bool loadingAsyncBars = false;
+        private bool loadingBarsComplete = false;
 
         // Params Panel
         private Border ParamBorder;
         public class IndicatorParams
         {
             public int LookBack { get; set; }
-            public VolumeModeData VolMode { get; set; }
-            public double RowHeight { get; set; }
-            public TimeFrame Interval { get; set; }
-            public bool KeepPOC { get; set; }
-            public bool ExtendedPOC { get; set; }
+            public VolumeMode_Data VolMode { get; set; }
+            public double RowHeightInPips { get; set; }
+            public VPInterval_Data VPInterval { get; set; }
+
+            // Volume Profile
+            public bool EnableVP { get; set; }
+            public bool EnableWeeklyProfile { get; set; }
+            public bool EnableMonthlyProfile { get; set; }
+            // View
+            public bool FillHist_VP { get; set; }
+            public HistSide_Data HistogramSide { get; set; }
+            public HistWidth_Data HistogramWidth { get; set; }
+            public bool Gradient { get; set; }
+            public bool OHLC { get; set; }
+            // Intraday View
+            public bool ShowIntradayProfile { get; set; }
+            public bool FillIntradaySpace { get; set; }
+            public int OffsetBarsIntraday { get; set; }
+            public TimeFrame OffsetTimeframeIntraday { get; set; }
+            // Mini VPs
+            public bool EnableMiniProfiles { get; set; }
+            public TimeFrame MiniVPsTimeframe { get; set; }
+            public bool ShowMiniResults { get; set; }
+
+            // ==== VA + POC ====
             public bool ShowVA { get; set; }
+            public int PercentVA { get; set; }
+            public bool KeepPOC { get; set; }
+            public bool ExtendPOC { get; set; }
+            public bool ExtendVA { get; set; }
+            public int ExtendCount { get; set; }
+
+            // Results
+            public bool ShowResults { get; set; }
+            // Results - Buy_Sell / Delta
+            public bool ShowSideTotal { get; set; }
+            public OperatorBuySell_Data OperatorBuySell { get; set; }
+            // Results - Delta
+            public bool ShowMinMax { get; set; }
+            public bool ShowOnlySubtDelta { get; set; }
+
+            // Misc
+            public UpdateProfile_Data UpdateProfileStrategy { get; set; }
+            public TimeFrame Source { get; set; }
+            public Distribution_Data Distribution { get; set; }
         }
 
         private void AddHiddenButton(Panel panel, Color btnColor)
@@ -328,478 +512,878 @@ namespace cAlgo
         protected override void Initialize()
         {
             // ========== Predefined Config ==========
-            if (ConfigRowInput == ConfigRowData.Predefined && (Chart.TimeFrame >= TimeFrame.Minute && Chart.TimeFrame <= TimeFrame.Day3))
+            if (RowConfig_Input == RowConfig_Data.ATR && (Chart.TimeFrame >= TimeFrame.Minute && Chart.TimeFrame <= TimeFrame.Day3))
             {
                 if (Chart.TimeFrame >= TimeFrame.Minute && Chart.TimeFrame <= TimeFrame.Minute4)
                 {
                     if (Chart.TimeFrame == TimeFrame.Minute)
-                        LookBack_TF = TimeFrame.Hour;
+                        MiniVPs_Timeframe = TimeFrame.Hour;
                     else if (Chart.TimeFrame == TimeFrame.Minute2)
-                        LookBack_TF = TimeFrame.Hour2;
+                        MiniVPs_Timeframe = TimeFrame.Hour2;
                     else if (Chart.TimeFrame <= TimeFrame.Minute4)
-                        LookBack_TF = TimeFrame.Hour3;
-
-                    SetHeightPips(0.5, 8);
+                        MiniVPs_Timeframe = TimeFrame.Hour3;
                 }
                 else if (Chart.TimeFrame >= TimeFrame.Minute5 && Chart.TimeFrame <= TimeFrame.Minute10)
                 {
                     if (Chart.TimeFrame == TimeFrame.Minute5)
-                        LookBack_TF = TimeFrame.Hour4;
+                        MiniVPs_Timeframe = TimeFrame.Hour4;
                     else if (Chart.TimeFrame == TimeFrame.Minute6)
-                        LookBack_TF = TimeFrame.Hour6;
+                        MiniVPs_Timeframe = TimeFrame.Hour6;
                     else if (Chart.TimeFrame <= TimeFrame.Minute8)
-                        LookBack_TF = TimeFrame.Hour8;
+                        MiniVPs_Timeframe = TimeFrame.Hour8;
                     else if (Chart.TimeFrame <= TimeFrame.Minute10)
-                        LookBack_TF = TimeFrame.Hour12;
-
-                    SetHeightPips(0.5, 25);
+                        MiniVPs_Timeframe = TimeFrame.Hour12;
                 }
                 else if (Chart.TimeFrame >= TimeFrame.Minute15 && Chart.TimeFrame <= TimeFrame.Hour8)
                 {
-                    if (Chart.TimeFrame >= TimeFrame.Minute15 && Chart.TimeFrame <= TimeFrame.Hour) {
-                        LookBack_TF = TimeFrame.Daily;
-                        SetHeightPips(2, 50);
-                    }
+                    if (Chart.TimeFrame >= TimeFrame.Minute15 && Chart.TimeFrame <= TimeFrame.Hour)
+                        MiniVPs_Timeframe = TimeFrame.Daily;
+
                     else if (Chart.TimeFrame <= TimeFrame.Hour8) {
-                        LookBack_TF = TimeFrame.Weekly;
-                        SetHeightPips(4, 140);
+                        EnableVP = true;
+                        EnableMiniProfiles = false;
+                        VPInterval_Input = VPInterval_Data.Weekly;
                     }
                 }
-                else if (Chart.TimeFrame >= TimeFrame.Hour12 && Chart.TimeFrame <= TimeFrame.Day3)
-                {
-                    LookBack_TF = TimeFrame.Monthly;
-                    SetHeightPips(6, 220);
-                }
-            }
-            else
-            {
-                string[] timeBased = { "Minute", "Hour", "Daily", "Day" };
-                if (ConfigRowInput == ConfigRowData.Predefined)
-                {
-                    string Msg = "'Predefined Config' is designed only for Standard Timeframe (Minutes, Hours, Days) \n Weekly and Monthly is not currently supported \n\n use 'Custom Config' to others Chart Timeframes (Renko/Range/Ticks).";
-                    Chart.DrawStaticText("txt", $"{Msg}", V_Align, H_Align, Color.Orange);
-                    Wrong = true;
-                    return;
-                }
-                if (!timeBased.Any(CustomInterval.Name.ToString().Contains))
-                {
-                    string Msg = $"Weekly and Monthly 'Interval' should have 'Bars Source' above Minutes";
-                    if (BarsVOLSource_TF.Name.Contains("Minute")) {
-                        Chart.DrawStaticText("txt", $"{Msg}", V_Align, H_Align, Color.Orange);
-                        Wrong = true;
-                        return;
-                    }
-                }
-                if (CustomInterval == Chart.TimeFrame || CustomInterval < Chart.TimeFrame)
-                {
-                    string comp = CustomInterval == Chart.TimeFrame ? "==" : "<";
-                    string Msg = $"Volume Interval ({CustomInterval.ShortName}) {comp} Chart Timeframe ({Chart.TimeFrame.ShortName})\nWhy?";
-                    Chart.DrawStaticText("txt", $"{Msg}", V_Align, H_Align, Color.Orange);
-                    Wrong = true;
-                    return;
-                }
-                if (CustomInterval < TimeFrame.Minute15)
-                {
-                    string Msg = "The minimum 'Custom Interval' is 15 minutes";
-                    Chart.DrawStaticText("txt", $"{Msg}", V_Align, H_Align, Color.Orange);
-                    Wrong = true;
-                    return;
-                }
-                LookBack_TF = CustomInterval;
-                HeightPips = CustomHeight;
-            }
-
-            void SetHeightPips(double digits5, double digits2)
-            {
-                if (Symbol.Digits == 5 || Symbol.Digits == 1)
-                    HeightPips = digits5;
-                else
-                    HeightPips = digits2;
-            }
-            string[] timesBased = { "Minute", "Hour", "Daily", "Day" };
-            if (!timesBased.Any(BarsVOLSource_TF.Name.ToString().Contains))
-            {
-                string Msg = $"'Bars Volume Source' is designed ONLY for: \n (Minutes, Hours, Days) \n Weekly and Monthly is not currently supported";
-                Chart.DrawStaticText("txt", $"{Msg}", V_Align, H_Align, Color.Orange);
-                Wrong = true;
-                return;
-            }
-            if ((VolumeModeInput == VolumeModeData.Buy_Sell || VolumeModeInput == VolumeModeData.Delta || VolumeModeInput == VolumeModeData.Normal_Delta) && BarsVOLSource_TF != TimeFrame.Minute)
-            {
-                string Msg = $"'Buy_Sell' and 'Delta' is designed ONLY for '1m Bars Volume Source'";
-                Chart.DrawStaticText("txt", $"{Msg}", V_Align, H_Align, Color.Orange);
-                Wrong = true;
-                return;
-            }
-            // ============================================================================
-
-            LookBack_Bars = MarketData.GetBars(LookBack_TF);
-            if (LookBack_Bars.ClosePrices.Count < Lookback)
-            {
-                while (LookBack_Bars.ClosePrices.Count < Lookback)
-                {
-                    int loadedCount = LookBack_Bars.LoadMoreHistory();
-                    Print($"Loaded {loadedCount}, {LookBack_TF.ShortName} LookBack Bars, Current Bar Date: {LookBack_Bars.OpenTimes.FirstOrDefault()}");
-                    if (loadedCount == 0)
-                        break;
+                else if (Chart.TimeFrame >= TimeFrame.Hour12 && Chart.TimeFrame <= TimeFrame.Weekly) {
+                    EnableVP = true;
+                    EnableMiniProfiles = false;
+                    VPInterval_Input = VPInterval_Data.Monthly;
                 }
             }
 
-            if (VolumeSourceInput == VolumeSourceData.Ticks)
-                TicksOHLC = MarketData.GetBars(TimeFrame.Tick);
-            else
-                VOL_Bars = MarketData.GetBars(BarsVOLSource_TF);
+            if (RowConfig_Input == RowConfig_Data.Custom)
+                heightPips = CustomHeightInPips;
+            else {
+                // Math Formulas by LLM
+                // Manual coding with adaptations for cTrader Algo API.
+                // The idea is => Set the rowHeight for any symbol with [1, 2, 5] digits with fewer hard-coded values.
+                AverageTrueRange atr = Indicators.AverageTrueRange(ATRPeriod, MovingAverageType.Exponential);
+                double atrInTick = atr.Result.LastValue / Symbol.TickSize;
+                double priceInTick = Bars.LastBar.Close / Symbol.TickSize;
 
-            if (VolumeSourceInput == VolumeSourceData.Bars)
-            {
-                if (VOL_Bars.OpenTimes.FirstOrDefault() > LookBack_Bars.OpenTimes[LookBack_Bars.ClosePrices.Count - Lookback])
-                {
-                    while (VOL_Bars.OpenTimes.FirstOrDefault() > LookBack_Bars.OpenTimes[LookBack_Bars.ClosePrices.Count - Lookback])
-                    {
-                        int loadedCount = VOL_Bars.LoadMoreHistory();
-                        Print($"Loaded {loadedCount}, {BarsVOLSource_TF.ShortName} VOL Bars, Current Bar Date: {VOL_Bars.OpenTimes.FirstOrDefault()}");
-                        if (loadedCount == 0)
-                            break;
-                    }
-                }
-                try
-                {
-                    DateTime FirstVolDate = VOL_Bars.OpenTimes.FirstOrDefault();
-                    ChartVerticalLine lineInfo = Chart.DrawVerticalLine("VolumeStart", FirstVolDate, Color.Red);
-                    lineInfo.LineStyle = LineStyle.Lines;
-                    ChartText textInfo = Chart.DrawText($"VolumeStartText", $"{BarsVOLSource_TF.ShortName} Volume Data \n ends here", FirstVolDate, Bars.HighPrices[Bars.OpenTimes.GetIndexByTime(FirstVolDate)], Color.Red);
-                    textInfo.FontSize = 8;
-                }
-                catch { };
+                // Original => (smaATRInTick * targetRows) / smaPriceInTick;
+                // However, Initialize() already has a lot of heavy things to start (Tick / Filters / Panel),
+                // Plus, the current approach is good enough and gives slightly/better higher numbers.
+                double K_Factor = (atrInTick * RowDetailATR) / priceInTick;
+                double rowSizeInTick = (atrInTick * atrInTick) / (K_Factor * priceInTick);
+
+                // Original => Math.Max(1, Math.Round(rowSizeInTick, 2)) * (Symbol.TickSize / Symbol.PipSize)
+                // Should 'never' go bellow 0.3 pips.
+                double rowSizePips = Math.Max(0.3, Math.Round(rowSizeInTick, 2));
+                heightPips = rowSizePips;
+                heightATR = rowSizePips;
             }
-            else
-                TickVolumeInitialize();
 
-            // Ex: 4 pips to VOL Distribuition(rowHeight)
-            rowHeight = Symbol.PipSize * HeightPips;
+            // Define rowHeight by Pips
+            rowHeight = Symbol.PipSize * heightPips;
+
+            // Load all at once, mostly due to:
+            // Loading parameters that have it
+            DailyBars = MarketData.GetBars(TimeFrame.Daily);
+            WeeklyBars = MarketData.GetBars(TimeFrame.Weekly);
+            MonthlyBars = MarketData.GetBars(TimeFrame.Monthly);
+            MiniVPs_Bars = MarketData.GetBars(MiniVPs_Timeframe);
+            VOL_Bars = MarketData.GetBars(VOL_Timeframe);
+
+            Bars.BarOpened += (_) => {
+                isUpdateVP = true;
+                if (UpdateProfile_Input != UpdateProfile_Data.EveryTick_CPU_Workout)
+                    prevUpdatePrice = _.Bars.LastBar.Close;
+            };
+
+            string currentTimeframe = Chart.TimeFrame.ToString();
+            isPriceBased_Chart = currentTimeframe.Contains("Renko") || currentTimeframe.Contains("Range") || currentTimeframe.Contains("Tick");
+            isRenkoChart = Chart.TimeFrame.ToString().Contains("Renko");
+
+            DrawStartVolumeLine();
 
             DrawOnScreen("Calculating...");
-            string nonTimeBased = !timesBased.Any(Chart.TimeFrame.ToString().Contains) ? "Ticks/Renko/Range with 100% Histogram Width \n sometimes is recommended" : "";
-            string ticksInfo = $"Ticks Volume Source: \n 1) Naturally heavier at 1 tick \n 2) Large 'Lookback' or 'Tick Data' takes longer to calculate \n 3) Recommended for intraday only";
-            string showTicksInfo = VolumeSourceInput == VolumeSourceData.Ticks ? ticksInfo : "";
-            Second_DrawOnScreen($"Taking too long? You can: \n 1) Increase the rowHeight \n 2) Disable the Value Area (High Performance)\n\n {nonTimeBased} \n\n {showTicksInfo}");
-            if (Application.UserTimeOffset.ToString() != "03:00:00")
-                Third_DrawOnScreen("Set your UTC to UTC+3");
+            Second_DrawOnScreen($"Taking too long? You can: \n 1) Increase the rowHeight \n 2) Disable the Value Area (High Performance)");
 
             // PARAMS PANEL
             VerticalAlignment vAlign = VerticalAlignment.Bottom;
             HorizontalAlignment hAlign = HorizontalAlignment.Right;
 
-            if (PanelAlignInput == PanelAlignData.Bottom_Left)
-                hAlign = HorizontalAlignment.Left;
-            else if (PanelAlignInput == PanelAlignData.Top_Left)
-                vAlign = VerticalAlignment.Top;
-            else if (PanelAlignInput == PanelAlignData.Top_Right) {
-                vAlign = VerticalAlignment.Top;
-                hAlign = HorizontalAlignment.Right;
-            } else if (PanelAlignInput == PanelAlignData.Center_Right) {
-                vAlign = VerticalAlignment.Center;
-                hAlign = HorizontalAlignment.Right;
-            } else if (PanelAlignInput == PanelAlignData.Center_Left) {
-                vAlign = VerticalAlignment.Center;
-                hAlign = HorizontalAlignment.Left;
-            } else if (PanelAlignInput == PanelAlignData.Top_Center) {
-                vAlign = VerticalAlignment.Top;
-                hAlign = HorizontalAlignment.Center;
-            } else if (PanelAlignInput == PanelAlignData.Bottom_Center) {
-                vAlign = VerticalAlignment.Bottom;
-                hAlign = HorizontalAlignment.Center;
+            switch (PanelAlign_Input)
+            {
+                case PanelAlign_Data.Bottom_Left:
+                    hAlign = HorizontalAlignment.Left;
+                    break;
+                case PanelAlign_Data.Top_Left:
+                    vAlign = VerticalAlignment.Top;
+                    hAlign = HorizontalAlignment.Left;
+                    break;
+                case PanelAlign_Data.Top_Right:
+                    vAlign = VerticalAlignment.Top;
+                    hAlign = HorizontalAlignment.Right;
+                    break;
+                case PanelAlign_Data.Center_Right:
+                    vAlign = VerticalAlignment.Center;
+                    hAlign = HorizontalAlignment.Right;
+                    break;
+                case PanelAlign_Data.Center_Left:
+                    vAlign = VerticalAlignment.Center;
+                    hAlign = HorizontalAlignment.Left;
+                    break;
+                case PanelAlign_Data.Top_Center:
+                    vAlign = VerticalAlignment.Top;
+                    hAlign = HorizontalAlignment.Center;
+                    break;
+                case PanelAlign_Data.Bottom_Center:
+                    vAlign = VerticalAlignment.Bottom;
+                    hAlign = HorizontalAlignment.Center;
+                    break;
             }
 
             IndicatorParams DefaultParams = new()
             {
                 LookBack = Lookback,
-                VolMode = VolumeModeInput,
-                RowHeight = HeightPips,
-                Interval = LookBack_TF,
+                VolMode = VolumeMode_Input,
+                RowHeightInPips = heightPips,
+                VPInterval = VPInterval_Input,
+
+                // Volume Profile
+                EnableVP = EnableVP,
+                EnableWeeklyProfile = EnableWeeklyProfile,
+                EnableMonthlyProfile = EnableMonthlyProfile,
+                // View
+                FillHist_VP = FillHist_VP,
+                HistogramSide = HistogramSide_Input,
+                HistogramWidth = HistogramWidth_Input,
+                Gradient = EnableGradient,
+                OHLC = ShowOHLC,
+                // Intraday View
+                ShowIntradayProfile = ShowIntradayProfile,
+                OffsetBarsIntraday = OffsetBarsInput,
+                OffsetTimeframeIntraday = OffsetTimeframeInput,
+                FillIntradaySpace = FillIntradaySpace,
+                // Mini VPs
+                EnableMiniProfiles = EnableMiniProfiles,
+                MiniVPsTimeframe = MiniVPs_Timeframe,
+                ShowMiniResults = ShowMiniResults,
+
+                // VA + POC
+                ShowVA = ShowVA,
+                PercentVA = PercentVA,
                 KeepPOC = KeepPOC,
-                ExtendedPOC = ExtendPOC,
-                ShowVA = ShowVA
+                ExtendPOC = ExtendPOC,
+                ExtendVA = ExtendVA,
+                ExtendCount = ExtendCount,
+
+                // Results
+                ShowResults = ShowResults,
+                OperatorBuySell = OperatorBuySell_Input,
+                ShowMinMax = ShowMinMaxDelta,
+                ShowOnlySubtDelta = ShowOnlySubtDelta,
+
+                UpdateProfileStrategy = UpdateProfile_Input,
+                Source = VOL_Timeframe,
+                Distribution = Distribution_Input
             };
 
             ParamsPanel ParamPanel = new(this, DefaultParams);
+
             Border borderParam = new()
             {
                 VerticalAlignment = vAlign,
                 HorizontalAlignment = hAlign,
                 Style = Styles.CreatePanelBackgroundStyle(),
                 Margin = "20 40 20 20",
-                Width = 225,
+                // ParamsPanel - Lock Width
+                Width = 255,
                 Child = ParamPanel
             };
             Chart.AddControl(borderParam);
             ParamBorder = borderParam;
 
-            var wrapPanel = new WrapPanel
+            WrapPanel wrapPanel = new()
             {
                 VerticalAlignment = vAlign,
                 HorizontalAlignment = hAlign,
             };
-            AddHiddenButton(wrapPanel, Color.Gray);
+            AddHiddenButton(wrapPanel, Color.FromHex("#7F808080"));
             Chart.AddControl(wrapPanel);
         }
 
         public override void Calculate(int index)
         {
-            if (Wrong)
-                return;
-
             // ==== Removing Messages ====
-            if (!IsLastBar)
-            {
-                DrawOnScreen(""); Second_DrawOnScreen(""); Third_DrawOnScreen("");
+            if (!IsLastBar) {
+                DrawOnScreen(""); Second_DrawOnScreen("");
             }
 
-            Bars TF_Bars = LookBack_Bars;
-            // Get Index of VOL Interval to continue only in Lookback
-            int iVerify = TF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
-            if (TF_Bars.ClosePrices.Count - iVerify > Lookback)
+            // ==== Chart Segmentation ====
+            CreateSegments(index);
+
+            // WM
+            if (EnableVP && !IsLastBar){
+                CreateMonthlyVP(index);
+                CreateWeeklyVP(index);
+            }
+
+            // LookBack
+            Bars vpBars = VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
+                           VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
+            // Get Index of VP Interval to continue only in Lookback
+            int iVerify = vpBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+            if (vpBars.ClosePrices.Count - iVerify > Lookback)
                 return;
 
-            int TF_idx = TF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
-            int indexStart = Bars.OpenTimes.GetIndexByTime(TF_Bars.OpenTimes[TF_idx]);
-
-            // ====== Extended POC/VA ========
-            if (ExtendPOC && POCsLines.Count != 0 && POCsLines.FirstOrDefault().Y2 != priceVA_LHP[2])
-            {
-                for (int tl = 0; tl < POCsLines.Count; tl++)
-                {
-                    POCsLines[tl].Time2 = Bars.OpenTimes[index];
-                    string dynDate = LookBack_TF == TimeFrame.Daily ? POCsLines[tl].Time1.Date.AddDays(1).ToString().Replace("00:00:00", "") : POCsLines[tl].Time1.Date.ToString();
-                    Chart.DrawText($"POC{POCsLines[tl].Time1}", $"{dynDate}", Bars.OpenTimes[index], POCsLines[tl].Y2 + (rowHeight / 2), ColorPOC);
-                }
-            }
-
-            if (ExtendVA && VALines.Count != 0 && VALines.FirstOrDefault().Time2 != Bars.OpenTimes[index])
-            {
-                for (int tl = 0; tl < VALines.Count; tl++)
-                    VALines[tl].Time2 = Bars.OpenTimes[index];
-            }
+            int TF_idx = vpBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+            int indexStart = Bars.OpenTimes.GetIndexByTime(vpBars.OpenTimes[TF_idx]);
 
             // === Clean Dicts/others ===
-            if (index == indexStart && index != cleanedIndex || (index - 1) == indexStart && (index - 1) != cleanedIndex)
-            {
-                Segments.Clear();
-                VolumesRank.Clear();
-                VolumesRank_Up.Clear();
-                VolumesRank_Down.Clear();
-                DeltaRank.Clear();
-                double[] resetDelta = {0, 0};
-                MinMaxDelta = resetDelta;
-                RectanglesToColor.Clear();
-                double[] VAforColor = { 0, 0, 0 };
-                priceVA_LHP = VAforColor;
-                cleanedIndex = index == indexStart ? index : (index - 1);
-            }
+            if (index == indexStart ||
+                (index - 1) == indexStart && isPriceBased_Chart ||
+                (index - 1) == indexStart && (index - 1) != lastCleaned._VP_Interval
+            )
+                CleanUp_MainVP(index, indexStart);
+
             // Historical data
             if (!IsLastBar)
             {
-                if (!isLive)
+                // Allows MiniVPs if (!EnableVP)
+                CreateMiniVPs(index);
+
+                if (EnableVP)
                     VolumeProfile(indexStart, index);
+
+                isUpdateVP = true; // chart end
             }
             else
             {
-                isLive = true;
-                // "Repaint" if the price moves half of rowHeight
-                if (Bars.ClosePrices[index] >= (prevPrice + (rowHeight / 2)) || Bars.ClosePrices[index] <= (prevPrice - (rowHeight / 2)) || configHasChanged)
+                // Live VP
+                /*
+                Known Issue:
+                */
+                if (UpdateVPStrategy_Input == UpdateVPStrategy_Data.SameThread_MayFreeze)
                 {
-                    for (int i = indexStart; i <= index; i++)
-                    {
-                        if (i == indexStart)
-                        {
-                            Segments.Clear();
-                            VolumesRank.Clear();
-                            VolumesRank_Up.Clear();
-                            VolumesRank_Down.Clear();
-                            DeltaRank.Clear();
-                            double[] resetDelta = {0, 0};
-                            MinMaxDelta = resetDelta;
-                            RectanglesToColor.Clear();
-                        }
+                    if (EnableVP)
+                        LiveVP_Update(indexStart, index);
+                    else if (!EnableVP && EnableMiniProfiles)
+                        LiveVP_Update(indexStart, index, true);
+                }
+                else
+                    LiveVP_Concurrent(index, indexStart);
 
-                        VolumeProfile(indexStart, i);
-                    }
-                    prevPrice = Bars.ClosePrices[index];
-                    configHasChanged = false;
+                if (!isEndChart) {
+                    LoadMoreHistory_IfNeeded();
+                    isEndChart = true;
                 }
             }
         }
 
-        private void VolumeProfile(int iStart, int index)
+        private void CleanUp_MainVP(int index, int indexStart)
         {
-            // ======= Highest and Lowest =======
-            Bars TF_Bars = LookBack_Bars;
-            int TF_idx = TF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+            // Reset VP
+            // Segments are identified by TF_idx(start)
+            // No need to clean up even if it's Daily Interval
+            if (!IsLastBar)
+                lastBar_VPStart = lastBar_VP;
+            VP_VolumesRank.Clear();
+            VP_VolumesRank_Up.Clear();
+            VP_VolumesRank_Down.Clear();
+            VP_VolumesRank_Subt.Clear();
+            VP_DeltaRank.Clear();
 
-            double highest = TF_Bars.HighPrices[TF_idx], lowest = TF_Bars.LowPrices[TF_idx], open = TF_Bars.OpenPrices[TF_idx];
+            double[] resetDelta = { 0, 0 };
+            VP_MinMaxDelta = resetDelta;
 
-            // ======= Chart Segmentation =======
-            List<double> currentSegments = new();
-            double prev_segment = open;
-            while (prev_segment >= (lowest - rowHeight))
+            lastCleaned._VP_Interval = index == indexStart ? index : (index - 1);
+        }
+
+        // *********** INTERVAL SEGMENTS ***********
+        /*
+            In order to optimize Volume Profile and reduce CPU worload
+            as well as create the possiblity to:
+                - See Weekly and/or Monthly "Intraday" Profile
+                - use Aligned Segments at Higher Timeframes (D1 to D3)
+            Segments will be calculated outside VolumeProfile()
+            and updated at new High/Low of its interval [D1, W1, M1]
+        */
+        private void CreateSegments(int index) {
+
+            // ==== Highest and Lowest ====
+            int TF_idx;
+            double open, highest, lowest;
+
+            switch (SegmentsInterval_Input)
             {
-                currentSegments.Add(prev_segment);
-                prev_segment = Math.Abs(prev_segment - rowHeight);
-            }
-            prev_segment = open;
-            while (prev_segment <= (highest + rowHeight))
-            {
-                currentSegments.Add(prev_segment);
-                prev_segment = Math.Abs(prev_segment + rowHeight);
-            }
-            Segments = currentSegments.OrderBy(x => x).ToList();
+                case SegmentsInterval_Data.Weekly:
+                    TF_idx = WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
 
-            // ======= VP =======
-            if (VolumeSourceInput == VolumeSourceData.Ticks)
-                VP_Tick(index);
-            else
-                VP_Bars(index);
+                    highest = WeeklyBars.HighPrices[TF_idx];
+                    lowest = WeeklyBars.LowPrices[TF_idx];
+                    open = WeeklyBars.OpenPrices[TF_idx];
+                    break;
+                case SegmentsInterval_Data.Monthly:
+                    TF_idx = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
 
-            // ======= Drawing =======
-            if (Segments.Count == 0)
+                    highest = MonthlyBars.HighPrices[TF_idx];
+                    lowest = MonthlyBars.LowPrices[TF_idx];
+                    open = MonthlyBars.OpenPrices[TF_idx];
+                    break;
+                default:
+                    TF_idx = DailyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+
+                    highest = DailyBars.HighPrices[TF_idx];
+                    lowest = DailyBars.LowPrices[TF_idx];
+                    open = DailyBars.OpenPrices[TF_idx];
+                    break;
+            }
+
+
+            // Add indexKey if not present
+            int startKey = TF_idx;
+            if (!segmentInfo.ContainsKey(startKey)) {
+                segmentInfo.Add(startKey, new SegmentsExtremumInfo {
+                    LastHighest = highest,
+                    LastLowest = lowest
+                });
+                updateSegments();
+            }
+            else {
+                // Update the entirely Segments
+                // when a new High/Low is made.
+                if (segmentInfo[startKey].LastHighest != highest) {
+                    updateSegments();
+                    segmentInfo[startKey].LastHighest = highest;
+                }
+
+                if (segmentInfo[startKey].LastLowest != lowest) {
+                    updateSegments();
+                    segmentInfo[startKey].LastLowest = lowest;
+                }
+            }
+
+            void updateSegments() {
+                List<double> currentSegments = new();
+
+                // ==== Chart Segmentation ====
+                double prev_segment = open;
+                while (prev_segment >= (lowest - rowHeight))
+                {
+                    currentSegments.Add(prev_segment);
+                    prev_segment = Math.Abs(prev_segment - rowHeight);
+                }
+                prev_segment = open;
+                while (prev_segment <= (highest + rowHeight))
+                {
+                    currentSegments.Add(prev_segment);
+                    prev_segment = Math.Abs(prev_segment + rowHeight);
+                }
+
+                Segments_VP = currentSegments.OrderBy(x => x).ToList();
+            }
+        }
+
+        // *********** VOLUME PROFILE BARS ***********
+        private void VolumeProfile(int iStart, int index, ExtraProfiles extraProfiles = ExtraProfiles.No, bool isLoop = false, bool drawOnly = false)
+        {
+            // Weekly/Monthly on Buy_Sell is a waste of time
+            if (VolumeMode_Input == VolumeMode_Data.Buy_Sell && (extraProfiles == ExtraProfiles.Weekly || extraProfiles == ExtraProfiles.Monthly))
+               return;
+
+            // ==== VP ====
+            if (!drawOnly)
+                VP_Bars(index, extraProfiles);
+
+            // ==== Drawing ====
+            if (Segments_VP.Count == 0 || isLoop)
                 return;
 
-            for (int i = 0; i < Segments.Count; i++)
+            // For Results
+            Bars mainTF = VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
+                           VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
+            Bars TF_Bars = extraProfiles == ExtraProfiles.No ? mainTF:
+                           extraProfiles == ExtraProfiles.MiniVP ? MiniVPs_Bars :
+                           extraProfiles == ExtraProfiles.Weekly ? WeeklyBars : MonthlyBars;
+            int TF_idx = TF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+            double lowest = TF_Bars.LowPrices[TF_idx];
+            double highest = TF_Bars.HighPrices[TF_idx];
+            if (double.IsNaN(lowest)) {
+                lowest = TF_Bars.LowPrices.LastValue;
+                highest = TF_Bars.HighPrices.LastValue;
+            } // Mini VPs avoid crash after recalculating
+
+            bool gapWeekend = Bars.OpenTimes[iStart].DayOfWeek == DayOfWeek.Friday && Bars.OpenTimes[iStart].Hour < 2;
+            DateTime x1_Start = Bars.OpenTimes[iStart + (gapWeekend ? 1 : 0)];
+            DateTime xBar = Bars.OpenTimes[index];
+
+            bool isIntraday = ShowIntradayProfile && index == Chart.LastVisibleBarIndex && !isLoop;
+            bool histRightSide = HistogramSide_Input == HistSide_Data.Right;
+
+            // Any Volume Mode
+            double maxLength = xBar.Subtract(x1_Start).TotalMilliseconds;
+
+            HistWidth_Data selectedWidth = HistogramWidth_Input;
+            double maxWidth = selectedWidth == HistWidth_Data._15 ? 1.25 :
+                              selectedWidth == HistWidth_Data._30 ? 1.50 :
+                              selectedWidth == HistWidth_Data._50 ? 2 : 3;
+            double maxHalfWidth = selectedWidth == HistWidth_Data._15 ? 1.12 :
+                                  selectedWidth == HistWidth_Data._30 ? 1.25 :
+                                  selectedWidth == HistWidth_Data._50 ? 1.40 : 1.75;
+
+            double proportion_VP = maxLength - (maxLength / maxWidth);
+            if (selectedWidth == HistWidth_Data._100)
+                proportion_VP = maxLength;
+
+            // Manual Refactoring.
+            // LLM allucinates.
+            for (int i = 0; i < Segments_VP.Count; i++)
             {
-                double priceKey = Segments[i];
-                if (!VolumesRank.ContainsKey(priceKey))
-                    continue;
+                double priceKey = Segments_VP[i];
+
+                if (extraProfiles == ExtraProfiles.Monthly)
+                {
+                    if (!MonthlyRank.Normal.ContainsKey(priceKey))
+                        continue;
+                }
+                else if (extraProfiles == ExtraProfiles.Weekly)
+                {
+                    if (!WeeklyRank.Normal.ContainsKey(priceKey))
+                        continue;
+                }
+                else if (extraProfiles == ExtraProfiles.MiniVP)
+                {
+                    if (!miniVPsRank.Normal.ContainsKey(priceKey))
+                        continue;
+                }
+                else if (extraProfiles == ExtraProfiles.No)
+                {
+                    if (!VP_VolumesRank.ContainsKey(priceKey))
+                        continue;
+                }
 
                 /*
                 Indeed, the value of X-Axis is simply a rule of three,
                 where the maximum value will be the maxLength (in Milliseconds),
                 from there the math adjusts the histograms.
-
                     MaxValue    maxLength(ms)
                        x             ?(ms)
-
                 The values 1.25 and 4 are the manually set values
+                ===================
+                NEW IN ODF_AGG => To avoid histograms unexpected behavior that occurs in historical data
+                - on Price-Based Charts (sometimes in candles too) where interval goes through weekend
+                  We'll skip 1 bar (friday) since Bar Index as X-axis didn't resolve the problem.
                 */
 
-                double lowerSegment = Segments[i] - rowHeight;
-                double upperSegment = Segments[i];
+                double lowerSegmentY1 = Segments_VP[i] - rowHeight;
+                double upperSegmentY2 = Segments_VP[i];
 
-                double largestVOL = VolumesRank.Values.Max();
+                double y1_text = priceKey;
 
-                double maxLength = Bars[index].OpenTime.Subtract(Bars[iStart].OpenTime).TotalMilliseconds;
-                var selected = HistWidthInput;
-                double maxWidth = selected == HistWidthData._15 ? 1.25 : selected == HistWidthData._30 ? 1.50 : selected == HistWidthData._50 ? 2 : 4;
-                double proportion = VolumesRank[priceKey] * (maxLength - (maxLength / maxWidth));
-                if (selected == HistWidthData._100)
-                    proportion = VolumesRank[priceKey] * maxLength;
-
-                double dynLength = proportion / largestVOL;
-
-                Color dynColor = HistColor;
-                if (VolumeModeInput == VolumeModeData.Gradient)
+                void DrawRectangle_Normal(double currentVolume, double maxVolume, bool intradayProfile = false)
                 {
+                    double proportion = currentVolume * proportion_VP;
+                    double dynLength = proportion / maxVolume;
 
-                    double Intensity = (VolumesRank[priceKey] * 100 / largestVOL) / 100;
-                    double stepR = (ColorGrandient_Max.R - ColorGrandient_Min.R) * Intensity;
-                    double stepG = (ColorGrandient_Max.G - ColorGrandient_Min.G) * Intensity;
-                    double stepB = (ColorGrandient_Max.B - ColorGrandient_Min.B) * Intensity;
+                    DateTime x2 = x1_Start.AddMilliseconds(dynLength);
 
-                    int A = (int)(2.55 * OpacityHistInput);
-                    int R = (int)Math.Round(ColorGrandient_Min.R + stepR);
-                    int G = (int)Math.Round(ColorGrandient_Min.G + stepG);
-                    int B = (int)Math.Round(ColorGrandient_Min.B + stepB);
-
-                    dynColor = Color.FromArgb(A, R, G, B);
-                }
-
-                if (VolumeModeInput == VolumeModeData.Normal || VolumeModeInput == VolumeModeData.Normal_Delta || VolumeModeInput == VolumeModeData.Gradient)
-                {
-                    ChartRectangle volHist;
-                    volHist = Chart.DrawRectangle($"{iStart}_{i}_", Bars.OpenTimes[iStart], lowerSegment, Bars.OpenTimes[iStart].AddMilliseconds(dynLength), upperSegment, dynColor);
-
-                    if (RectanglesToColor.ContainsKey(i))
-                        RectanglesToColor[i] = volHist;
-                    else
-                        RectanglesToColor.Add(i, volHist);
-
-                    if (FillHist)
-                        volHist.IsFilled = true;
-                    if (HistogramSideInput == HistSideData.Right)
+                    string extraName = extraProfiles == ExtraProfiles.No ? "" :
+                                       extraProfiles == ExtraProfiles.MiniVP ? "Mini" :
+                                       extraProfiles == ExtraProfiles.Weekly ? "Weekly" : "Monthly";
+                    Color histogramColor = extraProfiles == ExtraProfiles.No ? HistColor :
+                                       extraProfiles == ExtraProfiles.MiniVP ? HistColor :
+                                       extraProfiles == ExtraProfiles.Weekly ? WeeklyColor : MonthlyColor;
+                    if (EnableGradient)
                     {
-                        volHist.Time1 = Bars.OpenTimes[index];
-                        volHist.Time2 = Bars.OpenTimes[index].AddMilliseconds(-dynLength);
+                        Color minColor = extraProfiles == ExtraProfiles.No ? ColorGrandient_Min :
+                                          extraProfiles == ExtraProfiles.MiniVP ? ColorGrandient_Min :
+                                          extraProfiles == ExtraProfiles.Weekly ? WeeklyGrandient_Min : MonthlyGrandient_Min;
+                        Color maxColor = extraProfiles == ExtraProfiles.No ? ColorGrandient_Max :
+                                          extraProfiles == ExtraProfiles.MiniVP ? ColorGrandient_Max :
+                                          extraProfiles == ExtraProfiles.Weekly ? WeeklyGrandient_Max : MonthlyGrandient_Max;
+
+                        double Intensity = (currentVolume * 100 / maxVolume) / 100;
+                        double stepR = (maxColor.R - minColor.R) * Intensity;
+                        double stepG = (maxColor.G - minColor.G) * Intensity;
+                        double stepB = (maxColor.B - minColor.B) * Intensity;
+
+                        int A = (int)(2.55 * OpacityHistInput);
+                        int R = (int)Math.Round(minColor.R + stepR);
+                        int G = (int)Math.Round(minColor.G + stepG);
+                        int B = (int)Math.Round(minColor.B + stepB);
+
+                        Color dynColor = Color.FromArgb(A, R, G, B);
+
+                        histogramColor = dynColor;
                     }
 
-                    if (ShowResults)
+                    ChartRectangle volHist = Chart.DrawRectangle($"{iStart}_{i}_VP{extraName}_Normal", x1_Start, lowerSegmentY1, x2, upperSegmentY2, histogramColor);
+
+                    if (FillHist_VP)
+                        volHist.IsFilled = true;
+
+                    if (histRightSide)
                     {
-                        ChartText Center;
-                        double sum = Math.Round(VolumesRank.Values.Sum());
+                        volHist.Time1 = xBar;
+                        volHist.Time2 = xBar.AddMilliseconds(-dynLength);
+                    }
+
+                    if (intradayProfile && extraProfiles != ExtraProfiles.MiniVP)
+                    {
+                        DateTime dateOffset = TimeBasedOffset(xBar);
+                        DateTime dateOffset_Duo = TimeBasedOffset(dateOffset, true);
+                        DateTime dateOffset_Triple = TimeBasedOffset(dateOffset_Duo, true);
+
+                        double maxLength_Intraday = dateOffset.Subtract(xBar).TotalMilliseconds;
+
+                        if (extraName == "Weekly")
+                            maxLength_Intraday = dateOffset_Duo.Subtract(dateOffset).TotalMilliseconds;
+
+                        if (extraName == "Monthly")
+                            maxLength_Intraday = dateOffset_Triple.Subtract(dateOffset_Duo).TotalMilliseconds;
+
+                        // Recalculate histograms 'X' position
+                        double proportion_Intraday = currentVolume * (maxLength_Intraday - (maxLength_Intraday / maxWidth));
+                        if (selectedWidth == HistWidth_Data._100)
+                            proportion_Intraday = currentVolume * maxLength_Intraday;
+
+                        double dynLength_Intraday = proportion_Intraday / maxVolume;
+
+                        // Set 'X'
+                        volHist.Time1 = dateOffset;
+                        volHist.Time2 = dateOffset.AddMilliseconds(-dynLength_Intraday);
+
+                        if (extraName == "Weekly")
+                        {
+                            volHist.Time1 = dateOffset_Duo;
+                            volHist.Time2 = dateOffset_Duo.AddMilliseconds(-dynLength_Intraday);
+                            if (!EnableMonthlyProfile && FillIntradaySpace)
+                            {
+                                volHist.Time1 = dateOffset;
+                                volHist.Time2 = dateOffset.AddMilliseconds(dynLength_Intraday);
+                            }
+                        }
+                        if (extraName == "Monthly")
+                        {
+                            if (EnableWeeklyProfile)
+                            {
+                                // Show after
+                                volHist.Time1 = dateOffset_Triple;
+                                volHist.Time2 = dateOffset_Triple.AddMilliseconds(-dynLength_Intraday);
+                                // Show after together
+                                if (FillIntradaySpace)
+                                {
+                                    volHist.Time1 = dateOffset_Duo;
+                                    volHist.Time2 = dateOffset_Duo.AddMilliseconds(dynLength_Intraday);
+                                }
+                            }
+                            else
+                            {
+                                // Use Weekly position
+                                volHist.Time1 = dateOffset_Duo;
+                                volHist.Time2 = dateOffset_Duo.AddMilliseconds(-dynLength_Intraday);
+                                if (FillIntradaySpace)
+                                {
+                                    volHist.Time1 = dateOffset;
+                                    volHist.Time2 = dateOffset.AddMilliseconds(dynLength_Intraday);
+                                }
+                            }
+                        }
+
+                        IDictionary<double, double> VPdict = extraProfiles == ExtraProfiles.No ? VP_VolumesRank :
+                                                            extraProfiles == ExtraProfiles.MiniVP ? miniVPsRank.Normal :
+                                                            extraProfiles == ExtraProfiles.Weekly ? WeeklyRank.Normal : MonthlyRank.Normal;
+                        Draw_VA_POC(VPdict, iStart, x1_Start, xBar, extraProfiles, true, volHist.Time1);
+                    }
+                }
+
+                void DrawRectangle_BuySell(
+                    double currentBuy, double currentSell,
+                    double buyMax, double sellMax,
+                    bool intradayProfile = false)
+                {
+                    string extraName = extraProfiles == ExtraProfiles.No ? "" :
+                                       extraProfiles == ExtraProfiles.MiniVP ? "Mini" :
+                                       extraProfiles == ExtraProfiles.Weekly ? "Weekly" : "Monthly";
+
+                    // Buy vs Sell - already
+                    double maxBuyVolume = buyMax;
+                    double maxSellVolume = sellMax;
+
+                    double maxSideVolume = maxBuyVolume > maxSellVolume ? maxBuyVolume : maxSellVolume;
+
+                    double proportionBuy = 0;
+                    try { proportionBuy = currentBuy * (maxLength - (maxLength / maxHalfWidth)); } catch { };
+                    if (selectedWidth == HistWidth_Data._100)
+                        try { proportionBuy = currentBuy * (maxLength - (maxLength / 3)); } catch { };
+
+                    double dynLengthBuy = proportionBuy / maxSideVolume; ;
+
+                    double proportionSell = 0;
+                    try { proportionSell = currentSell * proportion_VP; } catch { };
+                    double dynLengthSell = proportionSell / maxSideVolume;
+
+                    DateTime x2_Sell = x1_Start.AddMilliseconds(dynLengthSell);
+                    DateTime x2_Buy = x1_Start.AddMilliseconds(dynLengthBuy);
+
+                    ChartRectangle buyHist, sellHist;
+                    sellHist = Chart.DrawRectangle($"{iStart}_{i}_VP{extraName}Sell", x1_Start, lowerSegmentY1, x2_Sell, upperSegmentY2, SellColor);
+                    buyHist = Chart.DrawRectangle($"{iStart}_{i}_VP{extraName}Buy", x1_Start, lowerSegmentY1, x2_Buy, upperSegmentY2, BuyColor);
+                    if (FillHist_VP)
+                    {
+                        buyHist.IsFilled = true;
+                        sellHist.IsFilled = true;
+                    }
+                    if (HistogramSide_Input == HistSide_Data.Right)
+                    {
+                        sellHist.Time1 = xBar;
+                        sellHist.Time2 = xBar.AddMilliseconds(-dynLengthSell);
+                        buyHist.Time1 = xBar;
+                        buyHist.Time2 = xBar.AddMilliseconds(-dynLengthBuy);
+                    }
+
+                    // Intraday Right Profile
+                    if (intradayProfile && extraProfiles != ExtraProfiles.MiniVP)
+                    {
+                        // ==== Subtract Profile / Plain Delta - Profile View ====
+                        // Recalculate histograms 'X' position
+                        DateTime dateOffset_Subt = TimeBasedOffset(xBar);
+
+                        double maxPositive = VP_VolumesRank_Subt.Values.Max();
+                        IEnumerable<double> negativeVolumeList = VP_VolumesRank_Subt.Values.Where(n => n < 0);
+                        double maxNegative = 0;
+                        try { maxNegative = Math.Abs(negativeVolumeList.Min()); } catch { }
+
+                        double subtMax = maxPositive > maxNegative ? maxPositive : maxNegative;
+
+                        double maxLength_Intraday = dateOffset_Subt.Subtract(xBar).TotalMilliseconds;
+                        double proportion_Intraday = VP_VolumesRank_Subt[priceKey] * (maxLength_Intraday - (maxLength_Intraday / maxWidth));
+                        double dynLength = proportion_Intraday / subtMax;
+
+                        // Set 'X'
+                        DateTime x1 = dateOffset_Subt;
+                        DateTime x2 = x1.AddMilliseconds(dynLength);
+
+                        Color colorHist = dynLength > 0 ? BuyColor : SellColor;
+                        ChartRectangle subtHist = Chart.DrawRectangle($"{iStart}_{i}_VPSubt", x1, lowerSegmentY1, x2, upperSegmentY2, colorHist);
+
+                        dynLength = -Math.Abs(dynLength);
+                        subtHist.Time1 = dateOffset_Subt;
+                        subtHist.Time2 = subtHist.Time2 != dateOffset_Subt ? dateOffset_Subt.AddMilliseconds(dynLength) : dateOffset_Subt;
+
+                        if (FillHist_VP)
+                            subtHist.IsFilled = true;
+
+                        Draw_VA_POC(VP_VolumesRank_Subt, iStart, x1_Start, xBar, extraProfiles, true, subtHist.Time1);
+                        // ==== Buy_Sell - Divided View - Half Width ====
+                        // Recalculate histograms 'X' position
+                        DateTime dateOffset = TimeBasedOffset(dateOffset_Subt, true);
+                        maxLength_Intraday = dateOffset.Subtract(dateOffset_Subt).TotalMilliseconds;
+
+                        // Replaced maxHalfWidth to maxWidth since it's Divided View
+                        proportionBuy = 0;
+                        try { proportionBuy = currentBuy * (maxLength_Intraday - (maxLength_Intraday / maxHalfWidth)); } catch { };
+                        if (selectedWidth == HistWidth_Data._100)
+                            try { proportionBuy = currentBuy * maxLength_Intraday; } catch { };
+
+                        dynLengthBuy = proportionBuy / maxBuyVolume; ;
+
+                        proportionSell = 0;
+                        try { proportionSell = currentSell * (maxLength_Intraday - (maxLength_Intraday / maxHalfWidth)); } catch { };
+                        if (selectedWidth == HistWidth_Data._100)
+                            try { proportionSell = currentSell * maxLength_Intraday; } catch { };
+
+                        dynLengthSell = proportionSell / maxSellVolume;
+
+                        // Set 'X'
+                        sellHist.Time1 = dateOffset;
+                        sellHist.Time2 = dateOffset.AddMilliseconds(-dynLengthSell);
+                        buyHist.Time1 = dateOffset;
+                        buyHist.Time2 = dateOffset.AddMilliseconds(dynLengthBuy);
+                    }
+                }
+
+                void DrawRectangle_Delta(double currentDelta, double positiveDeltaMax, IEnumerable<double> negativeDeltaList, bool intradayProfile = false)
+                {
+                    double negativeDeltaMax = 0;
+                    try { negativeDeltaMax = Math.Abs(negativeDeltaList.Min()); } catch { }
+
+                    double deltaMax = positiveDeltaMax > negativeDeltaMax ? positiveDeltaMax : negativeDeltaMax;
+
+                    double proportion_Delta = Math.Abs(currentDelta) * proportion_VP;
+                    double dynLength_Delta = proportion_Delta / deltaMax;
+
+                    Color colorHist = currentDelta >= 0 ? BuyColor : SellColor;
+                    DateTime x2 = x1_Start.AddMilliseconds(dynLength_Delta);
+
+                    string extraName = extraProfiles == ExtraProfiles.No ? "" :
+                                       extraProfiles == ExtraProfiles.MiniVP ? "Mini" :
+                                       extraProfiles == ExtraProfiles.Weekly ? "Weekly" : "Monthly";
+
+                    ChartRectangle deltaHist = Chart.DrawRectangle($"{iStart}_{i}_VP{extraName}_Delta", x1_Start, lowerSegmentY1, x2, upperSegmentY2, colorHist);
+
+                    if (FillHist_VP)
+                        deltaHist.IsFilled = true;
+
+                    if (HistogramSide_Input == HistSide_Data.Right)
+                    {
+                        deltaHist.Time1 = xBar;
+                        deltaHist.Time2 = deltaHist.Time2 != x1_Start ? xBar.AddMilliseconds(-dynLength_Delta) : x1_Start;
+                    }
+
+                    // Intraday Right Profile
+                    if (intradayProfile && extraProfiles != ExtraProfiles.MiniVP)
+                    {
+                        DateTime dateOffset = TimeBasedOffset(xBar);
+                        DateTime dateOffset_Duo = TimeBasedOffset(dateOffset, true);
+                        DateTime dateOffset_Triple = TimeBasedOffset(dateOffset_Duo, true);
+                        double maxLength_Intraday = dateOffset.Subtract(xBar).TotalMilliseconds;
+
+                        if (extraName == "Weekly")
+                            maxLength_Intraday = dateOffset_Duo.Subtract(dateOffset).TotalMilliseconds;
+
+                        if (extraName == "Monthly")
+                            maxLength_Intraday = dateOffset_Triple.Subtract(dateOffset_Duo).TotalMilliseconds;
+
+                        // Recalculate histograms 'X' position
+                        proportion_Delta = currentDelta * (maxLength_Intraday - (maxLength_Intraday / maxWidth));
+                        if (selectedWidth == HistWidth_Data._100)
+                            proportion_Delta = currentDelta * maxLength_Intraday;
+                        dynLength_Delta = proportion_Delta / deltaMax;
+
+                        colorHist = dynLength_Delta > 0 ? BuyColor : SellColor;
+                        dynLength_Delta = Math.Abs(dynLength_Delta); // Profile view only
+
+                        // Set 'X'
+                        deltaHist.Time1 = dateOffset;
+                        deltaHist.Time2 = deltaHist.Time2 != dateOffset ? dateOffset.AddMilliseconds(-dynLength_Delta) : dateOffset;
+                        deltaHist.Color = colorHist;
+
+                        if (extraName == "Weekly") {
+                            deltaHist.Time1 = dateOffset_Duo;
+                            deltaHist.Time2 = dateOffset_Duo.AddMilliseconds(-dynLength_Delta);
+                            if (!EnableMonthlyProfile && FillIntradaySpace) {
+                                deltaHist.Time1 = dateOffset;
+                                deltaHist.Time2 = dateOffset.AddMilliseconds(dynLength_Delta);
+                            }
+                        }
+                        if (extraName == "Monthly") {
+                            if (EnableWeeklyProfile) {
+                                // Show after
+                                deltaHist.Time1 = dateOffset_Triple;
+                                deltaHist.Time2 = dateOffset_Triple.AddMilliseconds(-dynLength_Delta);
+                                // Show after together
+                                if (FillIntradaySpace) {
+                                    deltaHist.Time1 = dateOffset_Duo;
+                                    deltaHist.Time2 = dateOffset_Duo.AddMilliseconds(dynLength_Delta);
+                                }
+                            }
+                            else {
+                                // Use Weekly position
+                                deltaHist.Time1 = dateOffset_Duo;
+                                deltaHist.Time2 = dateOffset_Duo.AddMilliseconds(-dynLength_Delta);
+                                if (FillIntradaySpace) {
+                                    deltaHist.Time1 = dateOffset;
+                                    deltaHist.Time2 = dateOffset.AddMilliseconds(dynLength_Delta);
+                                }
+                            }
+                        }
+                        IDictionary<double, double> VPdict = extraProfiles == ExtraProfiles.No ? VP_DeltaRank :
+                                                            extraProfiles == ExtraProfiles.MiniVP ? miniVPsRank.Delta :
+                                                            extraProfiles == ExtraProfiles.Weekly ? WeeklyRank.Delta : MonthlyRank.Delta;
+                        Draw_VA_POC(VPdict, iStart, x1_Start, xBar, extraProfiles, true, deltaHist.Time1);
+                    }
+                }
+
+                if (VolumeMode_Input == VolumeMode_Data.Normal)
+                {
+                    IDictionary<double, double> VPdict = extraProfiles == ExtraProfiles.No ? VP_VolumesRank:
+                                                         extraProfiles == ExtraProfiles.MiniVP ? miniVPsRank.Normal:
+                                                         extraProfiles == ExtraProfiles.Weekly ? WeeklyRank.Normal : MonthlyRank.Normal;
+                    Draw_VA_POC(VPdict, iStart, x1_Start, xBar, extraProfiles);
+
+                    if (extraProfiles == ExtraProfiles.No)
+                        DrawRectangle_Normal(VP_VolumesRank[priceKey], VP_VolumesRank.Values.Max(), isIntraday);
+
+                    if (extraProfiles == ExtraProfiles.MiniVP)
+                        DrawRectangle_Normal(miniVPsRank.Normal[priceKey], miniVPsRank.Normal.Values.Max(), false);
+
+                    if (extraProfiles == ExtraProfiles.Weekly)
+                        DrawRectangle_Normal(WeeklyRank.Normal[priceKey], WeeklyRank.Normal.Values.Max(), isIntraday);
+
+                    if (extraProfiles == ExtraProfiles.Monthly)
+                        DrawRectangle_Normal(MonthlyRank.Normal[priceKey], MonthlyRank.Normal.Values.Max(), isIntraday);
+
+                    if (ShowResults || ShowMiniResults)
+                    {
+                        if (extraProfiles == ExtraProfiles.MiniVP && !ShowMiniResults)
+                            continue;
+                        if (extraProfiles != ExtraProfiles.MiniVP && !ShowResults)
+                            continue;
+
+                        double sum = 0;
+                        if (extraProfiles == ExtraProfiles.No)
+                            sum = Math.Round(VP_VolumesRank.Values.Sum());
+                        if (extraProfiles == ExtraProfiles.MiniVP)
+                            sum = Math.Round(miniVPsRank.Normal.Values.Sum());
+                        if (extraProfiles == ExtraProfiles.Weekly)
+                            sum = Math.Round(WeeklyRank.Normal.Values.Sum());
+                        if (extraProfiles == ExtraProfiles.Monthly)
+                            sum = Math.Round(MonthlyRank.Normal.Values.Sum());
+
                         string strValue = FormatResults ? FormatBigNumber(sum) : $"{sum}";
 
-                        Color centerColor = (VolumeModeInput == VolumeModeData.Normal || VolumeModeInput == VolumeModeData.Normal_Delta) ? ColorOHLC : ColorGrandient_Min;
-                        Center = Chart.DrawText($"{iStart}NormalResult", $"\n{strValue}", Bars.OpenTimes[iStart], lowest, centerColor);
+                        ChartText Center = Chart.DrawText($"{iStart}_VPNormal{extraProfiles}Result", $"\n{strValue}", x1_Start, lowest, EnableGradient ? ColorGrandient_Min : HistColor);
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
                         Center.FontSize = FontSizeResults - 1;
 
-                        if (HistogramSideInput == HistSideData.Right) {
-                            Center.Time = Bars.OpenTimes[index];
+                        if (HistogramSide_Input == HistSide_Data.Right)
+                            Center.Time = xBar;
+
+                        // Intraday Right Profile
+                        if (isIntraday && extraProfiles == ExtraProfiles.No) {
+                            DateTime dateOffset = TimeBasedOffset(xBar);
+                            Center.Time = dateOffset;
                         }
                     }
                 }
-                if (VolumeModeInput == VolumeModeData.Buy_Sell)
+                else if (VolumeMode_Input == VolumeMode_Data.Buy_Sell)
                 {
-                    // Buy vs Sell = Pseudo Delta
-                    double buy_Volume = 0;
-                    try { buy_Volume = VolumesRank_Up.Values.Max(); } catch { };
-                    double sell_Volume = 0;
-                    try { sell_Volume = VolumesRank_Down.Values.Max(); } catch { };
-                    double sideVolMax = buy_Volume > sell_Volume ? buy_Volume : sell_Volume;
-
-                    double maxHalfWidth = selected == HistWidthData._15 ? 1.12 : selected == HistWidthData._30 ? 1.25 : selected == HistWidthData._50 ? 1.40 : 1.75;
-
-                    double proportion_Up = 0;
-                    try { proportion_Up = VolumesRank_Up[priceKey] * (maxLength - (maxLength / maxHalfWidth)); } catch { };
-                    if (selected == HistWidthData._100)
-                        try { proportion_Up = VolumesRank_Up[priceKey] * (maxLength - (maxLength / 3)); } catch { };
-
-                    double dynLength_Up = proportion_Up / sideVolMax; ;
-
-                    double proportion_Down = 0;
-                    try { proportion_Down = VolumesRank_Down[priceKey] * (maxLength - (maxLength / maxWidth)); } catch { };
-                    if (selected == HistWidthData._100)
-                        try { proportion_Down = VolumesRank_Down[priceKey] * maxLength; } catch { };
-
-                    double dynLength_Down = proportion_Down / sideVolMax;
-
-                    ChartRectangle buyHist, sellHist;
-                    if (VolumesRank_Down.ContainsKey(priceKey) && VolumesRank_Up.ContainsKey(priceKey))
-                    {
-                        sellHist = Chart.DrawRectangle($"{iStart}_{i}Sell", Bars.OpenTimes[iStart], lowerSegment, Bars[iStart].OpenTime.AddMilliseconds(dynLength_Down), upperSegment, SellColor);
-                        buyHist = Chart.DrawRectangle($"{iStart}_{i}Buy", Bars.OpenTimes[iStart], lowerSegment, Bars[iStart].OpenTime.AddMilliseconds(dynLength_Up), upperSegment, BuyColor);
-                        if (FillHist)
-                        {
-                            buyHist.IsFilled = true; sellHist.IsFilled = true;
-                        }
-                        if (HistogramSideInput == HistSideData.Right)
-                        {
-                            sellHist.Time1 = Bars.OpenTimes[index];
-                            sellHist.Time2 = Bars.OpenTimes[index].AddMilliseconds(-dynLength_Down);
-                            buyHist.Time1 = Bars.OpenTimes[index];
-                            buyHist.Time2 = Bars.OpenTimes[index].AddMilliseconds(-dynLength_Up);
-                        }
+                    if (extraProfiles == ExtraProfiles.No) {
+                        double buyMax = 0;
+                        try { buyMax = VP_VolumesRank_Up.Values.Max(); } catch { }
+                        double sellMax = 0;
+                        try { sellMax = VP_VolumesRank_Down.Values.Max(); } catch { }
+                        if (VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
+                            DrawRectangle_BuySell(VP_VolumesRank_Up[priceKey], VP_VolumesRank_Down[priceKey],
+                                                  buyMax, sellMax, isIntraday);
                     }
-                    if (ShowResults)
+                    if (extraProfiles == ExtraProfiles.MiniVP) {
+                        double buyMax = 0;
+                        try { buyMax = miniVPsRank.Up.Values.Max(); } catch { }
+                        double sellMax = 0;
+                        try { sellMax = miniVPsRank.Down.Values.Max(); } catch { }
+                        if (miniVPsRank.Up.ContainsKey(priceKey) && miniVPsRank.Down.ContainsKey(priceKey))
+                            DrawRectangle_BuySell(miniVPsRank.Up[priceKey], miniVPsRank.Down[priceKey],
+                                                  buyMax, sellMax, false);
+                    }
+
+                    if (ShowResults || ShowMiniResults)
                     {
-                        double volBuy = VolumesRank_Up.Values.Sum();
-                        double volSell = VolumesRank_Down.Values.Sum();
+                        if (extraProfiles == ExtraProfiles.MiniVP && !ShowMiniResults)
+                            continue;
+
+                        double volBuy = VP_VolumesRank_Up.Values.Sum();
+                        double volSell = VP_VolumesRank_Down.Values.Sum();
                         double percentBuy = (volBuy * 100) / (volBuy + volSell);
                         double percentSell = (volSell * 100) / (volBuy + volSell);
+                        percentBuy = Math.Round(percentBuy);
+                        percentSell = Math.Round(percentSell);
 
+                        string extraName = extraProfiles == ExtraProfiles.No ? "" :
+                                           extraProfiles == ExtraProfiles.MiniVP ? "Mini" :
+                                           extraProfiles == ExtraProfiles.Weekly ? "Weekly" : "Monthly";
                         ChartText Left, Right;
-                        Left = Chart.DrawText($"{iStart}SellSum", $"{Math.Round(percentSell)}%", Bars.OpenTimes[iStart], lowest, SellColor);
-                        Right = Chart.DrawText($"{iStart}BuySum", $"{Math.Round(percentBuy)}%", Bars.OpenTimes[iStart], lowest, BuyColor); 
-                        Left.HorizontalAlignment = HorizontalAlignment.Left; Left.FontSize = FontSizeResults;
-                        Right.HorizontalAlignment = HorizontalAlignment.Right; Right.FontSize = FontSizeResults;
+                        Left = Chart.DrawText($"{iStart}_VPSell{extraName}Sum", $"{percentSell}%", x1_Start, lowest, SellColor);
+                        Right = Chart.DrawText($"{iStart}_VPBuy{extraName}Sum", $"{percentBuy}%", x1_Start, lowest, BuyColor);
+                        Left.HorizontalAlignment = HorizontalAlignment.Left;
+                        Right.HorizontalAlignment = HorizontalAlignment.Right;
+                        Left.FontSize = FontSizeResults;
+                        Right.FontSize = FontSizeResults;
 
                         ChartText Center;
                         double sum = Math.Round(volBuy + volSell);
@@ -808,242 +1392,222 @@ namespace cAlgo
                         if (volBuy != 0 && volSell != 0)
                             divide = Math.Round(volBuy / volSell, 3);
 
-                        Color centerColor = Math.Round(percentBuy) > Math.Round(percentSell) ? BuyColor : SellColor;
-                        if (BuySellResult_Input == BuySellResult_Data.Sum)
-                            Center = Chart.DrawText($"{iStart}BuySellResult", $"\n{(FormatResults ? FormatBigNumber(sum) : sum)}", Bars.OpenTimes[iStart], lowest, centerColor);
-                        else if (BuySellResult_Input == BuySellResult_Data.Subtract) {
-                            string subtractFmtd = subtract > 0 ? FormatBigNumber(subtract) : $"-{FormatBigNumber(Math.Abs(subtract))}";
-                            Center = Chart.DrawText($"{iStart}BuySellResult", $"\n{(FormatResults ? subtractFmtd : subtract)}", Bars.OpenTimes[iStart], lowest, centerColor);
-                        }
-                        else
-                            Center = Chart.DrawText($"{iStart}BuySellResult", $"\n{divide}", Bars.OpenTimes[iStart], lowest, centerColor);
+                        string sumFmtd = FormatResults ? FormatBigNumber(sum) : $"{sum}";
+                        string subtractValueFmtd = subtract > 0 ? FormatBigNumber(subtract) : $"-{FormatBigNumber(Math.Abs(subtract))}";
+                        string subtractFmtd = FormatResults ? subtractValueFmtd : $"{subtract}";
 
+                        string strFormated = OperatorBuySell_Input == OperatorBuySell_Data.Sum ? sumFmtd :
+                                             OperatorBuySell_Input == OperatorBuySell_Data.Subtraction ? subtractFmtd : $"{divide}";
+
+                        Color centerColor = Math.Round(percentBuy) > Math.Round(percentSell) ? BuyColor : SellColor;
+
+                        Center = Chart.DrawText($"{iStart}_VPBuySell{extraName}Result", $"\n{strFormated}", x1_Start, lowest, centerColor);
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
                         Center.FontSize = FontSizeResults - 1;
 
-                        if (HistogramSideInput == HistSideData.Right)
+                        if (HistogramSide_Input == HistSide_Data.Right)
                         {
-                            Right.Time = Bars.OpenTimes[index];
-                            Left.Time = Bars.OpenTimes[index];
-                            Center.Time = Bars.OpenTimes[index];
+                            Right.Time = xBar;
+                            Left.Time = xBar;
+                            Center.Time = xBar;
+                        }
+
+                        // Intraday Right Profile
+                        if (isIntraday) {
+                            DateTime dateOffset = TimeBasedOffset(xBar);
+                            Right.Time = dateOffset;
+                            Left.Time = dateOffset;
+                            Center.Time = dateOffset;
                         }
                     }
                 }
-                else if (VolumeModeInput == VolumeModeData.Delta || VolumeModeInput == VolumeModeData.Normal_Delta)
+                else
                 {
-                    // Delta
-                    double Positive_Delta = DeltaRank.Values.Max();
-                    IEnumerable<double> allNegative = DeltaRank.Values.Where(n => n < 0);
-                    double Negative_Delta = 0;
-                    try { Negative_Delta = Math.Abs(allNegative.Min()); } catch { }
 
-                    double deltaMax = Positive_Delta > Negative_Delta ? Positive_Delta : Negative_Delta;
+                    IDictionary<double, double> VPdict = extraProfiles == ExtraProfiles.No ? VP_DeltaRank :
+                                                        extraProfiles == ExtraProfiles.MiniVP ? miniVPsRank.Delta :
+                                                        extraProfiles == ExtraProfiles.Weekly ? WeeklyRank.Delta : MonthlyRank.Delta;
+                    Draw_VA_POC(VPdict, iStart, x1_Start, xBar, extraProfiles);
 
-                    double proportion_Delta = Math.Abs(DeltaRank[priceKey]) * (maxLength - (maxLength / maxWidth));
-                    if (selected == HistWidthData._100)
-                        proportion_Delta = Math.Abs(DeltaRank[priceKey]) * maxLength;
-                    double dynLength_Delta = proportion_Delta / deltaMax;
-
-                    ChartRectangle deltaHist;
-                    try
-                    {
-                        if (DeltaRank[priceKey] >= 0)
-                            deltaHist = Chart.DrawRectangle($"{iStart}_{i}ProfileDelta", Bars.OpenTimes[iStart], lowerSegment, Bars[iStart].OpenTime.AddMilliseconds(dynLength_Delta), upperSegment, BuyColor);
-                        else
-                            deltaHist = Chart.DrawRectangle($"{iStart}_{i}ProfileDelta", Bars.OpenTimes[iStart], lowerSegment, Bars[iStart].OpenTime.AddMilliseconds(dynLength_Delta), upperSegment, SellColor);
+                    if (extraProfiles == ExtraProfiles.No) {
+                        DrawRectangle_Delta(VP_DeltaRank[priceKey],
+                                            VP_DeltaRank.Values.Max(),
+                                            VP_DeltaRank.Values.Where(n => n < 0), isIntraday);
                     }
-                    catch
-                    {
-                        deltaHist = Chart.DrawRectangle($"{iStart}_{i}ProfileDelta", Bars.OpenTimes[iStart], lowerSegment, Bars[iStart].OpenTime, upperSegment, HistColor);
-                    }
-                    if (FillHist)
-                        deltaHist.IsFilled = true;
-                    if (HistogramSideInput == HistSideData.Right || VolumeModeInput == VolumeModeData.Normal_Delta)
-                    {
-                        deltaHist.Time1 = Bars.OpenTimes[index];
-                        deltaHist.Time2 = deltaHist.Time2 != Bars[iStart].OpenTime ? Bars.OpenTimes[index].AddMilliseconds(-dynLength_Delta) : Bars[iStart].OpenTime;
-                    }
+                    if (extraProfiles == ExtraProfiles.MiniVP)
+                        DrawRectangle_Delta(miniVPsRank.Delta[priceKey],
+                                            miniVPsRank.Delta.Values.Max(),
+                                            miniVPsRank.Delta.Values.Where(n => n < 0), false);
 
-                    if (ShowResults)
+                    if (extraProfiles == ExtraProfiles.Weekly)
+                        DrawRectangle_Delta(WeeklyRank.Delta[priceKey],
+                                            WeeklyRank.Delta.Values.Max(),
+                                            WeeklyRank.Delta.Values.Where(n => n < 0), isIntraday);
+
+                    if (extraProfiles == ExtraProfiles.Monthly)
+                        DrawRectangle_Delta(MonthlyRank.Delta[priceKey],
+                                            MonthlyRank.Delta.Values.Max(),
+                                            MonthlyRank.Delta.Values.Where(n => n < 0), isIntraday);
+
+                    if (ShowResults || ShowMiniResults)
                     {
-                        double deltaBuy = DeltaRank.Values.Where(n => n > 0).Sum();
-                        double deltaSell = DeltaRank.Values.Where(n => n < 0).Sum();
+                        if (extraProfiles == ExtraProfiles.MiniVP && !ShowMiniResults)
+                            continue;
+
+                        string extraName = extraProfiles == ExtraProfiles.No ? "" :
+                                           extraProfiles == ExtraProfiles.MiniVP ? "Mini" :
+                                           extraProfiles == ExtraProfiles.Weekly ? "Weekly" : "Monthly";
+                        double deltaBuy = 0;
+                        double deltaSell = 0;
+                        double totalDelta = 0;
+
+                        if (extraProfiles == ExtraProfiles.No) {
+                            deltaBuy = VP_DeltaRank.Values.Where(n => n > 0).Sum();
+                            deltaSell = VP_DeltaRank.Values.Where(n => n < 0).Sum();
+                            totalDelta = Math.Round(VP_DeltaRank.Values.Sum());
+                        }
+                        if (extraProfiles == ExtraProfiles.MiniVP) {
+                            deltaBuy = miniVPsRank.Delta.Values.Where(n => n > 0).Sum();
+                            deltaSell = miniVPsRank.Delta.Values.Where(n => n < 0).Sum();
+                            totalDelta = Math.Round(miniVPsRank.Delta.Values.Sum());
+                        }
+                        if (extraProfiles == ExtraProfiles.Weekly) {
+                            deltaBuy = WeeklyRank.Delta.Values.Where(n => n > 0).Sum();
+                            deltaSell = WeeklyRank.Delta.Values.Where(n => n < 0).Sum();
+                            totalDelta = Math.Round(WeeklyRank.Delta.Values.Sum());
+                        }
+                        if (extraProfiles == ExtraProfiles.Monthly) {
+                            deltaBuy = MonthlyRank.Delta.Values.Where(n => n > 0).Sum();
+                            deltaSell = MonthlyRank.Delta.Values.Where(n => n < 0).Sum();
+                            totalDelta = Math.Round(MonthlyRank.Delta.Values.Sum());
+                        }
+
                         double percentBuy = 0;
                         double percentSell = 0;
                         try { percentBuy = (deltaBuy * 100) / (deltaBuy + Math.Abs(deltaSell)); } catch { };
                         try { percentSell = (deltaSell * 100) / (deltaBuy + Math.Abs(deltaSell)); } catch { }
+                        percentBuy = Math.Round(percentBuy);
+                        percentSell = Math.Round(percentSell);
 
                         ChartText Left, Right;
-                        Right = Chart.DrawText($"{iStart}BuyDeltaSum", $"{Math.Round(percentBuy)}%", Bars.OpenTimes[iStart], lowest, BuyColor);
-                        Left = Chart.DrawText($"{iStart}SellDeltaSum", $"{Math.Round(percentSell)}%", Bars.OpenTimes[iStart], lowest, SellColor);
-                        Left.HorizontalAlignment = HorizontalAlignment.Left; Left.FontSize = FontSizeResults;
-                        Right.HorizontalAlignment = HorizontalAlignment.Right; Right.FontSize = FontSizeResults;
+                        Right = Chart.DrawText($"{iStart}_VP{extraName}DeltaBuySum", $"{percentBuy}%", x1_Start, lowest, BuyColor);
+                        Left = Chart.DrawText($"{iStart}_VP{extraName}DeltaSellSum", $"{percentSell}%", x1_Start, lowest, SellColor);
+                        Left.HorizontalAlignment = HorizontalAlignment.Left;
+                        Right.HorizontalAlignment = HorizontalAlignment.Right;
+                        Left.FontSize = FontSizeResults;
+                        Right.FontSize = FontSizeResults;
 
-                        ChartText Center, MinText, MaxText, SubText;
-                        double totalDelta = Math.Round(DeltaRank.Values.Sum());
-                        double minDelta = Math.Round(MinMaxDelta[0]);
-                        double maxDelta = Math.Round(MinMaxDelta[1]);
-                        double subDelta = Math.Round(minDelta - maxDelta);
-                        
+                        ChartText Center;
                         string totalDeltaFmtd = totalDelta > 0 ? FormatBigNumber(totalDelta) : $"-{FormatBigNumber(Math.Abs(totalDelta))}";
-                        string minDeltaFmtd = minDelta > 0 ? FormatBigNumber(minDelta) : $"-{FormatBigNumber(Math.Abs(minDelta))}";
-                        string maxDeltaFmtd = maxDelta > 0 ? FormatBigNumber(maxDelta) : $"-{FormatBigNumber(Math.Abs(maxDelta))}";
-                        string subDeltaFmtd = subDelta > 0 ? FormatBigNumber(subDelta) : $"-{FormatBigNumber(Math.Abs(subDelta))}";
-                        
+                        string totalDeltaString = FormatResults ? totalDeltaFmtd : $"{totalDelta}";
+
                         Color centerColor = totalDelta > 0 ? BuyColor : SellColor;
-                        Color subColor = subDelta > 0 ? BuyColor : SellColor;
-                        Center = Chart.DrawText($"{iStart}DeltaResult", $"\n{(FormatResults ? totalDeltaFmtd : totalDelta)}", Bars.OpenTimes[iStart], lowest, centerColor);
-                        MinText = Chart.DrawText($"{iStart}DeltaMinResult", $"\n\nMin: {(FormatResults ? minDeltaFmtd : minDelta)}", Bars.OpenTimes[iStart], lowest, SellColor);
-                        MaxText = Chart.DrawText($"{iStart}DeltaMaxResult", $"\n\n\nMax: {(FormatResults ? maxDeltaFmtd : maxDelta)}", Bars.OpenTimes[iStart], lowest, BuyColor);
-                        SubText = Chart.DrawText($"{iStart}DeltaSubResult", $"\n\n\n\nSub: {(FormatResults ? subDeltaFmtd : subDelta)}", Bars.OpenTimes[iStart], lowest, subColor);
-                        
+                        Center = Chart.DrawText($"{iStart}_VP{extraName}DeltaResult", $"\n{totalDeltaString}", x1_Start, lowest, centerColor);
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
-                        MinText.HorizontalAlignment = HorizontalAlignment.Center;
-                        MaxText.HorizontalAlignment = HorizontalAlignment.Center;
-                        SubText.HorizontalAlignment = HorizontalAlignment.Center;
                         Center.FontSize = FontSizeResults - 1;
-                        MinText.FontSize = FontSizeResults - 1;
-                        MaxText.FontSize = FontSizeResults - 1;
-                        SubText.FontSize = FontSizeResults - 1;
-                        
-                        if (HistogramSideInput == HistSideData.Right || VolumeModeInput == VolumeModeData.Normal_Delta)
+
+                        if (HistogramSide_Input == HistSide_Data.Right)
                         {
-                            Right.Time = Bars.OpenTimes[index];
-                            Left.Time = Bars.OpenTimes[index];
-                            Center.Time = Bars.OpenTimes[index];
-                            MinText.Time = Bars.OpenTimes[index];
-                            MaxText.Time = Bars.OpenTimes[index];
-                            SubText.Time = Bars.OpenTimes[index];
+                            Right.Time = xBar;
+                            Left.Time = xBar;
+                            Center.Time = xBar;
                         }
-                    }
-                }
-                // ============= Coloring Letters + VAL / VAH / POC =============
-                if (ShowVA)
-                {
-                    double[] VAL_VAH_POC = VA_Calculation();
 
-                    // ==========================
-                    ChartTrendLine poc = Chart.DrawTrendLine($"POC_{iStart}", TF_Bars.OpenTimes[TF_idx], VAL_VAH_POC[2] - rowHeight, Bars.OpenTimes[index], VAL_VAH_POC[2] - rowHeight, ColorPOC);
-                    ChartTrendLine vah = Chart.DrawTrendLine($"VAH_{iStart}", TF_Bars.OpenTimes[TF_idx], VAL_VAH_POC[1] + rowHeight, Bars.OpenTimes[index], VAL_VAH_POC[1] + rowHeight, ColorVAH);
-                    ChartTrendLine val = Chart.DrawTrendLine($"VAL_{iStart}", TF_Bars.OpenTimes[TF_idx], VAL_VAH_POC[0], Bars.OpenTimes[index], VAL_VAH_POC[0], ColorVAL);
+                        // Intraday Right Profile
+                        if (isIntraday && extraProfiles == ExtraProfiles.No) {
+                            DateTime dateOffset = TimeBasedOffset(xBar);
+                            Right.Time = dateOffset;
+                            Left.Time = dateOffset;
+                            Center.Time = dateOffset;
+                        }
 
-                    double[] VAforColor = { VAL_VAH_POC[0], VAL_VAH_POC[1], VAL_VAH_POC[2] };
-                    priceVA_LHP = VAforColor;
-
-                    poc.LineStyle = LineStylePOC; poc.Thickness = ThicknessPOC; poc.Comment = "POC";
-                    vah.LineStyle = LineStyleVA; vah.Thickness = ThicknessVA; vah.Comment = "VAH";
-                    val.LineStyle = LineStyleVA; val.Thickness = ThicknessVA; val.Comment = "VAL";
-
-                    // ==== POC Lines ====
-                    if (POCsLines.Contains(poc))
-                    {
-                        for (int tl = 0; tl < RectanglesToColor.Count; tl++)
+                        if (ShowMinMaxDelta)
                         {
-                            if (POCsLines[tl].Time1 == poc.Time1)
+                            ChartText MinText, MaxText, SubText;
+
+                            double minDelta = 0;
+                            double maxDelta = 0;
+                            double subDelta = 0;
+                            if (extraProfiles == ExtraProfiles.No) {
+                                minDelta = Math.Round(VP_MinMaxDelta[0]);
+                                maxDelta = Math.Round(VP_MinMaxDelta[1]);
+                                subDelta = Math.Round(minDelta - maxDelta);
+                            }
+                            if (extraProfiles == ExtraProfiles.MiniVP) {
+                                minDelta = Math.Round(miniVPsRank.MinMaxDelta[0]);
+                                maxDelta = Math.Round(miniVPsRank.MinMaxDelta[1]);
+                                subDelta = Math.Round(minDelta - maxDelta);
+                            }
+                            if (extraProfiles == ExtraProfiles.Weekly) {
+                                minDelta = Math.Round(WeeklyRank.MinMaxDelta[0]);
+                                maxDelta = Math.Round(WeeklyRank.MinMaxDelta[1]);
+                                subDelta = Math.Round(minDelta - maxDelta);
+                            }
+                            if (extraProfiles == ExtraProfiles.Monthly) {
+                                minDelta = Math.Round(MonthlyRank.MinMaxDelta[0]);
+                                maxDelta = Math.Round(MonthlyRank.MinMaxDelta[1]);
+                                subDelta = Math.Round(minDelta - maxDelta);
+                            }
+
+                            string minDeltaFmtd = minDelta > 0 ? FormatBigNumber(minDelta) : $"-{FormatBigNumber(Math.Abs(minDelta))}";
+                            string maxDeltaFmtd = maxDelta > 0 ? FormatBigNumber(maxDelta) : $"-{FormatBigNumber(Math.Abs(maxDelta))}";
+                            string subDeltaFmtd = subDelta > 0 ? FormatBigNumber(subDelta) : $"-{FormatBigNumber(Math.Abs(subDelta))}";
+
+                            string minDeltaString = FormatResults ? minDeltaFmtd : $"{minDelta}";
+                            string maxDeltaString = FormatResults ? maxDeltaFmtd : $"{maxDelta}";
+                            string subDeltaString = FormatResults ? subDeltaFmtd : $"{subDelta}";
+
+                            Color subColor = subDelta > 0 ? BuyColor : SellColor;
+
+                            if (!ShowOnlySubtDelta)
                             {
-                                POCsLines[tl] = poc;
-                                break;
+                                MinText = Chart.DrawText($"{iStart}_VP{extraName}DeltaMinResult", $"\n\nMin: {minDeltaString}", x1_Start, lowest, SellColor);
+                                MaxText = Chart.DrawText($"{iStart}_VP{extraName}DeltaMaxResult", $"\n\n\nMax: {maxDeltaString}", x1_Start, lowest, BuyColor);
+                                SubText = Chart.DrawText($"{iStart}_VP{extraName}DeltaSubResult", $"\n\n\n\nSub: {subDeltaString}", x1_Start, lowest, subColor);
+                                MinText.HorizontalAlignment = HorizontalAlignment.Center;
+                                MaxText.HorizontalAlignment = HorizontalAlignment.Center;
+                                SubText.HorizontalAlignment = HorizontalAlignment.Center;
+                                MinText.FontSize = FontSizeResults - 1;
+                                MaxText.FontSize = FontSizeResults - 1;
+                                SubText.FontSize = FontSizeResults - 1;
+
+                                if (HistogramSide_Input == HistSide_Data.Right)
+                                {
+                                    MinText.Time = xBar;
+                                    MaxText.Time = xBar;
+                                    SubText.Time = xBar;
+                                }
+
+                                // Intraday Right Profile
+                                if (isIntraday && extraProfiles == ExtraProfiles.No) {
+                                    DateTime dateOffset = TimeBasedOffset(xBar);
+                                    MinText.Time = dateOffset;
+                                    MaxText.Time = dateOffset;
+                                    SubText.Time = dateOffset;
+                                }
+                            }
+                            else {
+                                SubText = Chart.DrawText($"{iStart}_VP{extraName}DeltaSubResult", $"\n\nSub: {subDeltaString}", x1_Start, lowest, subColor);
+                                SubText.HorizontalAlignment = HorizontalAlignment.Center;
+                                SubText.FontSize = FontSizeResults - 1;
+
+                                if (HistogramSide_Input == HistSide_Data.Right)
+                                    SubText.Time = xBar;
+                                // Intraday Right Profile
+                                if (isIntraday && extraProfiles == ExtraProfiles.No) {
+                                    DateTime dateOffset = TimeBasedOffset(xBar);
+                                    SubText.Time = dateOffset;
+                                }
                             }
                         }
                     }
-                    else
-                        POCsLines.Add(poc);
-
-                    // ==== VAH / VAL Lines ====
-                    if (VALines.Contains(vah) || VALines.Contains(val))
-                    {
-                        for (int tl = 0; tl < VALines.Count; tl++)
-                        {
-                            if (VALines[tl].Comment == "VAH" && VALines[tl].Time1 == vah.Time1)
-                                VALines[tl] = vah;
-                            else if (VALines[tl].Comment == "VAL" && VALines[tl].Time1 == val.Time1)
-                                VALines[tl] = val;
-                        }
-                    }
-                    else
-                    {
-                        if (!VALines.Contains(vah))
-                            VALines.Add(vah);
-                        if (!VALines.Contains(val))
-                            VALines.Add(val);
-                    }
-
-                    if (VolumeModeInput == VolumeModeData.Normal)
-                    {
-                        // =========== Coloring Retangles ============
-                        foreach (int key in RectanglesToColor.Keys)
-                        {
-                            if (RectanglesToColor[key].Y1 > priceVA_LHP[0] && RectanglesToColor[key].Y1 < priceVA_LHP[1])
-                                RectanglesToColor[key].Color = HistColorVA;
-
-                            if (RectanglesToColor[key].Y1 == priceVA_LHP[2] - rowHeight)
-                                RectanglesToColor[key].Color = ColorPOC;
-
-                            if (RectanglesToColor[key].Y1 == priceVA_LHP[1])
-                                RectanglesToColor[key].Color = ColorVAH;
-                            else if (RectanglesToColor[key].Y1 == priceVA_LHP[0])
-                                RectanglesToColor[key].Color = ColorVAL;
-                        }
-                    }
-                    else
-                    {
-                        foreach (int key in RectanglesToColor.Keys)
-                        {
-                            if (RectanglesToColor[key].Y1 == priceVA_LHP[2] - rowHeight)
-                                RectanglesToColor[key].Color = ColorPOC;
-                        }
-                    }
                 }
-                else if (!ShowVA && KeepPOC)
-                {
-                    double priceLVOL = 0;
-                    for (int k = 0; k < VolumesRank.Count; k++)
-                    {
-                        if (VolumesRank.ElementAt(k).Value == largestVOL)
-                        {
-                            priceLVOL = VolumesRank.ElementAt(k).Key;
-                            break;
-                        }
-                    }
-
-                    ChartTrendLine poc = Chart.DrawTrendLine($"POC_{iStart}", TF_Bars.OpenTimes[TF_idx], priceLVOL - rowHeight, Bars.OpenTimes[index], priceLVOL - rowHeight, ColorPOC);
-                    poc.LineStyle = LineStylePOC; poc.Thickness = ThicknessPOC; poc.Comment = "POC";
-
-                    // ==== POC Lines ====
-                    if (POCsLines.Contains(poc))
-                    {
-                        for (int tl = 0; tl < RectanglesToColor.Count; tl++)
-                        {
-                            if (POCsLines[tl].Time1 == poc.Time1)
-                            {
-                                POCsLines[tl] = poc;
-                                break;
-                            }
-                        }
-                    }
-                    else
-                        POCsLines.Add(poc);
-
-                    // =========== Coloring Retangles ============
-                    foreach (int key in RectanglesToColor.Keys)
-                    {
-                        if (RectanglesToColor[key].Y1 == priceLVOL - rowHeight)
-                            RectanglesToColor[key].Color = ColorPOC;
-                    }
-                }
-            }
-            // ====== Rectangle VA ======
-            if (ShowVA && priceVA_LHP[0] != 0)
-            {
-                ChartRectangle rectVA;
-                rectVA = Chart.DrawRectangle($"{TF_Bars.OpenTimes[TF_idx]}", TF_Bars.OpenTimes[TF_idx], priceVA_LHP[0], Bars.OpenTimes[index], priceVA_LHP[1] + rowHeight, VAColor);
-                rectVA.IsFilled = true;
             }
 
             if (!ShowOHLC)
                 return;
-            ChartText iconOpenSession = Chart.DrawText($"Start{TF_Bars.OpenTimes[TF_idx]}", "▂", TF_Bars.OpenTimes[TF_idx], TF_Bars.OpenPrices[TF_idx], ColorOHLC);
-            ChartText iconCloseSession = Chart.DrawText($"End{TF_Bars.OpenTimes[TF_idx]}", "▂", TF_Bars.OpenTimes[TF_idx], Bars.ClosePrices[index], ColorOHLC);
+            ChartText iconOpenSession = Chart.DrawText($"{iStart}_OHLC_Open{extraProfiles}", "▂", histRightSide ? xBar : x1_Start , TF_Bars.OpenPrices[TF_idx], ColorOHLC);
+            ChartText iconCloseSession = Chart.DrawText($"{iStart}_OHLC_Close{extraProfiles}", "▂", histRightSide ? xBar : x1_Start, Bars.ClosePrices[index], ColorOHLC);
             iconOpenSession.VerticalAlignment = VerticalAlignment.Center;
             iconOpenSession.HorizontalAlignment = HorizontalAlignment.Left;
             iconOpenSession.FontSize = 14;
@@ -1051,56 +1615,772 @@ namespace cAlgo
             iconCloseSession.HorizontalAlignment = HorizontalAlignment.Right;
             iconCloseSession.FontSize = 14;
 
-            ChartTrendLine Session = Chart.DrawTrendLine($"Session{TF_Bars.OpenTimes[TF_idx]}", TF_Bars.OpenTimes[TF_idx], lowest, TF_Bars.OpenTimes[TF_idx], highest, ColorOHLC);
+            ChartTrendLine Session = Chart.DrawTrendLine($"{iStart}_OHLC_Body{extraProfiles}", histRightSide ? xBar : x1_Start, lowest, histRightSide ? xBar : x1_Start, highest, ColorOHLC);
             Session.Thickness = 3;
         }
-        private void VP_Bars(int index)
+
+        private void LiveVP_Update(int indexStart, int index, bool onlyMini = false) {
+            double price = Bars.ClosePrices[index];
+
+            bool updateStrategy = UpdateProfile_Input == UpdateProfile_Data.ThroughSegments_Balanced ?
+                                Math.Abs(price - prevUpdatePrice) >= rowHeight :
+                                UpdateProfile_Input != UpdateProfile_Data.Through_2_Segments_Best ||
+                                Math.Abs(price - prevUpdatePrice) >= (rowHeight + rowHeight);
+
+            if (updateStrategy || isUpdateVP || configHasChanged)
+            {
+                if (!onlyMini)
+                {
+                    if (EnableMonthlyProfile && VPInterval_Input != VPInterval_Data.Monthly)
+                    {
+
+                        int monthIndex = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+                        int monthStart = Bars.OpenTimes.GetIndexByTime(MonthlyBars.OpenTimes[monthIndex]);
+
+                        if (index != monthStart)
+                        {
+                            bool loopStart = true;
+                            for (int i = monthStart; i <= index; i++) {
+                                if (i < index)
+                                    CreateMonthlyVP(i, loopStart, true); // Update only
+                                else
+                                    CreateMonthlyVP(i, loopStart, false); // Update and Draw
+                                loopStart = false;
+                            }
+
+                        }
+                    }
+
+                    if (EnableWeeklyProfile && VPInterval_Input != VPInterval_Data.Weekly)
+                    {
+                        int weekIndex = WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+                        int weekStart = Bars.OpenTimes.GetIndexByTime(WeeklyBars.OpenTimes[weekIndex]);
+
+                        if (index != weekStart)
+                        {
+                            bool loopStart = true;
+                            for (int i = weekStart; i <= index; i++) {
+                                if (i < index)
+                                    CreateWeeklyVP(i, loopStart, true); // Update only
+                                else
+                                    CreateWeeklyVP(i, loopStart, false); // Update and Draw
+                                loopStart = false;
+                            }
+                        }
+                    }
+
+                    if (EnableMiniProfiles) {
+                        int miniIndex = MiniVPs_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+                        int miniStart = Bars.OpenTimes.GetIndexByTime(MiniVPs_Bars.OpenTimes[miniIndex]);
+
+                        if (index != miniStart)
+                        {
+                            bool loopStart = true;
+                            for (int i = miniStart; i <= index; i++)
+                            {
+                                if (i < index)
+                                    CreateMiniVPs(i, loopStart, true); // Update only
+                                else
+                                    CreateMiniVPs(i, loopStart, false); // Update and Draw
+                                loopStart = false;
+                            }
+                        }
+                    }
+
+                    if (index != indexStart)
+                    {
+                        for (int i = indexStart; i <= index; i++)
+                        {
+                            if (i == indexStart) {
+                                VP_VolumesRank.Clear();
+                                VP_VolumesRank_Up.Clear();
+                                VP_VolumesRank_Down.Clear();
+                                VP_VolumesRank_Subt.Clear();
+                                VP_DeltaRank.Clear();
+                            }
+                            if (i < index)
+                                VolumeProfile(indexStart, i, ExtraProfiles.No, true); // Update only
+                            else
+                                VolumeProfile(indexStart, i, ExtraProfiles.No, false); // Update and Draw
+                        }
+                    }
+                }
+                else
+                {
+                    int miniIndex = MiniVPs_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+                    int miniStart = Bars.OpenTimes.GetIndexByTime(MiniVPs_Bars.OpenTimes[miniIndex]);
+
+                    if (index != miniStart)
+                    {
+                        bool loopStart = true;
+                        for (int i = miniStart; i <= index; i++)
+                        {
+                            if (i < index)
+                                CreateMiniVPs(i, loopStart, true); // Update only
+                            else
+                                CreateMiniVPs(i, loopStart, false); // Update and Draw
+                            loopStart = false;
+                        }
+                    }
+                }
+            }
+
+            configHasChanged = false;
+            isUpdateVP = false;
+            if (UpdateProfile_Input != UpdateProfile_Data.EveryTick_CPU_Workout)
+                prevUpdatePrice = price;
+        }
+
+        private void LiveVP_Concurrent(int index, int indexStart)
+        {
+            if (!EnableVP && !EnableMiniProfiles)
+                return;
+
+            double price = Bars.ClosePrices[index];
+            bool updateStrategy = UpdateProfile_Input == UpdateProfile_Data.ThroughSegments_Balanced ?
+                                Math.Abs(price - prevUpdatePrice) >= rowHeight :
+                                UpdateProfile_Input != UpdateProfile_Data.Through_2_Segments_Best ||
+                                Math.Abs(price - prevUpdatePrice) >= (rowHeight + rowHeight);
+            if (updateStrategy || isUpdateVP || configHasChanged)
+            {
+                if (Bars.Count > BarTimes_Array.Length)
+                {
+                    lock (_lockBars)
+                        BarTimes_Array = Bars.OpenTimes.ToArray();
+                }
+
+                lock (_lockSource)
+                    Bars_List = new List<Bar>(VOL_Bars);
+
+                liveVP_UpdateIt = true;
+            }
+            cts ??= new CancellationTokenSource();
+
+            CreateMonthlyVP(index, isConcurrent: true);
+            CreateWeeklyVP(index, isConcurrent: true);
+            CreateMiniVPs(index, isConcurrent: true);
+
+            if (EnableVP)
+            {
+                liveVP_Task ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.No, cts.Token));
+                liveVP_StartIndexes.VP = indexStart;
+                if (index != indexStart) {
+                    lock (_lock)
+                        VolumeProfile(indexStart, index, ExtraProfiles.No, false, true);
+                }
+            }
+        }
+
+        private void LiveVP_Worker(ExtraProfiles extraID, CancellationToken token)
+        {
+            /*
+            It's quite simple, but gave headaches mostly due to GetByInvoke() unexpected behavior and debugging it.
+             - GetByInvoke() will slowdown loops due to accumulative Bars[index] => "0.xx ms" operations
+            The major reason why Copy of Time/Bars are used.
+            */
+
+            IDictionary<double, double> Worker_VolumesRank = new Dictionary<double, double>();
+            IDictionary<double, double> Worker_VolumesRank_Up = new Dictionary<double, double>();
+            IDictionary<double, double> Worker_VolumesRank_Down = new Dictionary<double, double>();
+            IDictionary<double, double> Worker_VolumesRank_Subt = new Dictionary<double, double>();
+            IDictionary<double, double> Worker_DeltaRank = new Dictionary<double, double>();
+            double[] Worker_MinMaxDelta = { 0, 0 };
+
+            DateTime lastTime = new();
+            IEnumerable<DateTime> TimesCopy = Array.Empty<DateTime>();
+            IEnumerable<Bar> BarsCopy = new List<Bar>();
+
+            while (!token.IsCancellationRequested)
+            {
+                if (!liveVP_UpdateIt) {
+                    // Stop itself
+                    if (extraID == ExtraProfiles.No && !EnableVP) {
+                        liveVP_Task = null;
+                        return;
+                    }
+                    if (extraID == ExtraProfiles.MiniVP && !EnableMiniProfiles) {
+                        miniVP_Task = null;
+                        return;
+                    }
+                    if (extraID == ExtraProfiles.Weekly && !EnableVP) {
+                        weeklyVP_Task = null;
+                        return;
+                    }
+                    if (extraID == ExtraProfiles.Monthly && !EnableVP) {
+                        monthlyVP_Task = null;
+                        return;
+                    }
+
+                    Thread.Sleep(100);
+                    continue;
+                }
+
+                try
+                {
+                    Worker_VolumesRank = new Dictionary<double, double>();
+                    Worker_VolumesRank_Up = new Dictionary<double, double>();
+                    Worker_VolumesRank_Down = new Dictionary<double, double>();
+                    Worker_VolumesRank_Subt = new Dictionary<double, double>();
+                    Worker_DeltaRank = new Dictionary<double, double>();
+                    double[] resetDelta = {0, 0};
+                    Worker_MinMaxDelta = resetDelta;
+
+                    // Chart Bars
+                    int startIndex = extraID == ExtraProfiles.No ? liveVP_StartIndexes.VP :
+                                     extraID == ExtraProfiles.MiniVP ? liveVP_StartIndexes.Mini :
+                                     extraID == ExtraProfiles.Weekly ? liveVP_StartIndexes.Weekly : liveVP_StartIndexes.Monthly;
+                    DateTime lastBarTime = GetByInvoke(() => Bars.LastBar.OpenTime);
+
+                    // Replace only when needed
+                    if (lastTime != lastBarTime) {
+                        lock (_lockBars)
+                            TimesCopy = BarTimes_Array.Skip(startIndex);
+                        lastTime = lastBarTime;
+                    }
+                    int endIndex = TimesCopy.Count();
+
+                    // Source Bars
+                    int startSourceIndex = extraID == ExtraProfiles.No ? lastBar_VPStart:
+                                     extraID == ExtraProfiles.MiniVP ? lastBar_ExtraVPs._MiniStart :
+                                     extraID == ExtraProfiles.Weekly ? lastBar_ExtraVPs._WeeklyStart : lastBar_ExtraVPs._MonthlyStart;
+
+                    lock (_lockSource)
+                        BarsCopy = Bars_List.Skip(startSourceIndex);
+
+                    for (int i = 0; i < endIndex; i++)
+                    {
+                        Worker_VP_Bars(i, extraID, i == (endIndex - 1));
+                    }
+
+                    object whichLock = extraID == ExtraProfiles.No ? _lock :
+                                       extraID == ExtraProfiles.MiniVP ? _miniLock :
+                                       extraID == ExtraProfiles.Weekly ? _weeklyLock : _monthlyLock;
+                    lock (whichLock) {
+                        switch (extraID)
+                        {
+                            case ExtraProfiles.MiniVP:
+                                miniVPsRank.Normal = Worker_VolumesRank;
+                                miniVPsRank.Up = Worker_VolumesRank_Up;
+                                miniVPsRank.Down = Worker_VolumesRank_Down;
+                                miniVPsRank.Delta = Worker_DeltaRank;
+                                miniVPsRank.MinMaxDelta = Worker_MinMaxDelta;
+                                break;
+                            case ExtraProfiles.Weekly:
+                                WeeklyRank.Normal = Worker_VolumesRank;
+                                WeeklyRank.Up = Worker_VolumesRank_Up;
+                                WeeklyRank.Down = Worker_VolumesRank_Down;
+                                WeeklyRank.Delta = Worker_DeltaRank;
+                                WeeklyRank.MinMaxDelta = Worker_MinMaxDelta;
+                                break;
+                            case ExtraProfiles.Monthly:
+                                MonthlyRank.Normal = Worker_VolumesRank;
+                                MonthlyRank.Up = Worker_VolumesRank_Up;
+                                MonthlyRank.Down = Worker_VolumesRank_Down;
+                                MonthlyRank.Delta = Worker_DeltaRank;
+                                MonthlyRank.MinMaxDelta = Worker_MinMaxDelta;
+                                break;
+                            default:
+                                VP_VolumesRank = Worker_VolumesRank;
+                                VP_VolumesRank_Up = Worker_VolumesRank_Up;
+                                VP_VolumesRank_Down = Worker_VolumesRank_Down;
+                                VP_VolumesRank_Subt = Worker_VolumesRank_Subt;
+                                VP_DeltaRank = Worker_DeltaRank;
+                                VP_MinMaxDelta = Worker_MinMaxDelta;
+                                break;
+                        }
+
+                        configHasChanged = false;
+                        isUpdateVP = false;
+
+                        if (UpdateProfile_Input != UpdateProfile_Data.EveryTick_CPU_Workout)
+                            prevUpdatePrice = BarsCopy.Last().Close;
+                    }
+                }
+                catch (Exception e) { Print($"CRASH at LiveVP_Worker => {extraID}: {e}"); }
+
+                liveVP_UpdateIt = false;
+            }
+
+            void Worker_VP_Bars(int index, ExtraProfiles extraVP = ExtraProfiles.No, bool isLastBarLoop = false)
+            {
+                DateTime startTime = TimesCopy.ElementAt(index);
+                DateTime endTime = !isLastBarLoop ? TimesCopy.ElementAt(index + 1) : BarsCopy.Last().OpenTime;
+
+                for (int k = 0; k < BarsCopy.Count(); ++k)
+                {
+                    Bar volBar = BarsCopy.ElementAt(k);
+
+                    if (volBar.OpenTime < startTime || volBar.OpenTime > endTime)
+                    {
+                        if (volBar.OpenTime > endTime)
+                            break;
+                        else
+                            continue;
+                    }
+
+                    /*
+                    The Volume Calculation(in Bars Volume Source) is exported, with adaptations, from the BEST VP I have see/used for MT4/MT5,
+                        of Russian FXcoder's https://gitlab.com/fxcoder-mql/vp (VP 10.1), author of the famous (Volume Profile + Range v6.0)
+
+                    I tried to reproduce as close as possible from the original,
+                    I would say it was very good approximation in most core options, except the:
+                        - "Triangular", witch I had to interpret it my way, and it turned out different, of course.
+                        - "Parabolic", but the result turned out good
+                    */
+
+                    bool isBullish = volBar.Close >= volBar.Open;
+                    if (Distribution_Input == Distribution_Data.OHLC || Distribution_Input == Distribution_Data.OHLC_No_Avg)
+                    {
+                        bool isAvg = Distribution_Input == Distribution_Data.OHLC;
+                        // ========= Tick Simulation ================
+                        // Bull/Buy/Up bar
+                        if (volBar.Close >= volBar.Open)
+                        {
+                            // Average Tick Volume
+                            double avgVol = isAvg ?
+                            volBar.TickVolume / (volBar.Open + volBar.High + volBar.Low + volBar.Close / 4) :
+                            volBar.TickVolume;
+
+                            for (int i = 0; i < Segments_VP.Count; i++)
+                            {
+                                double priceKey = Segments_VP[i];
+                                if (Segments_VP[i] <= volBar.Open && Segments_VP[i] >= volBar.Low)
+                                    AddVolume(priceKey, avgVol, isBullish);
+                                if (Segments_VP[i] <= volBar.High && Segments_VP[i] >= volBar.Low)
+                                    AddVolume(priceKey, avgVol, isBullish);
+                                if (Segments_VP[i] <= volBar.High && Segments_VP[i] >= volBar.Close)
+                                    AddVolume(priceKey, avgVol, isBullish);
+                            }
+                        }
+                        // Bear/Sell/Down bar
+                        else
+                        {
+                            // Average Tick Volume
+                            double avgVol = isAvg ? volBar.TickVolume / (volBar.Open + volBar.High + volBar.Low + volBar.Close / 4) : volBar.TickVolume;
+                            for (int i = 0; i < Segments_VP.Count; i++)
+                            {
+                                double priceKey = Segments_VP[i];
+                                if (Segments_VP[i] >= volBar.Open && Segments_VP[i] <= volBar.High)
+                                    AddVolume(priceKey, avgVol, isBullish);
+                                if (Segments_VP[i] <= volBar.High && Segments_VP[i] >= volBar.Low)
+                                    AddVolume(priceKey, avgVol, isBullish);
+                                if (Segments_VP[i] >= volBar.Low && Segments_VP[i] <= volBar.Close)
+                                    AddVolume(priceKey, avgVol, isBullish);
+                            }
+                        }
+                    }
+                    else if (Distribution_Input == Distribution_Data.High || Distribution_Input == Distribution_Data.Low || Distribution_Input == Distribution_Data.Close)
+                    {
+                        var selected = Distribution_Input;
+                        if (selected == Distribution_Data.High)
+                        {
+                            double prevSegment = 0;
+                            for (int i = 0; i < Segments_VP.Count; i++)
+                            {
+                                if (Segments_VP[i] >= volBar.High && prevSegment <= volBar.High)
+                                    AddVolume(Segments_VP[i], volBar.TickVolume, isBullish);
+                                prevSegment = Segments_VP[i];
+                            }
+                        }
+                        else if (selected == Distribution_Data.Low)
+                        {
+                            double prevSegment = 0;
+                            for (int i = 0; i < Segments_VP.Count; i++)
+                            {
+                                if (Segments_VP[i] >= volBar.Low && prevSegment <= volBar.Low)
+                                    AddVolume(Segments_VP[i], volBar.TickVolume, isBullish);
+                                prevSegment = Segments_VP[i];
+                            }
+                        }
+                        else
+                        {
+                            double prevSegment = 0;
+                            for (int i = 0; i < Segments_VP.Count; i++)
+                            {
+                                if (Segments_VP[i] >= volBar.Close && prevSegment <= volBar.Close)
+                                    AddVolume(Segments_VP[i], volBar.TickVolume, isBullish);
+                                prevSegment = Segments_VP[i];
+                            }
+                        }
+                    }
+                    else if (Distribution_Input == Distribution_Data.Uniform_Distribution)
+                    {
+                        double HL = Math.Abs(volBar.High - volBar.Low);
+                        double uniVol = volBar.TickVolume / HL;
+                        for (int i = 0; i < Segments_VP.Count; i++)
+                        {
+                            if (Segments_VP[i] >= volBar.Low && Segments_VP[i] <= volBar.High)
+                                AddVolume(Segments_VP[i], uniVol, isBullish);
+                        }
+                    }
+                    else if (Distribution_Input == Distribution_Data.Uniform_Presence)
+                    {
+                        double uniP_Vol = 1;
+                        for (int i = 0; i < Segments_VP.Count; i++)
+                        {
+                            if (Segments_VP[i] >= volBar.Low && Segments_VP[i] <= volBar.High)
+                                AddVolume(Segments_VP[i], uniP_Vol, isBullish);
+                        }
+                    }
+                    else if (Distribution_Input == Distribution_Data.Parabolic_Distribution)
+                    {
+                        double HL2 = Math.Abs(volBar.High - volBar.Low) / 2;
+                        double hl2SQRT = Math.Sqrt(HL2);
+                        double final = hl2SQRT / hl2SQRT;
+
+                        double parabolicVol = volBar.TickVolume / final;
+
+                        for (int i = 0; i < Segments_VP.Count; i++)
+                        {
+                            if (Segments_VP[i] >= volBar.Low && Segments_VP[i] <= volBar.High)
+                                AddVolume(Segments_VP[i], parabolicVol, isBullish);
+                        }
+                    }
+                    else if (Distribution_Input == Distribution_Data.Triangular_Distribution)
+                    {
+                        double HL = Math.Abs(volBar.High - volBar.Low);
+                        double HL2 = HL / 2;
+                        double HL_minus = HL - HL2;
+                        // =====================================
+                        double oneStep = HL2 * HL_minus / 2;
+                        double secondStep = HL_minus * HL / 2;
+                        double final = oneStep + secondStep;
+
+                        double triangularVol = volBar.TickVolume / final;
+
+                        for (int i = 0; i < Segments_VP.Count; i++)
+                        {
+                            if (Segments_VP[i] >= volBar.Low && Segments_VP[i] <= volBar.High)
+                                AddVolume(Segments_VP[i], triangularVol, isBullish);
+                        }
+                    }
+                }
+
+                void AddVolume(double priceKey, double vol, bool isBullish)
+                {
+                    if (!Worker_VolumesRank.ContainsKey(priceKey))
+                        Worker_VolumesRank.Add(priceKey, vol);
+                    else
+                        Worker_VolumesRank[priceKey] += vol;
+
+                    bool condition = VolumeMode_Input != VolumeMode_Data.Normal;
+                    if (condition)
+                        Add_BuySell(priceKey, vol, isBullish);
+                }
+                void Add_BuySell(double priceKey, double vol, bool isBullish)
+                {
+                    if (isBullish)
+                    {
+                        if (!Worker_VolumesRank_Up.ContainsKey(priceKey))
+                            Worker_VolumesRank_Up.Add(priceKey, vol);
+                        else
+                            Worker_VolumesRank_Up[priceKey] += vol;
+                    }
+                    else
+                    {
+                        if (!Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_VolumesRank_Down.Add(priceKey, vol);
+                        else
+                            Worker_VolumesRank_Down[priceKey] += vol;
+                    }
+
+                    double prevDelta = Worker_DeltaRank.Values.Sum();
+
+                    if (!Worker_DeltaRank.ContainsKey(priceKey))
+                    {
+                        if (Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_DeltaRank.Add(priceKey, (Worker_VolumesRank_Up[priceKey] - Worker_VolumesRank_Down[priceKey]));
+                        else if (Worker_VolumesRank_Up.ContainsKey(priceKey) && !Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_DeltaRank.Add(priceKey, (Worker_VolumesRank_Up[priceKey]));
+                        else if (!Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_DeltaRank.Add(priceKey, (-Worker_VolumesRank_Down[priceKey]));
+                        else
+                            Worker_DeltaRank.Add(priceKey, 0);
+                    }
+                    else
+                    {
+                        if (Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_DeltaRank[priceKey] += (Worker_VolumesRank_Up[priceKey] - Worker_VolumesRank_Down[priceKey]);
+                        else if (Worker_VolumesRank_Up.ContainsKey(priceKey) && !Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_DeltaRank[priceKey] += (Worker_VolumesRank_Up[priceKey]);
+                        else if (!Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_DeltaRank[priceKey] += (-Worker_VolumesRank_Down[priceKey]);
+
+                    }
+
+                    double currentDelta = Worker_DeltaRank.Values.Sum();
+                    if (prevDelta > currentDelta)
+                        Worker_MinMaxDelta[0] = prevDelta; // Min
+                    if (prevDelta < currentDelta)
+                        Worker_MinMaxDelta[1] = prevDelta; // Max before final delta
+
+                    if (extraVP != ExtraProfiles.No && VolumeMode_Input != VolumeMode_Data.Buy_Sell)
+                        return;
+                    // Subtract Profile - Plain Delta
+                    if (!Worker_VolumesRank_Subt.ContainsKey(priceKey))
+                    {
+                        if (Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_VolumesRank_Subt.Add(priceKey, (Worker_VolumesRank_Up[priceKey] - Worker_VolumesRank_Down[priceKey]));
+                        else if (Worker_VolumesRank_Up.ContainsKey(priceKey) && !Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_VolumesRank_Subt.Add(priceKey, (Worker_VolumesRank_Up[priceKey]));
+                        else if (!Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_VolumesRank_Subt.Add(priceKey, (-Worker_VolumesRank_Down[priceKey]));
+                        else
+                            Worker_VolumesRank_Subt.Add(priceKey, 0);
+                    }
+                    else
+                    {
+                        if (Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_VolumesRank_Subt[priceKey] = (Worker_VolumesRank_Up[priceKey] - Worker_VolumesRank_Down[priceKey]);
+                        else if (Worker_VolumesRank_Up.ContainsKey(priceKey) && !Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_VolumesRank_Subt[priceKey] = (Worker_VolumesRank_Up[priceKey]);
+                        else if (!Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_VolumesRank_Subt[priceKey] = (-Worker_VolumesRank_Down[priceKey]);
+                    }
+                }
+            }
+
+        }
+
+        protected override void OnDestroy()
+        {
+            cts.Cancel();
+        }
+
+        // Code generated by LLM.
+        /*
+            From my attempts, it should never be declared/invoked in the main thread,
+                - ManualResetEventSlim(false) locks the indicator's Initialize, no matter the field or location it's on.
+
+            The idea is "Get any cTrader's object by running BeginInvokeOnMainThread on it"
+            The downside is calling it at every cTrader related objects (obviously) (Bars, Chart, etc..)
+
+            A small price to pay to avoid freezes and lags.
+        */
+        public T GetByInvoke<T>(Func<T> func, string label = null)
+        {
+            if (func == null) throw new ArgumentNullException(nameof(func));
+
+            T result = default;
+            var done = new ManualResetEventSlim(false);
+
+            Stopwatch sw = null;
+            if (!string.IsNullOrEmpty(label))
+                sw = Stopwatch.StartNew();
+
+            BeginInvokeOnMainThread(() =>
+            {
+                try {
+                    result = func();
+                }
+                finally {
+                    if (!string.IsNullOrEmpty(label)) {
+                        sw.Stop();
+                        Print($"[GetByInvoke] {label} took {sw.Elapsed.TotalMilliseconds:F2} ms");
+                    }
+                    done.Set();
+                }
+            });
+
+            done.Wait(); // wait for main thread to finish
+            return result;
+        }
+
+        private void CreateMiniVPs(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
+            if (EnableMiniProfiles)
+            {
+                int miniIndex = MiniVPs_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+                int miniStart = Bars.OpenTimes.GetIndexByTime(MiniVPs_Bars.OpenTimes[miniIndex]);
+
+                if (index == miniStart ||
+                    (index - 1) == miniStart && isPriceBased_Chart ||
+                    (index - 1) == miniStart && (index - 1) != lastCleaned._Mini || loopStart
+                ) {
+                    if (!IsLastBar)
+                        lastBar_ExtraVPs._MiniStart = lastBar_ExtraVPs._Mini;
+                    miniVPsRank.Normal.Clear();
+                    miniVPsRank.Up.Clear();
+                    miniVPsRank.Down.Clear();
+                    miniVPsRank.Delta.Clear();
+                    double[] resetDelta = {0, 0};
+                    miniVPsRank.MinMaxDelta = resetDelta;
+                    lastCleaned._Mini = index == miniStart ? index : (index - 1);
+                }
+                if (!isConcurrent)
+                    VolumeProfile(miniStart, index, ExtraProfiles.MiniVP, isLoop);
+                else
+                {
+                    miniVP_Task ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.MiniVP, cts.Token));
+
+                    liveVP_StartIndexes.Mini = miniStart;
+
+                    if (index != miniStart) {
+                        lock (_miniLock)
+                        VolumeProfile(miniStart, index, ExtraProfiles.MiniVP, false, true);
+                    }
+                }
+            }
+        }
+        private void CreateWeeklyVP(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
+            if (EnableVP && EnableWeeklyProfile)
+            {
+                // Avoid recalculating the same period.
+                if (VPInterval_Input == VPInterval_Data.Weekly)
+                    return;
+
+                int weekIndex = WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+                int weekStart = Bars.OpenTimes.GetIndexByTime(WeeklyBars.OpenTimes[weekIndex]);
+
+                if (index == weekStart ||
+                    (index - 1) == weekStart && isPriceBased_Chart || loopStart
+                ) {
+                    if (!IsLastBar)
+                        lastBar_ExtraVPs._WeeklyStart = lastBar_ExtraVPs._Weekly;
+                    WeeklyRank.Normal.Clear();
+                    WeeklyRank.Up.Clear();
+                    WeeklyRank.Down.Clear();
+                    WeeklyRank.Delta.Clear();
+                    double[] resetDelta = {0, 0};
+                    WeeklyRank.MinMaxDelta = resetDelta;
+                }
+                if (!isConcurrent)
+                    VolumeProfile(weekStart, index, ExtraProfiles.Weekly, isLoop);
+                else
+                {
+                    weeklyVP_Task ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.Weekly, cts.Token));
+
+                    liveVP_StartIndexes.Weekly = weekStart;
+
+                    if (index != weekStart) {
+                        lock (_weeklyLock)
+                            VolumeProfile(weekStart, index, ExtraProfiles.Weekly, false, true);
+                    }
+                }
+            }
+        }
+        private void CreateMonthlyVP(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
+            // Avoid recalculating the same period.
+            if (VPInterval_Input == VPInterval_Data.Monthly)
+                return;
+
+            if (EnableVP && EnableMonthlyProfile)
+            {
+                int monthIndex = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+                int monthStart = Bars.OpenTimes.GetIndexByTime(MonthlyBars.OpenTimes[monthIndex]);
+
+                if (index == monthStart ||
+                    (index - 1) == monthStart && isPriceBased_Chart || loopStart
+                ) {
+                    if (!IsLastBar)
+                        lastBar_ExtraVPs._MonthlyStart = lastBar_ExtraVPs._Monthly;
+                    MonthlyRank.Normal.Clear();
+                    MonthlyRank.Up.Clear();
+                    MonthlyRank.Down.Clear();
+                    MonthlyRank.Delta.Clear();
+                    double[] resetDelta = {0, 0};
+                    MonthlyRank.MinMaxDelta = resetDelta;
+                }
+                if (!isConcurrent)
+                    VolumeProfile(monthStart, index, ExtraProfiles.Monthly, isLoop);
+                else
+                {
+                    monthlyVP_Task ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.Monthly, cts.Token));
+
+                    liveVP_StartIndexes.Monthly = monthStart;
+
+                    if (index != monthStart) {
+                        lock (_monthlyLock)
+                            VolumeProfile(monthStart, index, ExtraProfiles.Monthly, false, true);
+                    }
+                }
+            }
+        }
+
+        // ====== Functions Area ======
+        private void VP_Bars(int index, ExtraProfiles extraVP = ExtraProfiles.No)
         {
             DateTime startTime = Bars.OpenTimes[index];
             DateTime endTime = Bars.OpenTimes[index + 1];
-            
-            // For real-time market
+
+            // For real-time market - VP
             // Run conditional only in the last bar of repaint loop
             if (IsLastBar && Bars.OpenTimes[index] == Bars.LastBar.OpenTime)
-                endTime = VOL_Bars.Last().OpenTime;
+                endTime = VOL_Bars.LastBar.OpenTime;
 
-            for (int k = 0; k < VOL_Bars.Count; ++k)
+            int startIndex = lastBar_VPStart;
+
+            if (extraVP == ExtraProfiles.Monthly) {
+                startIndex = lastBar_ExtraVPs._Monthly;
+                if (IsLastBar)
+                    startIndex = lastBar_ExtraVPs._MonthlyStart;
+            }
+            if (extraVP == ExtraProfiles.Weekly) {
+                startIndex = lastBar_ExtraVPs._Weekly;
+                if (IsLastBar)
+                    startIndex = lastBar_ExtraVPs._WeeklyStart;
+            }
+            if (extraVP == ExtraProfiles.MiniVP) {
+                startIndex = lastBar_ExtraVPs._Mini;
+                if (IsLastBar)
+                    startIndex = lastBar_ExtraVPs._MiniStart;
+            }
+
+            // Keep shared VOL_Bars since 1min bars
+            // are quite cheap in terms of RAM, even for 1 year.
+            for (int k = startIndex; k < VOL_Bars.Count; ++k)
             {
                 Bar volBar;
                 volBar = VOL_Bars[k];
 
                 if (volBar.OpenTime < startTime || volBar.OpenTime > endTime)
                 {
-                    if (volBar.OpenTime > endTime)
+                    if (volBar.OpenTime > endTime) {
+                        if (extraVP == ExtraProfiles.No)
+                            lastBar_VP = k;
+                        if (extraVP == ExtraProfiles.Monthly)
+                            lastBar_ExtraVPs._Monthly = k;
+                        if (extraVP == ExtraProfiles.Weekly)
+                            lastBar_ExtraVPs._Weekly = k;
+                        if (extraVP == ExtraProfiles.MiniVP)
+                            lastBar_ExtraVPs._Mini = k;
+
                         break;
+                    }
                     else
                         continue;
                 }
-                /* The Volume Calculation(in Bars Volume Source) is exported, with adaptations, from the BEST VP I have see/used for MT4/MT5,
+
+                /*
+                The Volume Calculation(in Bars Volume Source) is exported, with adaptations, from the BEST VP I have see/used for MT4/MT5,
                     of Russian FXcoder's https://gitlab.com/fxcoder-mql/vp (VP 10.1), author of the famous (Volume Profile + Range v6.0)
-                / I tried to reproduce as close to the original,
-                / I would say it was very good approximation in most core options,
-                / except the "Triangular", witch I had to interpret it my way, and it turned out different, of course.
-                / "Parabolic" too but the result turned out good
+
+                I tried to reproduce as close as possible from the original,
+                I would say it was very good approximation in most core options, except the:
+                    - "Triangular", witch I had to interpret it my way, and it turned out different, of course.
+                    - "Parabolic", but the result turned out good
                 */
+
                 bool isBullish = volBar.Close >= volBar.Open;
-                if (DistributionInput == DistributionData.OHLC || DistributionInput == DistributionData.OHLC_No_Avg)
+                if (Distribution_Input == Distribution_Data.OHLC || Distribution_Input == Distribution_Data.OHLC_No_Avg)
                 {
-                    bool isAvg = DistributionInput == DistributionData.OHLC;
+                    bool isAvg = Distribution_Input == Distribution_Data.OHLC;
                     // ========= Tick Simulation ================
                     // Bull/Buy/Up bar
                     if (volBar.Close >= volBar.Open)
                     {
                         // Average Tick Volume
-                        double avgVol = isAvg ? volBar.TickVolume / (volBar.Open + volBar.High + volBar.Low + volBar.Close / 4) : volBar.TickVolume;
-                        for (int i = 0; i < Segments.Count; i++)
+                        double avgVol = isAvg ?
+                        volBar.TickVolume / (volBar.Open + volBar.High + volBar.Low + volBar.Close / 4) :
+                        volBar.TickVolume;
+
+                        for (int i = 0; i < Segments_VP.Count; i++)
                         {
-                            double priceKey = Segments[i];
-                            if (Segments[i] <= volBar.Open && Segments[i] >= volBar.Low)
+                            double priceKey = Segments_VP[i];
+                            if (Segments_VP[i] <= volBar.Open && Segments_VP[i] >= volBar.Low)
                                 AddVolume(priceKey, avgVol, isBullish);
-                            if (Segments[i] <= volBar.High && Segments[i] >= volBar.Low)
+                            if (Segments_VP[i] <= volBar.High && Segments_VP[i] >= volBar.Low)
                                 AddVolume(priceKey, avgVol, isBullish);
-                            if (Segments[i] <= volBar.High && Segments[i] >= volBar.Close)
+                            if (Segments_VP[i] <= volBar.High && Segments_VP[i] >= volBar.Close)
                                 AddVolume(priceKey, avgVol, isBullish);
                         }
                     }
@@ -1109,114 +2389,125 @@ namespace cAlgo
                     {
                         // Average Tick Volume
                         double avgVol = isAvg ? volBar.TickVolume / (volBar.Open + volBar.High + volBar.Low + volBar.Close / 4) : volBar.TickVolume;
-                        for (int i = 0; i < Segments.Count; i++)
+                        for (int i = 0; i < Segments_VP.Count; i++)
                         {
-                            double priceKey = Segments[i];
-                            if (Segments[i] >= volBar.Open && Segments[i] <= volBar.High)
+                            double priceKey = Segments_VP[i];
+                            if (Segments_VP[i] >= volBar.Open && Segments_VP[i] <= volBar.High)
                                 AddVolume(priceKey, avgVol, isBullish);
-                            if (Segments[i] <= volBar.High && Segments[i] >= volBar.Low)
+                            if (Segments_VP[i] <= volBar.High && Segments_VP[i] >= volBar.Low)
                                 AddVolume(priceKey, avgVol, isBullish);
-                            if (Segments[i] >= volBar.Low && Segments[i] <= volBar.Close)
+                            if (Segments_VP[i] >= volBar.Low && Segments_VP[i] <= volBar.Close)
                                 AddVolume(priceKey, avgVol, isBullish);
                         }
                     }
                 }
-                else if (DistributionInput == DistributionData.High || DistributionInput == DistributionData.Low || DistributionInput == DistributionData.Close)
+                else if (Distribution_Input == Distribution_Data.High || Distribution_Input == Distribution_Data.Low || Distribution_Input == Distribution_Data.Close)
                 {
-                    var selected = DistributionInput;
-                    if (selected == DistributionData.High)
+                    var selected = Distribution_Input;
+                    if (selected == Distribution_Data.High)
                     {
                         double prevSegment = 0;
-                        for (int i = 0; i < Segments.Count; i++)
+                        for (int i = 0; i < Segments_VP.Count; i++)
                         {
-                            if (Segments[i] >= volBar.High && prevSegment <= volBar.High)
-                                AddVolume(Segments[i], volBar.TickVolume, isBullish);
-                            prevSegment = Segments[i];
+                            if (Segments_VP[i] >= volBar.High && prevSegment <= volBar.High)
+                                AddVolume(Segments_VP[i], volBar.TickVolume, isBullish);
+                            prevSegment = Segments_VP[i];
                         }
                     }
-                    else if (selected == DistributionData.Low)
+                    else if (selected == Distribution_Data.Low)
                     {
                         double prevSegment = 0;
-                        for (int i = 0; i < Segments.Count; i++)
+                        for (int i = 0; i < Segments_VP.Count; i++)
                         {
-                            if (Segments[i] >= volBar.Low && prevSegment <= volBar.Low)
-                                AddVolume(Segments[i], volBar.TickVolume, isBullish);
-                            prevSegment = Segments[i];
+                            if (Segments_VP[i] >= volBar.Low && prevSegment <= volBar.Low)
+                                AddVolume(Segments_VP[i], volBar.TickVolume, isBullish);
+                            prevSegment = Segments_VP[i];
                         }
                     }
                     else
                     {
                         double prevSegment = 0;
-                        for (int i = 0; i < Segments.Count; i++)
+                        for (int i = 0; i < Segments_VP.Count; i++)
                         {
-                            if (Segments[i] >= volBar.Close && prevSegment <= volBar.Close)
-                                AddVolume(Segments[i], volBar.TickVolume, isBullish);
-                            prevSegment = Segments[i];
+                            if (Segments_VP[i] >= volBar.Close && prevSegment <= volBar.Close)
+                                AddVolume(Segments_VP[i], volBar.TickVolume, isBullish);
+                            prevSegment = Segments_VP[i];
                         }
                     }
                 }
-                else if (DistributionInput == DistributionData.Uniform_Distribution)
+                else if (Distribution_Input == Distribution_Data.Uniform_Distribution)
                 {
                     double HL = Math.Abs(volBar.High - volBar.Low);
                     double uniVol = volBar.TickVolume / HL;
-                    for (int i = 0; i < Segments.Count; i++)
+                    for (int i = 0; i < Segments_VP.Count; i++)
                     {
-                        if (Segments[i] >= volBar.Low && Segments[i] <= volBar.High)
-                            AddVolume(Segments[i], uniVol, isBullish);
+                        if (Segments_VP[i] >= volBar.Low && Segments_VP[i] <= volBar.High)
+                            AddVolume(Segments_VP[i], uniVol, isBullish);
                     }
                 }
-                else if (DistributionInput == DistributionData.Uniform_Presence)
+                else if (Distribution_Input == Distribution_Data.Uniform_Presence)
                 {
                     double uniP_Vol = 1;
-                    for (int i = 0; i < Segments.Count; i++)
+                    for (int i = 0; i < Segments_VP.Count; i++)
                     {
-                        if (Segments[i] >= volBar.Low && Segments[i] <= volBar.High)
-                            AddVolume(Segments[i], uniP_Vol, isBullish);
+                        if (Segments_VP[i] >= volBar.Low && Segments_VP[i] <= volBar.High)
+                            AddVolume(Segments_VP[i], uniP_Vol, isBullish);
                     }
                 }
-                else if (DistributionInput == DistributionData.Parabolic_Distribution)
+                else if (Distribution_Input == Distribution_Data.Parabolic_Distribution)
                 {
-                    double HL = Math.Abs(volBar.High - volBar.Low);
-                    double HL2 = HL / 2;
+                    double HL2 = Math.Abs(volBar.High - volBar.Low) / 2;
                     double hl2SQRT = Math.Sqrt(HL2);
                     double final = hl2SQRT / hl2SQRT;
 
                     double parabolicVol = volBar.TickVolume / final;
 
-                    for (int i = 0; i < Segments.Count; i++)
+                    for (int i = 0; i < Segments_VP.Count; i++)
                     {
-                        if (Segments[i] >= volBar.Low && Segments[i] <= volBar.High)
-                            AddVolume(Segments[i], parabolicVol, isBullish);
+                        if (Segments_VP[i] >= volBar.Low && Segments_VP[i] <= volBar.High)
+                            AddVolume(Segments_VP[i], parabolicVol, isBullish);
                     }
                 }
-                else if (DistributionInput == DistributionData.Triangular_Distribution)
+                else if (Distribution_Input == Distribution_Data.Triangular_Distribution)
                 {
                     double HL = Math.Abs(volBar.High - volBar.Low);
                     double HL2 = HL / 2;
                     double HL_minus = HL - HL2;
                     // =====================================
-                    double oneStep = HL2 * HL2 / 2;
-                    double secondStep = HL_minus * HL_minus / 2;
+                    double oneStep = HL2 * HL_minus / 2;
+                    double secondStep = HL_minus * HL / 2;
                     double final = oneStep + secondStep;
 
                     double triangularVol = volBar.TickVolume / final;
 
-                    for (int i = 0; i < Segments.Count; i++)
+                    for (int i = 0; i < Segments_VP.Count; i++)
                     {
-                        if (Segments[i] >= volBar.Low && Segments[i] <= volBar.High)
-                            AddVolume(Segments[i], triangularVol, isBullish);
+                        if (Segments_VP[i] >= volBar.Low && Segments_VP[i] <= volBar.High)
+                            AddVolume(Segments_VP[i], triangularVol, isBullish);
                     }
                 }
             }
 
             void AddVolume(double priceKey, double vol, bool isBullish)
             {
-                if (!VolumesRank.ContainsKey(priceKey))
-                    VolumesRank.Add(priceKey, vol);
+                if (EnableMonthlyProfile && extraVP == ExtraProfiles.Monthly)
+                    UpdateExtraProfiles(MonthlyRank, priceKey, vol, isBullish);
+
+                if (EnableWeeklyProfile && extraVP == ExtraProfiles.Weekly)
+                    UpdateExtraProfiles(WeeklyRank, priceKey, vol, isBullish);
+
+                if (EnableMiniProfiles && extraVP == ExtraProfiles.MiniVP)
+                    UpdateExtraProfiles(miniVPsRank, priceKey, vol, isBullish);
+
+                if (extraVP != ExtraProfiles.No)
+                    return;
+
+                if (!VP_VolumesRank.ContainsKey(priceKey))
+                    VP_VolumesRank.Add(priceKey, vol);
                 else
-                    VolumesRank[priceKey] += vol;
-                
-                bool condition = VolumeModeInput != VolumeModeData.Normal || VolumeModeInput != VolumeModeData.Gradient;
+                    VP_VolumesRank[priceKey] += vol;
+
+                bool condition = VolumeMode_Input != VolumeMode_Data.Normal;
                 if (condition)
                     Add_BuySell(priceKey, vol, isBullish);
             }
@@ -1224,139 +2515,134 @@ namespace cAlgo
             {
                 if (isBullish)
                 {
-                    if (!VolumesRank_Up.ContainsKey(priceKey))
-                        VolumesRank_Up.Add(priceKey, vol);
+                    if (!VP_VolumesRank_Up.ContainsKey(priceKey))
+                        VP_VolumesRank_Up.Add(priceKey, vol);
                     else
-                        VolumesRank_Up[priceKey] += vol;
+                        VP_VolumesRank_Up[priceKey] += vol;
                 }
                 else
                 {
-                    if (!VolumesRank_Down.ContainsKey(priceKey))
-                        VolumesRank_Down.Add(priceKey, vol);
+                    if (!VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_VolumesRank_Down.Add(priceKey, vol);
                     else
-                        VolumesRank_Down[priceKey] += vol;
+                        VP_VolumesRank_Down[priceKey] += vol;
                 }
 
-                double prevDelta = DeltaRank.Values.Sum();
+                double prevDelta = VP_DeltaRank.Values.Sum();
 
-                if (!DeltaRank.ContainsKey(priceKey))
+                if (!VP_DeltaRank.ContainsKey(priceKey))
                 {
-                    if (VolumesRank_Up.ContainsKey(priceKey) && VolumesRank_Down.ContainsKey(priceKey))
-                        DeltaRank.Add(priceKey, (VolumesRank_Up[priceKey] - VolumesRank_Down[priceKey]));
-                    else if (VolumesRank_Up.ContainsKey(priceKey) && !VolumesRank_Down.ContainsKey(priceKey))
-                        DeltaRank.Add(priceKey, (VolumesRank_Up[priceKey]));
-                    else if (!VolumesRank_Up.ContainsKey(priceKey) && VolumesRank_Down.ContainsKey(priceKey))
-                        DeltaRank.Add(priceKey, (-VolumesRank_Down[priceKey]));
+                    if (VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_DeltaRank.Add(priceKey, (VP_VolumesRank_Up[priceKey] - VP_VolumesRank_Down[priceKey]));
+                    else if (VP_VolumesRank_Up.ContainsKey(priceKey) && !VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_DeltaRank.Add(priceKey, (VP_VolumesRank_Up[priceKey]));
+                    else if (!VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_DeltaRank.Add(priceKey, (-VP_VolumesRank_Down[priceKey]));
                     else
-                        DeltaRank.Add(priceKey, 0);
+                        VP_DeltaRank.Add(priceKey, 0);
                 }
                 else
                 {
-                    if (VolumesRank_Up.ContainsKey(priceKey) && VolumesRank_Down.ContainsKey(priceKey))
-                        DeltaRank[priceKey] += (VolumesRank_Up[priceKey] - VolumesRank_Down[priceKey]);
-                    else if (VolumesRank_Up.ContainsKey(priceKey) && !VolumesRank_Down.ContainsKey(priceKey))
-                        DeltaRank[priceKey] += (VolumesRank_Up[priceKey]);
-                    else if (!VolumesRank_Up.ContainsKey(priceKey) && VolumesRank_Down.ContainsKey(priceKey))
-                        DeltaRank[priceKey] += (-VolumesRank_Down[priceKey]);
+                    if (VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_DeltaRank[priceKey] += (VP_VolumesRank_Up[priceKey] - VP_VolumesRank_Down[priceKey]);
+                    else if (VP_VolumesRank_Up.ContainsKey(priceKey) && !VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_DeltaRank[priceKey] += (VP_VolumesRank_Up[priceKey]);
+                    else if (!VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_DeltaRank[priceKey] += (-VP_VolumesRank_Down[priceKey]);
 
                 }
 
-                double currentDelta = DeltaRank.Values.Sum();
+                double currentDelta = VP_DeltaRank.Values.Sum();
                 if (prevDelta > currentDelta)
-                    MinMaxDelta[0] = prevDelta; // Min
+                    VP_MinMaxDelta[0] = prevDelta; // Min
                 if (prevDelta < currentDelta)
-                    MinMaxDelta[1] = prevDelta; // Max before final delta
-            }
-        }
+                    VP_MinMaxDelta[1] = prevDelta; // Max before final delta
 
-        // ====== Functions Area ======
-        private void VP_Tick(int index)
-        {
-            DateTime startTime = Bars.OpenTimes[index];
-            DateTime endTime = Bars.OpenTimes[index + 1];
-
-            // For real-time market
-            // Run conditional only in the last bar of repaint loop
-            if (IsLastBar && Bars.OpenTimes[index] == Bars.LastBar.OpenTime)
-                endTime = TicksOHLC.Last().OpenTime;
-
-            double prevTick = 0;
-
-            for (int tickIndex = 0; tickIndex < TicksOHLC.Count; tickIndex++)
-            {
-                Bar tickBar;
-                tickBar = TicksOHLC[tickIndex];
-
-                if (tickBar.OpenTime < startTime || tickBar.OpenTime > endTime)
+                if (VolumeMode_Input != VolumeMode_Data.Buy_Sell)
+                    return;
+                // Subtract Profile - Plain Delta
+                if (!VP_VolumesRank_Subt.ContainsKey(priceKey))
                 {
-                    if (tickBar.OpenTime > endTime)
-                        break;
+                    if (VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_VolumesRank_Subt.Add(priceKey, (VP_VolumesRank_Up[priceKey] - VP_VolumesRank_Down[priceKey]));
+                    else if (VP_VolumesRank_Up.ContainsKey(priceKey) && !VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_VolumesRank_Subt.Add(priceKey, (VP_VolumesRank_Up[priceKey]));
+                    else if (!VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_VolumesRank_Subt.Add(priceKey, (-VP_VolumesRank_Down[priceKey]));
                     else
-                        continue;
+                        VP_VolumesRank_Subt.Add(priceKey, 0);
                 }
-
-                RankVol(tickBar.Close);
-                prevTick = tickBar.Close;
-            }
-            // ========= ========== ==========
-            void RankVol(double tickPrice)
-            {
-                double prev_segmentValue = 0.0;
-                for (int i = 0; i < Segments.Count; i++)
+                else
                 {
-                    if (tickPrice >= prev_segmentValue && tickPrice <= Segments[i])
-                    {
-                        double priceKey = Segments[i];
-                        double prevDelta = DeltaRank.Values.Sum();
-
-                        if (VolumesRank.ContainsKey(priceKey))
-                        {
-                            VolumesRank[priceKey] += 1;
-
-                            if (tickPrice > prevTick && prevTick != 0)
-                                VolumesRank_Up[priceKey] += 1;
-                            else if (tickPrice < prevTick && prevTick != 0)
-                                VolumesRank_Down[priceKey] += 1;
-                            else if (tickPrice == prevTick && prevTick != 0)
-                            {
-                                VolumesRank_Up[priceKey] += 1;
-                                VolumesRank_Down[priceKey] += 1;
-                            }
-
-                            DeltaRank[priceKey] += (VolumesRank_Up[priceKey] - VolumesRank_Down[priceKey]);
-                        }
-                        else
-                        {
-                            VolumesRank.Add(priceKey, 1);
-
-                            if (!VolumesRank_Up.ContainsKey(priceKey))
-                                VolumesRank_Up.Add(priceKey, 1);
-                            else
-                                VolumesRank_Up[priceKey] += 1;
-
-                            if (!VolumesRank_Down.ContainsKey(priceKey))
-                                VolumesRank_Down.Add(priceKey, 1);
-                            else
-                                VolumesRank_Down[priceKey] += 1;
-
-                            if (!DeltaRank.ContainsKey(priceKey))
-                                DeltaRank.Add(priceKey, (VolumesRank_Up[priceKey] - VolumesRank_Down[priceKey]));
-                            else
-                                DeltaRank[priceKey] += (VolumesRank_Up[priceKey] - VolumesRank_Down[priceKey]);
-                        }
-                        
-                        double currentDelta = DeltaRank.Values.Sum();
-                        if (prevDelta > currentDelta)
-                            MinMaxDelta[0] = prevDelta; // Min
-                        if (prevDelta < currentDelta)
-                            MinMaxDelta[1] = prevDelta; // Max before final delta
-
-                        break;
-                    }
-                    prev_segmentValue = Segments[i];
+                    if (VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_VolumesRank_Subt[priceKey] = (VP_VolumesRank_Up[priceKey] - VP_VolumesRank_Down[priceKey]);
+                    else if (VP_VolumesRank_Up.ContainsKey(priceKey) && !VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_VolumesRank_Subt[priceKey] = (VP_VolumesRank_Up[priceKey]);
+                    else if (!VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_VolumesRank_Subt[priceKey] = (-VP_VolumesRank_Down[priceKey]);
                 }
+            }
+
+            void UpdateExtraProfiles(VolumeRankType volRank, double priceKey, double vol, bool isBullish) {
+                if (!volRank.Normal.ContainsKey(priceKey))
+                    volRank.Normal.Add(priceKey, vol);
+                else
+                    volRank.Normal[priceKey] += vol;
+
+                bool condition = VolumeMode_Input != VolumeMode_Data.Normal;
+                if (condition)
+                    Add_BuySell_Extra(volRank, priceKey, vol, isBullish);
+            }
+
+            void Add_BuySell_Extra(VolumeRankType volRank, double priceKey, double vol, bool isBullish)
+            {
+                if (isBullish)
+                {
+                    if (!volRank.Up.ContainsKey(priceKey))
+                        volRank.Up.Add(priceKey, vol);
+                    else
+                        volRank.Up[priceKey] += vol;
+                }
+                else
+                {
+                    if (!volRank.Down.ContainsKey(priceKey))
+                        volRank.Down.Add(priceKey, vol);
+                    else
+                        volRank.Down[priceKey] += vol;
+                }
+
+                double prevDelta = volRank.Delta.Values.Sum();
+
+                if (!volRank.Delta.ContainsKey(priceKey))
+                {
+                    if (volRank.Up.ContainsKey(priceKey) && volRank.Down.ContainsKey(priceKey))
+                        volRank.Delta.Add(priceKey, (volRank.Up[priceKey] - volRank.Down[priceKey]));
+                    else if (volRank.Up.ContainsKey(priceKey) && !volRank.Down.ContainsKey(priceKey))
+                        volRank.Delta.Add(priceKey, (volRank.Up[priceKey]));
+                    else if (!volRank.Up.ContainsKey(priceKey) && volRank.Down.ContainsKey(priceKey))
+                        volRank.Delta.Add(priceKey, (-volRank.Down[priceKey]));
+                    else
+                        volRank.Delta.Add(priceKey, 0);
+                }
+                else
+                {
+                    if (volRank.Up.ContainsKey(priceKey) && volRank.Down.ContainsKey(priceKey))
+                        volRank.Delta[priceKey] += (volRank.Up[priceKey] - volRank.Down[priceKey]);
+                    else if (volRank.Up.ContainsKey(priceKey) && !volRank.Down.ContainsKey(priceKey))
+                        volRank.Delta[priceKey] += (volRank.Up[priceKey]);
+                    else if (!volRank.Up.ContainsKey(priceKey) && volRank.Down.ContainsKey(priceKey))
+                        volRank.Delta[priceKey] += (-volRank.Down[priceKey]);
+
+                }
+
+                double currentDelta = volRank.Delta.Values.Sum();
+                if (prevDelta > currentDelta)
+                    volRank.MinMaxDelta[0] = prevDelta; // Min
+                if (prevDelta < currentDelta)
+                    volRank.MinMaxDelta[1] = prevDelta; // Max before final delta
             }
         }
+
         public string FormatBigNumber(double num)
         {
             /*
@@ -1372,7 +2658,7 @@ namespace cAlgo
             FormatMaxDigits_Data selected = FormatMaxDigits_Input;
             string digitsThousand = selected == FormatMaxDigits_Data.Two ? "0.##k" : selected == FormatMaxDigits_Data.One ? "0.#k" : "0.k";
             string digitsMillion = selected == FormatMaxDigits_Data.Two ? "0.##M" : selected == FormatMaxDigits_Data.One ? "0.#M" : "0.M";
-            
+
             if (num >= 100000000) {
                 return (num / 1000000D).ToString(digitsMillion);
             }
@@ -1391,6 +2677,39 @@ namespace cAlgo
 
             return num.ToString("#,0");
         }
+
+        private DateTime TimeBasedOffset(DateTime dateBar, bool isSubt = false) {
+            // Offset by timebased timeframe (15m bar * nº bars of 15m)
+            string[] timesBased = { "Minute", "Hour", "Daily", "Day", "Weekly", "Monthly" };
+            string currentTimeframe = Chart.TimeFrame.ToString();
+
+            // Required for Price-Based Charts for manual offset
+            string tfName;
+            if (timesBased.Any(currentTimeframe.Contains))
+                tfName = Chart.TimeFrame.ShortName.ToString();
+            else
+                tfName = OffsetTimeframeInput.ShortName.ToString();
+
+            // Get the time-based interval value
+            string tfString = string.Join("", tfName.Where(char.IsDigit));
+            int tfValue = int.TryParse(tfString, out int value) ? value : 1;
+
+            DateTime dateToReturn = dateBar;
+            int offsetCondiditon = !isSubt ? (OffsetBarsInput + 1) : Math.Max(2, OffsetBarsInput - 1);
+            if (tfName.Contains('m'))
+                dateToReturn = dateBar.AddMinutes(tfValue * offsetCondiditon);
+            else if (tfName.Contains('h'))
+                dateToReturn = dateBar.AddHours(tfValue * offsetCondiditon);
+            else if (tfName.Contains('D'))
+                dateToReturn = dateBar.AddDays(tfValue * offsetCondiditon);
+            else if (tfName.Contains('W'))
+                dateToReturn = dateBar.AddDays(7 * offsetCondiditon);
+            else if (tfName.Contains("Month1"))
+                dateToReturn = dateBar.AddMonths(tfValue * offsetCondiditon);
+
+            return dateToReturn;
+        }
+
         private void DrawOnScreen(string Msg)
         {
             Chart.DrawStaticText("txt", $"{Msg}", V_Align, H_Align, Color.LightBlue);
@@ -1399,111 +2718,118 @@ namespace cAlgo
         {
             Chart.DrawStaticText("txt2", $"{Msg}", VerticalAlignment.Top, HorizontalAlignment.Left, Color.LightBlue);
         }
-        private void Third_DrawOnScreen(string Msg)
+        private void Draw_VA_POC(IDictionary<double, double> vpDict, int iStart, DateTime x1_Start, DateTime xBar, ExtraProfiles extraProfiles = ExtraProfiles.No, bool isIntraday = false, DateTime intraX1 = default)
         {
-            Chart.DrawStaticText("txt3", $"{Msg}", VerticalAlignment.Top, HorizontalAlignment.Right, Color.Yellow);
-        }
-        private void TickVolumeInitialize()
-        {
-            if (LoadFromInput == LoadFromData.Custom)
-            {
-                // ==== Get datetime to load from: dd/mm/yyyy ====
-                if (DateTime.TryParseExact(StringDate, "dd/mm/yyyy", new CultureInfo("en-US"), DateTimeStyles.None, out FromDateTime))
-                {
-                    if (FromDateTime > Server.Time.Date)
-                    {
-                        // for Log
-                        FromDateTime = Server.Time.Date;
-                        Print($"Invalid DateTime '{StringDate}'. Using '{FromDateTime}'");
-                    }
+            if (ShowVA) {
+                double[] VAL_VAH_POC = VA_Calculation(vpDict);
+
+                if (!VAL_VAH_POC.Any())
+                    return;
+
+                ChartTrendLine poc = Chart.DrawTrendLine($"{iStart}_POC{extraProfiles}", x1_Start, VAL_VAH_POC[2] - rowHeight, xBar, VAL_VAH_POC[2] - rowHeight, ColorPOC);
+                ChartTrendLine vah = Chart.DrawTrendLine($"{iStart}_VAH{extraProfiles}", x1_Start, VAL_VAH_POC[1] + rowHeight, xBar, VAL_VAH_POC[1] + rowHeight, ColorVAH);
+                ChartTrendLine val = Chart.DrawTrendLine($"{iStart}_VAL{extraProfiles}", x1_Start, VAL_VAH_POC[0], xBar, VAL_VAH_POC[0], ColorVAL);
+
+                poc.LineStyle = LineStylePOC; poc.Thickness = ThicknessPOC; poc.Comment = "POC";
+                vah.LineStyle = LineStyleVA; vah.Thickness = ThicknessVA; vah.Comment = "VAH";
+                val.LineStyle = LineStyleVA; val.Thickness = ThicknessVA; val.Comment = "VAL";
+
+                ChartRectangle rectVA;
+                rectVA = Chart.DrawRectangle($"{iStart}_RectVA{extraProfiles}", x1_Start, VAL_VAH_POC[0], xBar, VAL_VAH_POC[1] + rowHeight, VAColor);
+                rectVA.IsFilled = true;
+
+                if (ExtendVA) {
+                    vah.Time2 = extendDate();
+                    val.Time2 = extendDate();
+                    rectVA.Time2 = extendDate();
                 }
-                else
-                {
-                    // for Log
-                    FromDateTime = Server.Time.Date;
-                    Print($"Invalid DateTime '{StringDate}'. Using '{FromDateTime}'");
+                if (ExtendPOC)
+                    poc.Time2 = extendDate();
+
+                if (isIntraday && extraProfiles != ExtraProfiles.MiniVP) {
+                    poc.Time1 = intraX1;
+                    vah.Time1 = intraX1;
+                    val.Time1 = intraX1;
+                    rectVA.Time1 = intraX1;
                 }
             }
-            else
+            else if (!ShowVA && KeepPOC)
             {
-                if (LoadFromInput != LoadFromData.According_to_Lookback)
+                double positiveMax = Math.Abs(vpDict.Values.Max());
+                double negativeMax = 0;
+                try { negativeMax = Math.Abs(vpDict.Values.Where(n => n < 0).Min()); } catch { }
+
+                double largestVOL = positiveMax > negativeMax ? positiveMax : negativeMax;
+
+                double priceLVOL = 0;
+                foreach (var kv in vpDict)
                 {
-                    DateTime LastBarTime = Bars.LastBar.OpenTime.Date;
-                    if (LoadFromInput == LoadFromData.Today)
-                        FromDateTime = LastBarTime.Date;
-                    else if (LoadFromInput == LoadFromData.Yesterday)
-                        FromDateTime = LastBarTime.AddDays(-1);
-                    else if (LoadFromInput == LoadFromData.One_Week)
-                        FromDateTime = LastBarTime.AddDays(-5);
-
-                    FromDateTime = FromDateTime.AddDays(-1).AddHours(21);
+                    if (Math.Abs(kv.Value) == largestVOL) { priceLVOL = kv.Key; break; }
                 }
-                else
-                    FromDateTime = LookBack_Bars.OpenTimes[LookBack_Bars.ClosePrices.Count - Lookback];
+                ChartTrendLine poc = Chart.DrawTrendLine($"{iStart}_POC{extraProfiles}", x1_Start, priceLVOL - rowHeight, xBar, priceLVOL - rowHeight, ColorPOC);
+                poc.LineStyle = LineStylePOC; poc.Thickness = ThicknessPOC; poc.Comment = "POC";
 
+                if (ExtendPOC)
+                    poc.Time2 = extendDate();
+
+                if (isIntraday && extraProfiles != ExtraProfiles.MiniVP)
+                    poc.Time1 = intraX1;
             }
 
-            // ==== Check if existing ticks data on the chart really needs more data ====
-            DateTime FirstTickTime = TicksOHLC.OpenTimes.FirstOrDefault();
-            if (FirstTickTime >= FromDateTime)
-            {
-                LoadMoreTicks(FromDateTime);
-                DrawOnScreen("Data Collection Finished \n Calculating...");
-            }
-            else
-            {
-                Print($"Using existing tick data from '{FirstTickTime}'");
-                DrawOnScreen($"Using existing tick data from '{FirstTickTime}' \n Calculating...");
-            }
-            try
-            {
-                FirstTickTime = TicksOHLC.OpenTimes.FirstOrDefault();
-                ChartVerticalLine lineInfo = Chart.DrawVerticalLine("VolumeStart", FirstTickTime, Color.Red);
-                lineInfo.LineStyle = LineStyle.Lines;
-                ChartText textInfo = Chart.DrawText($"VolumeStartText", $"Tick Volume Data \n ends here", FirstTickTime, Bars.HighPrices[Bars.OpenTimes.GetIndexByTime(FirstTickTime)], Color.Red);
-                textInfo.FontSize = 8;
-            }
-            catch { };
-        }
-        private void LoadMoreTicks(DateTime FromDateTime)
-        {
-            bool msg = false;
+            DateTime extendDate() {
+                string tfName = extraProfiles == ExtraProfiles.No ?
+                (VPInterval_Input == VPInterval_Data.Daily ? "D1" :
+                    VPInterval_Input == VPInterval_Data.Weekly ? "W1" : "Month1" ) :
+                extraProfiles == ExtraProfiles.MiniVP ? MiniVPs_Timeframe.ShortName.ToString() :
+                extraProfiles == ExtraProfiles.Weekly ?  "W1" :  "Month1";
 
-            while (TicksOHLC.OpenTimes.FirstOrDefault() > FromDateTime)
-            {
-                if (!msg)
-                {
-                    Print($"Loading from '{TicksOHLC.OpenTimes.First()}' to '{FromDateTime}'...");
-                    msg = true;
-                }
+                // Get the time-based interval value
+                string tfString = string.Join("", tfName.Where(char.IsDigit));
+                int tfValue = int.TryParse(tfString, out int value) ? value : 1;
 
-                int loadedCount = TicksOHLC.LoadMoreHistory();
-                Print("Loaded {0} Ticks, Current Tick Date: {1}", loadedCount, TicksOHLC.OpenTimes.FirstOrDefault());
-                if (loadedCount == 0)
-                    break;
+                DateTime dateToReturn = xBar;
+                if (tfName.Contains('m'))
+                    dateToReturn = xBar.AddMinutes(tfValue * ExtendCount);
+                else if (tfName.Contains('h'))
+                    dateToReturn = xBar.AddHours(tfValue * ExtendCount);
+                else if (tfName.Contains('D'))
+                    dateToReturn = xBar.AddDays(tfValue * ExtendCount);
+                else if (tfName.Contains('W'))
+                    dateToReturn = xBar.AddDays(7 * ExtendCount);
+                else if (tfName.Contains("Month1"))
+                    dateToReturn = xBar.AddMonths(tfValue * ExtendCount);
+
+                return dateToReturn;
             }
-            Print("Data Collection Finished, First Tick from: {0}", TicksOHLC.OpenTimes.FirstOrDefault());
         }
         // ========= ========== ==========
-        private double[] VA_Calculation()
+        /*
+            TODO: VA + POC for historical MiniVPs, Daily Weekly mothnly
+            TODO, VA + POC intraday if possible
+            TODO extended POCS/VAS by nº day or nº Mini VP timeframe
+        */
+        private double[] VA_Calculation(IDictionary<double, double> vpDict)
         {
             /*  https://onlinelibrary.wiley.com/doi/pdf/10.1002/9781118659724.app1
                 https://www.mypivots.com/dictionary/definition/40/calculating-market-profile-value-area
                 Same of TPO Profile(https://ctrader.com/algos/indicators/show/3074)  */
 
-            double largestVOL = VolumesRank.Values.Max();
+            if (vpDict.Values.Count < 4)
+                return Array.Empty<double>();
 
-            double totalvol = VolumesRank.Values.Sum();
-            double _70percent = Math.Round((70 * totalvol) / 100);
+            double positiveMax = Math.Abs(vpDict.Values.Max());
+            double negativeMax = 0;
+            try { negativeMax = Math.Abs(vpDict.Values.Where(n => n < 0).Min()); } catch { }
+
+            double largestVOL = positiveMax > negativeMax ? positiveMax : negativeMax;
+
+            double totalvol = Math.Abs(vpDict.Values.Sum());
+            double _70percent = Math.Round((PercentVA * totalvol) / 100);
 
             double priceLVOL = 0;
-            for (int k = 0; k < VolumesRank.Count; k++)
+            foreach (var kv in vpDict)
             {
-                if (VolumesRank.ElementAt(k).Value == largestVOL)
-                {
-                    priceLVOL = VolumesRank.ElementAt(k).Key;
-                    break;
-                }
+                if (Math.Abs(kv.Value) == largestVOL) { priceLVOL = kv.Key; break; }
             }
             double priceVAH = 0;
             double priceVAL = 0;
@@ -1512,11 +2838,11 @@ namespace cAlgo
 
             List<double> upKeys = new();
             List<double> downKeys = new();
-            for (int i = 0; i < Segments.Count; i++)
+            for (int i = 0; i < Segments_VP.Count; i++)
             {
-                double priceKey = Segments[i];
+                double priceKey = Segments_VP[i];
 
-                if (VolumesRank.ContainsKey(priceKey))
+                if (vpDict.ContainsKey(priceKey))
                 {
                     if (priceKey < priceLVOL)
                         downKeys.Add(priceKey);
@@ -1524,13 +2850,16 @@ namespace cAlgo
                         upKeys.Add(priceKey);
                 }
             }
-            upKeys.Sort();
-            downKeys.Sort();
-            downKeys.Reverse();
 
             double[] withoutVA = { priceLVOL - (rowHeight * 2), priceLVOL + (rowHeight / 2), priceLVOL };
-            if (upKeys.Count == 0 || downKeys.Count == 0)
+            if (!upKeys.Any() || !downKeys.Any())
                 return withoutVA;
+
+            upKeys.Sort();
+            if (upKeys.Count > 2)
+                upKeys.Remove(upKeys.LastOrDefault());
+            downKeys.Sort();
+            downKeys.Reverse();
 
             double[] prev2UP = { 0, 0 };
             double[] prev2Down = { 0, 0 };
@@ -1541,7 +2870,7 @@ namespace cAlgo
             bool lockBelow = false;
             double[] belowKV = { 0, 0 };
 
-            for (int i = 0; i < VolumesRank.Keys.Count; i++)
+            for (int i = 0; i < vpDict.Keys.Count; i++)
             {
                 if (sumVA >= _70percent)
                     break;
@@ -1549,14 +2878,14 @@ namespace cAlgo
                 double sumUp = 0;
                 double sumDown = 0;
 
-                // ========= Above of POC =========
+                // ==== Above of POC ====
                 double prevUPkey = upKeys.First();
                 double keyUP = 0;
                 foreach (double key in upKeys)
                 {
                     if (upKeys.Count == 1 || prev2UP[0] != 0 && prev2UP[1] != 0 && key == upKeys.Last())
                     {
-                        sumDown = VolumesRank[key];
+                        sumDown = Math.Abs(vpDict[key]);
                         keyUP = key;
                         break;
                     }
@@ -1569,8 +2898,8 @@ namespace cAlgo
                     if (prev2UP[0] == 0 && prev2UP[1] == 0 && key != prevUPkey
                     || prev2UP[0] != 0 && prev2UP[1] != 0 && prevUPkey > aboveKV[0] && key > aboveKV[0])
                     {
-                        double upVOL = VolumesRank[key];
-                        double up2VOL = VolumesRank[prevUPkey];
+                        double upVOL = Math.Abs(vpDict[key]);
+                        double up2VOL = Math.Abs(vpDict[prevUPkey]);
 
                         keyUP = key;
 
@@ -1586,14 +2915,14 @@ namespace cAlgo
                     prevUPkey = key;
                 }
 
-                // ========= Below of POC =========
+                // ==== Below of POC ====
                 double prevDownkey = downKeys.First();
                 double keyDw = 0;
                 foreach (double key in downKeys)
                 {
                     if (downKeys.Count == 1 || prev2Down[0] != 0 && prev2Down[1] != 0 && key == downKeys.Last())
                     {
-                        sumDown = VolumesRank[key];
+                        sumDown = Math.Abs(vpDict[key]);
                         keyDw = key;
                         break;
                     }
@@ -1606,8 +2935,8 @@ namespace cAlgo
                     if (prev2Down[0] == 0 && prev2Down[1] == 0 && key != prevDownkey
                     || prev2Down[0] != 0 && prev2Down[1] != 0 && prevDownkey < aboveKV[0] && key < belowKV[0])
                     {
-                        double downVOL = VolumesRank[key];
-                        double down2VOL = VolumesRank[prevDownkey];
+                        double downVOL = Math.Abs(vpDict[key]);
+                        double down2VOL = Math.Abs(vpDict[prevDownkey]);
 
                         keyDw = key;
 
@@ -1623,7 +2952,7 @@ namespace cAlgo
                     prevDownkey = key;
                 }
 
-                // ========= VA rating =========
+                // ==== VA rating ====
                 if (sumUp > sumDown)
                 {
                     sumVA += sumUp;
@@ -1664,234 +2993,817 @@ namespace cAlgo
         }
 
         public void ClearAndRecalculate()
-        {            
-            // The chart should already be clear
-            // No objects
-            
-            int FirstIndex = Bars.OpenTimes.GetIndexByTime(LookBack_Bars.OpenTimes.FirstOrDefault());
+        {
+            Thread.Sleep(300);
+            LoadMoreHistory_IfNeeded();
 
-            // Get Index of VOL Interval to continue only in Lookback
-            int iVerify = LookBack_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[FirstIndex]);
-            while (LookBack_Bars.ClosePrices.Count - iVerify > Lookback) {
+            // LookBack from VP
+            Bars vpBars = VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
+                           VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
+            int FirstIndex = Bars.OpenTimes.GetIndexByTime(vpBars.OpenTimes.FirstOrDefault());
+            // Get Index of ODF Interval to continue only in Lookback
+            int iVerify = vpBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[FirstIndex]);
+            while (vpBars.ClosePrices.Count - iVerify > Lookback) {
                 FirstIndex++;
-                iVerify = LookBack_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[FirstIndex]);
+                iVerify = vpBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[FirstIndex]);
             }
 
-            int TF_idx = LookBack_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[FirstIndex]);
-            int indexStart = Bars.OpenTimes.GetIndexByTime(LookBack_Bars.OpenTimes[TF_idx]);
+            // Daily or Weekly VP
+            int TF_idx = vpBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[FirstIndex]);
+            int indexStart = Bars.OpenTimes.GetIndexByTime(vpBars.OpenTimes[TF_idx]);
+
+            // Weekly Profile but Daily VP
+            bool extraWeekly = EnableVP && EnableWeeklyProfile && VPInterval_Input == VPInterval_Data.Daily;
+            if (extraWeekly) {
+                TF_idx = WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[FirstIndex]);
+                indexStart = Bars.OpenTimes.GetIndexByTime(WeeklyBars.OpenTimes[TF_idx]);
+            }
+            // Monthly Profile
+            bool extraMonthly = EnableVP && EnableMonthlyProfile;
+            if (extraMonthly) {
+                TF_idx = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[FirstIndex]);
+                indexStart = Bars.OpenTimes.GetIndexByTime(MonthlyBars.OpenTimes[TF_idx]);
+            }
+
+            // Reset Tick Index.
+            lastBar_VP = 0;
+            lastBar_ExtraVPs._Mini = 0;
+            lastBar_ExtraVPs._Weekly = 0;
+            lastBar_ExtraVPs._Monthly = 0;
+
+            // Reset Segments
+            // It's needed since TF_idx(start) change if SegmentsInterval_Input is switched on the panel
+            Segments_VP.Clear();
+            segmentInfo.Clear();
+
+            // Reset last update
+            lastCleaned._VP_Interval = 0;
 
             // Historical data
             for (int index = indexStart; index < Bars.Count; index++)
             {
-                TF_idx = LookBack_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
-                indexStart = Bars.OpenTimes.GetIndexByTime(LookBack_Bars.OpenTimes[TF_idx]);
+                CreateSegments(index);
 
-                if (index == indexStart && index != cleanedIndex || (index - 1) == indexStart && (index - 1) != cleanedIndex)
-                {
-                    Segments.Clear();
-                    VolumesRank.Clear();
-                    VolumesRank_Up.Clear();
-                    VolumesRank_Down.Clear();
-                    DeltaRank.Clear();
-                    RectanglesToColor.Clear();
-                    double[] VAforColor = { 0, 0, 0 };
-                    priceVA_LHP = VAforColor;
-                    cleanedIndex = index == indexStart ? index : (index - 1);
+                if (EnableVP) {
+                    CreateMonthlyVP(index);
+                    CreateWeeklyVP(index);
                 }
-                VolumeProfile(indexStart, index);
-            }
-               
-            // Repaint current profile
-            for (int i = indexStart; i <= Bars.Count; i++)
-            {
-                if (i == indexStart)
-                {
-                    Segments.Clear();
-                    VolumesRank.Clear();
-                    VolumesRank_Up.Clear();
-                    VolumesRank_Down.Clear();
-                    DeltaRank.Clear();
-                    double[] resetDelta = {0, 0};
-                    MinMaxDelta = resetDelta;
-                    RectanglesToColor.Clear();
+                // Calculate ODF only in lookback
+                if (extraWeekly || extraMonthly) {
+                    iVerify = vpBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+                    if (vpBars.ClosePrices.Count - iVerify > Lookback)
+                        continue;
                 }
 
-                VolumeProfile(indexStart, i);
+                TF_idx = vpBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+                indexStart = Bars.OpenTimes.GetIndexByTime(vpBars.OpenTimes[TF_idx]);
+
+                if (index == indexStart ||
+                   (index - 1) == indexStart && isPriceBased_Chart ||
+                   (index - 1) == indexStart && (index - 1) != lastCleaned._VP_Interval)
+                    CleanUp_MainVP(indexStart, index);
+
+                CreateMiniVPs(index);
+
+                try { if (EnableVP) VolumeProfile(indexStart, index); } catch { }
             }
-            
+
             configHasChanged = true;
-            if (ExtendPOC) {
-                ExtendPOCNow();
-            }
+            DrawStartVolumeLine();
         }
 
-        public void SetRowHeight(double number)
-        {
-            rowHeight = number;
-        }
-        public void SetLookback(int number)
-        {
-            Lookback = number;
-        }
-        public void SetInterval(TimeFrame newTF) {
-            LookBack_TF = newTF;
-            LookBack_Bars = MarketData.GetBars(LookBack_TF);
-            if (LookBack_Bars.ClosePrices.Count < Lookback)
+        public void DrawStartVolumeLine() {
+            try
             {
-                while (LookBack_Bars.ClosePrices.Count < Lookback)
+                DateTime FirstVolDate = VOL_Bars.OpenTimes.FirstOrDefault();
+                ChartVerticalLine lineInfo = Chart.DrawVerticalLine("VolumeStart", FirstVolDate, Color.Red);
+                lineInfo.LineStyle = LineStyle.Lines;
+                ChartText textInfo = Chart.DrawText($"VolumeStartText", $"{VOL_Timeframe.ShortName} Volume Data \n ends here", FirstVolDate, VOL_Bars.HighPrices.FirstOrDefault(), Color.Red);
+                textInfo.FontSize = 8;
+            }
+            catch { };
+            try
+            {
+                Bar FirstIntervalBar = VPInterval_Input == VPInterval_Data.Daily ? DailyBars.FirstOrDefault() :
+                                            VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars.FirstOrDefault() : MonthlyBars.FirstOrDefault();
+                DateTime FirstIntervalDate = FirstIntervalBar.OpenTime;
+                double FirstIntervalPrice = FirstIntervalBar.High;
+
+                ChartVerticalLine lineInfo = Chart.DrawVerticalLine("LookbackStart", FirstIntervalDate, Color.Gray);
+                lineInfo.LineStyle = LineStyle.Lines;
+                ChartText textInfo = Chart.DrawText($"LookbackStartText", $"{VPInterval_Input} Interval Data \n ends here", FirstIntervalDate, FirstIntervalPrice, Color.Gray);
+                textInfo.FontSize = 8;
+            }
+            catch { };
+        }
+        public void DrawTargetDateLine() {
+            try
+            {
+                Bars VPInterval_Bars = VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
+                                   VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
+                DateTime TargetVolDate = VPInterval_Bars.OpenTimes[VPInterval_Bars.ClosePrices.Count - Lookback];
+                TargetVolDate = EnableWeeklyProfile && !EnableMonthlyProfile ? WeeklyBars.LastBar.OpenTime.Date :
+                                EnableMonthlyProfile ? MonthlyBars.LastBar.OpenTime.Date :
+                                TargetVolDate;
+                ChartVerticalLine lineInfo = Chart.DrawVerticalLine("VolumeTarget", TargetVolDate, Color.Yellow);
+                lineInfo.LineStyle = LineStyle.Lines;
+                ChartText textInfo = Chart.DrawText($"VolumeTargetText", $"Target Volume Data", TargetVolDate, VOL_Bars.HighPrices.FirstOrDefault(), Color.Red);
+                textInfo.FontSize = 8;
+            }
+            catch { }
+        }
+        public void LoadMoreHistory_IfNeeded() {
+            Bars VPInterval_Bars = VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
+                                   VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
+
+            DateTime sourceDate = EnableWeeklyProfile && !EnableMonthlyProfile ? WeeklyBars.LastBar.OpenTime.Date :
+                                  EnableMonthlyProfile ? MonthlyBars.LastBar.OpenTime.Date :
+                                  VPInterval_Bars.OpenTimes[VPInterval_Bars.ClosePrices.Count - Lookback];
+
+            if (LoadBarsStrategy_Input == LoadBarsStrategy_Data.Async) {
+                if (VPInterval_Bars.ClosePrices.Count < Lookback || VOL_Bars.OpenTimes.FirstOrDefault() > sourceDate) {
+                    loadingAsyncBars = false;
+                    loadingBarsComplete = false;
+                    timerHandler.isAsyncLoading = true;
+                    Timer.Start(TimeSpan.FromSeconds(0.5));
+                }
+                return;
+            }
+
+            // Lookback
+            if (VPInterval_Bars.ClosePrices.Count < Lookback)
+            {
+                PopupNotification notifyProgress = Notifications.ShowPopup(NOTIFY_CAPTION, $"Loading Sync => {VPInterval_Bars} Lookback Bars", PopupNotificationState.InProgress);
+                while (VPInterval_Bars.ClosePrices.Count < Lookback)
                 {
-                    int loadedCount = LookBack_Bars.LoadMoreHistory();
-                    Print($"Loaded {loadedCount}, {LookBack_TF.ShortName} LookBack Bars, Current Bar Date: {LookBack_Bars.OpenTimes.FirstOrDefault()}");
+                    int loadedCount = VPInterval_Bars.LoadMoreHistory();
                     if (loadedCount == 0)
                         break;
                 }
+                notifyProgress.Complete(PopupNotificationState.Success);
             }
 
-            if (VolumeSourceInput == VolumeSourceData.Bars)
+            DateTime lookbackDate = VPInterval_Bars.OpenTimes[VPInterval_Bars.ClosePrices.Count - Lookback];
+
+            sourceDate = EnableWeeklyProfile && !EnableMonthlyProfile ? WeeklyBars.LastBar.OpenTime.Date :
+                        EnableMonthlyProfile ? MonthlyBars.LastBar.OpenTime.Date :
+                        VPInterval_Bars.OpenTimes[VPInterval_Bars.ClosePrices.Count - Lookback];
+
+            if (EnableMiniProfiles && MiniVPs_Bars.OpenTimes.FirstOrDefault() > lookbackDate) {
+                PopupNotification notifyProgress = Notifications.ShowPopup(NOTIFY_CAPTION, $"Loading Sync => {MiniVPs_Timeframe} Lookback Bars", PopupNotificationState.InProgress);
+                while (MiniVPs_Bars.OpenTimes.FirstOrDefault() > lookbackDate)
+                {
+                    int loadedCount = MiniVPs_Bars.LoadMoreHistory();
+                    if (loadedCount == 0)
+                        break;
+                }
+                notifyProgress.Complete(PopupNotificationState.Success);
+            }
+
+            // Source
+            if (VOL_Bars.OpenTimes.FirstOrDefault() > sourceDate)
             {
-                if (VOL_Bars.OpenTimes.FirstOrDefault() > LookBack_Bars.OpenTimes[LookBack_Bars.ClosePrices.Count - Lookback])
+                PopupNotification notifyProgress_Two = Notifications.ShowPopup(NOTIFY_CAPTION, $"Loading Sync => {VOL_Timeframe.ShortName} Bars", PopupNotificationState.InProgress);
+                while (VOL_Bars.OpenTimes.FirstOrDefault() > sourceDate)
                 {
-                    while (VOL_Bars.OpenTimes.FirstOrDefault() > LookBack_Bars.OpenTimes[LookBack_Bars.ClosePrices.Count - Lookback])
-                    {
-                        int loadedCount = VOL_Bars.LoadMoreHistory();
-                        Print($"Loaded {loadedCount}, {BarsVOLSource_TF.ShortName} VOL Bars, Current Bar Date: {VOL_Bars.OpenTimes.FirstOrDefault()}");
-                        if (loadedCount == 0)
-                            break;
-                    }
+                    int loadedCount = VOL_Bars.LoadMoreHistory();
+                    if (loadedCount == 0)
+                        break;
                 }
-                try
-                {
-                    DateTime FirstVolDate = VOL_Bars.OpenTimes.FirstOrDefault();
-                    ChartVerticalLine lineInfo = Chart.DrawVerticalLine("VolumeStart", FirstVolDate, Color.Red);
-                    lineInfo.LineStyle = LineStyle.Lines;
-                    ChartText textInfo = Chart.DrawText($"VolumeStartText", $"{BarsVOLSource_TF.ShortName} Volume Data \n ends here", FirstVolDate, Bars.HighPrices[Bars.OpenTimes.GetIndexByTime(FirstVolDate)], Color.Red);
-                    textInfo.FontSize = 8;
-                }
-                catch { };
+                notifyProgress_Two.Complete(PopupNotificationState.Success);
             }
         }
-        public void ExtendPOCNow() {
-            if (ExtendPOC && POCsLines.Count != 0)
-            {
-                for (int tl = 0; tl < POCsLines.Count; tl++)
-                {
-                    POCsLines[tl].Time2 = Bars.LastBar.OpenTime;
-                    string dynDate = LookBack_TF == TimeFrame.Daily ? POCsLines[tl].Time1.Date.AddDays(1).ToString().Replace("00:00:00", "") : POCsLines[tl].Time1.Date.ToString();
-                    Chart.DrawText($"POC{POCsLines[tl].Time1}", $"{dynDate}", Bars.LastBar.OpenTime, POCsLines[tl].Y2 + (rowHeight / 2), ColorPOC);
-                }
-            }
-        }
-        public int GetLookback()
+        protected override void OnTimer()
         {
+            if (timerHandler.isAsyncLoading)
+            {
+                if (!loadingAsyncBars) {
+                    string volumeLineInfo = "=> Zoom out and follow the Vertical Line";
+                    asyncBarsPopup = Notifications.ShowPopup(
+                        NOTIFY_CAPTION,
+                        $"[{Symbol.Name}] Loading Async {VOL_Timeframe.ShortName} Bars \n{volumeLineInfo}",
+                        PopupNotificationState.InProgress
+                    );
+                }
+
+                if (!loadingBarsComplete) {
+                    Bars VPInterval_Bars = VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
+                                           VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
+                    if (VPInterval_Bars.ClosePrices.Count < Lookback)
+                    {
+                        while (VPInterval_Bars.ClosePrices.Count < Lookback)
+                        {
+                            int loadedCount = VPInterval_Bars.LoadMoreHistory();
+                            if (loadedCount == 0)
+                                break;
+                        }
+                    }
+                    DateTime lookbackDate = VPInterval_Bars.OpenTimes[VPInterval_Bars.ClosePrices.Count - Lookback];
+
+                    if (EnableMiniProfiles && MiniVPs_Bars.OpenTimes.FirstOrDefault() > lookbackDate) {
+                        while (MiniVPs_Bars.OpenTimes.FirstOrDefault() > lookbackDate)
+                        {
+                            int loadedCount = MiniVPs_Bars.LoadMoreHistory();
+                            if (loadedCount == 0)
+                                break;
+                        }
+                    }
+                    DateTime sourceDate = EnableWeeklyProfile && !EnableMonthlyProfile ? WeeklyBars.LastBar.OpenTime.Date :
+                                          EnableMonthlyProfile ? MonthlyBars.LastBar.OpenTime.Date :
+                                          lookbackDate;
+
+                    // Draw target date.
+                    DrawTargetDateLine();
+
+                    VOL_Bars.LoadMoreHistoryAsync((_) => {
+                        DateTime currentDate = _.Bars.FirstOrDefault().OpenTime;
+
+                        DrawStartVolumeLine();
+
+                        if (currentDate != default && currentDate < sourceDate) {
+                            if (asyncBarsPopup.State != PopupNotificationState.Success)
+                                asyncBarsPopup.Complete(PopupNotificationState.Success);
+
+                            loadingBarsComplete = true;
+                        }
+                    });
+
+                    loadingAsyncBars = true;
+                }
+                else {
+                    ClearAndRecalculate();
+                    timerHandler.isAsyncLoading = false;
+                    Timer.Stop();
+                }
+            }
+
+        }
+        public int GetLookback() {
             return Lookback;
         }
-        public double GetRowHeight()
-        {
+        public double GetRowHeight() {
             return rowHeight;
         }
-        public TimeFrame GetInterval() {
-            return LookBack_TF;
+        public void SetRowHeight(double number) {
+            rowHeight = number;
         }
+        public void SetLookback(int number) {
+            Lookback = number;
+            LoadMoreHistory_IfNeeded();
+        }
+        public void SetMiniVPsBars() {
+            MiniVPs_Bars = MarketData.GetBars(MiniVPs_Timeframe);
+        }
+        public void SetVPBars() {
+            VOL_Bars = MarketData.GetBars(VOL_Timeframe);
+            LoadMoreHistory_IfNeeded();
+        }
+
     }
+
+    // ================ PARAMS PANEL ================
+    /*
+    What I've done since bringing it from ODF Aggregated, by order:
+        Remove all unrelated Volume Profile inputs
+        Add remaining VP settings
+        Reogarnize inputs
+        Add "VA + POC"
+    */
+
+    public enum ParamInputType { Text, Checkbox, ComboBox }
+
+    public class ParamDefinition
+    {
+        public string Region { get; init; }
+        public int RegionOrder { get; init; }
+        public string Key { get; init; }
+        public string Label { get; init; }
+        public ParamInputType InputType { get; init; }
+        public Func<IndicatorParams, object> GetDefault { get; init; }
+        public Action<string> OnChanged { get; init; }
+        public Func<IEnumerable<string>> EnumOptions { get; init; } = null;
+        public Func<bool> IsVisible { get; set; } = () => true;
+    }
+    public enum Supported_Timeframes {
+        m5, m10, m15, m30, m45, h1, h2, h3, h4, h6, h8, h12, D1, D2, D3
+    }
+    public enum Supported_Sources {
+        m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m15, m30, m45, h1, h2, h3, h4, h6, h8, h12, D1, D2, D3
+    }
+
     public class ParamsPanel : CustomControl
     {
-        // Any
-        private const string LookBack_InputKey = "LookBackKey";
-        private const string RowHeight_InputKey = "RowHeightKey";
-        private const string Interval_InputKey = "IntervalKey";
-        private const string KeepPOC_InputKey = "KeepPOCKey";
-        private const string ExtendedPOC_InputKey = "ExtendedPOCKey";
-        private const string ShowVA_InputKey = "ShowVAKey";
-
-        private readonly IDictionary<string, TextBox> textInputMap = new Dictionary<string, TextBox>();
-        private readonly IDictionary<string, CheckBox> checkBoxMap = new Dictionary<string, CheckBox>();
-        private readonly IDictionary<string, ComboBox> comboBoxMap = new Dictionary<string, ComboBox>();
         private readonly FreeVolumeProfileV20 Outside;
-
-        private Button ModeBtn;
-        private readonly Color BtnColor;
         private readonly IndicatorParams FirstParams;
+        private Button ModeBtn;
+        private Button SaveBtn;
+        private Button ApplyBtn;
+        private ProgressBar _progressBar;
+        private bool isLoadingParams;
+
+        private readonly Dictionary<string, TextBox> textInputMap = new();
+        private readonly Dictionary<string, TextBlock> textInputLabelMap = new();
+
+        private readonly Dictionary<string, TextBlock> checkBoxTextMap = new();
+        private readonly Dictionary<string, CheckBox> checkBoxMap = new();
+
+        private readonly Dictionary<string, ComboBox> comboBoxMap = new();
+        private readonly Dictionary<string, TextBlock> comboBoxTextMap = new();
+
+        private readonly List<ParamDefinition> _paramDefinitions;
+        private readonly Dictionary<string, RegionSection> _regionSections = new();
+        private readonly Dictionary<string, object> _originalValues = new();
+        private ColorTheme ApplicationTheme => Outside.Application.ColorTheme;
 
         public ParamsPanel(FreeVolumeProfileV20 indicator, IndicatorParams defaultParams)
         {
-            BtnColor = Color.FromHex("#7F808080");
             Outside = indicator;
             FirstParams = defaultParams;
+            _paramDefinitions = DefineParams();
+
             AddChild(CreateTradingPanel());
+
+            LoadParams(); // If not present, use defaults params.
+            RefreshVisibility(); // Refresh UI with the current values.
+        }
+
+        private List<ParamDefinition> DefineParams()
+        {
+            return new List<ParamDefinition>
+            {
+                new()
+                {
+                    Region = "General",
+                    RegionOrder = 1,
+                    Key = "LookbackKey",
+                    Label = "Lookback",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.LookBack,
+                    OnChanged = _ => UpdateLookback()
+                },
+                new()
+                {
+                    Region = "General",
+                    RegionOrder = 1,
+                    Key = "RowHeightKey",
+                    Label = "Row(pips)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.RowHeightInPips.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateRowHeight()
+                },
+                new()
+                {
+                    Region = "General",
+                    RegionOrder = 1,
+                    Key = "VPIntervalKey",
+                    Label = "Interval",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.VPInterval.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(VPInterval_Data)),
+                    OnChanged = _ => UpdateVPInterval(),
+                },
+
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "EnableVPKey",
+                    Label = "Enable?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.EnableVP,
+                    OnChanged = _ => UpdateCheckbox("EnableVPKey", val => Outside.EnableVP = val),
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "WeeklyVPKey",
+                    Label = "Weekly VP?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.EnableWeeklyProfile,
+                    OnChanged = _ => UpdateCheckbox("WeeklyVPKey", val => Outside.EnableWeeklyProfile = val),
+                    IsVisible = () => Outside.VolumeMode_Input != VolumeMode_Data.Buy_Sell && Outside.VPInterval_Input != VPInterval_Data.Weekly
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "MonthlyVPKey",
+                    Label = "Monthly VP?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.EnableMonthlyProfile,
+                    OnChanged = _ => UpdateCheckbox("MonthlyVPKey", val => Outside.EnableMonthlyProfile = val),
+                    IsVisible = () => Outside.VolumeMode_Input != VolumeMode_Data.Buy_Sell && Outside.VPInterval_Input != VPInterval_Data.Monthly
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "FillVPKey",
+                    Label = "Fill Histogram?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.FillHist_VP,
+                    OnChanged = _ => UpdateCheckbox("FillVPKey", val => Outside.FillHist_VP = val),
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "SideVPKey",
+                    Label = "Side",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.HistogramSide.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(HistSide_Data)),
+                    OnChanged = _ => UpdateSideVP(),
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "WidthVPKey",
+                    Label = "Width",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.HistogramWidth.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(HistWidth_Data)),
+                    OnChanged = _ => UpdateWidthVP(),
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "IntradayVPKey",
+                    Label = "Intraday?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.ShowIntradayProfile,
+                    OnChanged = _ => UpdateCheckbox("IntradayVPKey", val => Outside.ShowIntradayProfile = val),
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "IntraOffsetKey",
+                    Label = "Offset(bars)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.OffsetBarsIntraday.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateIntradayOffset(),
+                    IsVisible = () => Outside.ShowIntradayProfile
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "IntraTFKey",
+                    Label = "Offset(time)",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.OffsetTimeframeIntraday.ShortName,
+                    EnumOptions = () => Enum.GetNames(typeof(Supported_Timeframes)),
+                    OnChanged = _ => UpdateIntradayTimeframe(),
+                    IsVisible = () => Outside.ShowIntradayProfile && Outside.isPriceBased_Chart
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "GradientKey",
+                    Label = "Gradient?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.Gradient,
+                    OnChanged = _ => UpdateCheckbox("GradientKey", val => Outside.EnableGradient = val),
+                    IsVisible = () => Outside.VolumeMode_Input == VolumeMode_Data.Normal
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "FillIntraVPKey",
+                    Label = "Intra-Space?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.FillIntradaySpace,
+                    OnChanged = _ => UpdateCheckbox("FillIntraVPKey", val => Outside.FillIntradaySpace = val),
+                    IsVisible = () => Outside.ShowIntradayProfile && (Outside.EnableWeeklyProfile || Outside.EnableMonthlyProfile)
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "ShowOHLCKey",
+                    Label = "OHLC Body?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.OHLC,
+                    OnChanged = _ => UpdateCheckbox("ShowOHLCKey", val => Outside.ShowOHLC = val),
+                },
+
+                new()
+                {
+                    Region = "Mini VPs",
+                    RegionOrder = 3,
+                    Key = "MiniVPsKey",
+                    Label = "Enable?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.EnableMiniProfiles,
+                    OnChanged = _ => UpdateCheckbox("MiniVPsKey", val => Outside.EnableMiniProfiles = val)
+                },
+                new()
+                {
+                    Region = "Mini VPs",
+                    RegionOrder = 3,
+                    Key = "MiniTFKey",
+                    Label = "Mini-Interval",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.MiniVPsTimeframe.ShortName.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(Supported_Timeframes)),
+                    OnChanged = _ => UpdateMiniVPTimeframe()
+                },
+                new()
+                {
+                    Region = "Mini VPs",
+                    RegionOrder = 3,
+                    Key = "MiniResultKey",
+                    Label = "Mini-Result?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.ShowMiniResults,
+                    OnChanged = _ => UpdateCheckbox("MiniResultKey", val => Outside.ShowMiniResults = val)
+                },
+
+                new()
+                {
+                    Region = "VA + POC",
+                    RegionOrder = 3,
+                    Key = "EnableVAKey",
+                    Label = "Enable VA?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.ShowVA,
+                    OnChanged = _ => UpdateCheckbox("EnableVAKey", val => Outside.ShowVA = val)
+                },
+                new()
+                {
+                    Region = "VA + POC",
+                    RegionOrder = 3,
+                    Key = "VAValueKey",
+                    Label = "VA(%)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.PercentVA.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdatePercentVA(),
+                    IsVisible = () => Outside.ShowVA
+                },
+                new()
+                {
+                    Region = "VA + POC",
+                    RegionOrder = 3,
+                    Key = "OnlyPOCKey",
+                    Label = "Only POC?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.KeepPOC,
+                    OnChanged = _ => UpdateCheckbox("OnlyPOCKey", val => Outside.KeepPOC = val)
+                },
+                new()
+                {
+                    Region = "VA + POC",
+                    RegionOrder = 3,
+                    Key = "ExtendVAKey",
+                    Label = "Extend VA?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.ExtendVA,
+                    OnChanged = _ => UpdateCheckbox("ExtendVAKey", val => Outside.ExtendVA = val)
+                },
+                new()
+                {
+                    Region = "VA + POC",
+                    RegionOrder = 3,
+                    Key = "ExtendCountKey",
+                    Label = "Extend(count))",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ExtendCount.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateExtendCount(),
+                    IsVisible = () => Outside.ExtendVA || Outside.ExtendPOC
+                },
+                new()
+                {
+                    Region = "VA + POC",
+                    RegionOrder = 3,
+                    Key = "ExtendPOCKey",
+                    Label = "Extend POC?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.ExtendPOC,
+                    OnChanged = _ => UpdateCheckbox("ExtendPOCKey", val => Outside.ExtendPOC = val)
+                },
+
+                new()
+                {
+                    Region = "Misc",
+                    RegionOrder = 4,
+                    Key = "UpdateVPKey",
+                    Label = "Update At",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.UpdateProfileStrategy.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(UpdateProfile_Data)),
+                    OnChanged = _ => UpdateVP(),
+                },
+                new()
+                {
+                    Region = "Misc",
+                    RegionOrder = 4,
+                    Key = "SourceVPKey",
+                    Label = "Source",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => "m1",
+                    EnumOptions = () => Enum.GetNames(typeof(Supported_Sources)),
+                    OnChanged = _ => UpdateSourceVP(),
+                },
+                new()
+                {
+                    Region = "Misc",
+                    RegionOrder = 4,
+                    Key = "DistributionKey",
+                    Label = "Distribution",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.Distribution.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(Distribution_Data)),
+                    OnChanged = _ => UpdateDistribuition(),
+                },
+
+                new()
+                {
+                    Region = "Misc",
+                    RegionOrder = 4,
+                    Key = "ShowResultsKey",
+                    Label = "Results?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.ShowResults,
+                    OnChanged = _ => UpdateCheckbox("ShowResultsKey", val => Outside.ShowResults = val),
+                },
+                new()
+                {
+                    Region = "Misc",
+                    RegionOrder = 4,
+                    Key = "ShowMinMaxKey",
+                    Label = "Min/Max?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.ShowMinMax,
+                    OnChanged = _ => UpdateCheckbox("ShowMinMaxKey", val => Outside.ShowMinMaxDelta = val),
+                    IsVisible = () => Outside.VolumeMode_Input == VolumeMode_Data.Delta && Outside.ShowResults
+                },
+                new()
+                {
+                    Region = "Misc",
+                    RegionOrder = 4,
+                    Key = "OnlySubtKey",
+                    Label = "Only Subtract?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.ShowOnlySubtDelta,
+                    OnChanged = _ => UpdateCheckbox("OnlySubtKey", val => Outside.ShowOnlySubtDelta = val),
+                    IsVisible = () => Outside.VolumeMode_Input == VolumeMode_Data.Delta && Outside.ShowMinMaxDelta && Outside.ShowResults
+                },
+                new()
+                {
+                    Region = "Misc",
+                    RegionOrder = 4,
+                    Key = "OperatorKey",
+                    Label = "Operator",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.OperatorBuySell.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(OperatorBuySell_Data)),
+                    OnChanged = _ => UpdateOperator(),
+                    IsVisible = () => Outside.VolumeMode_Input == VolumeMode_Data.Buy_Sell && Outside.ShowResults
+                },
+            };
         }
 
         private ControlBase CreateTradingPanel()
         {
-            StackPanel mainPanel = new();
+            // Replace StackPanel to Grid
+            // So the Footer stays pinned at the bottom, always visible.
+            Grid mainPanel = new(3, 1);
 
-            ControlBase header = CreateHeader();
-            mainPanel.AddChild(header);
+            mainPanel.Rows[0].SetHeightToAuto();
+            mainPanel.AddChild(CreateHeader(), 0, 0);
 
-            StackPanel contentPanel = CreateContentPanel();
-            mainPanel.AddChild(contentPanel);
+            mainPanel.Rows[1].SetHeightInStars(1); // Takes remaining space
+            mainPanel.AddChild(CreateContentPanel(), 1, 0);
+
+            mainPanel.Rows[2].SetHeightToAuto();
+            mainPanel.AddChild(CreateFooter(), 2, 0);
 
             return mainPanel;
         }
 
         private static ControlBase CreateHeader()
         {
-            Border headerBorder = new()
+            var grid = new Grid(0, 0);
+            grid.AddChild(new TextBlock
+            {
+                Text = "Free Volume Profile",
+                Margin = "10 7",
+                Style = Styles.CreateHeaderStyle(),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                TextAlignment = TextAlignment.Center
+
+            });
+            var border = new Border
             {
                 BorderThickness = "0 0 0 1",
                 Style = Styles.CreateCommonBorderStyle(),
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Width = 280
+                Width = 230, // ParamsPanel Width
+                Child = grid
             };
-            Grid grid = new(0, 0);
-
-            TextBlock header = new()
-            {
-                Text = "Volume Profile",
-                Margin = "10 7",
-                Style = Styles.CreateHeaderStyle(),
-                HorizontalAlignment = HorizontalAlignment.Center,
-            };
-            grid.AddChild(header, 0, 0);
-
-            headerBorder.Child = grid;
-            return headerBorder;
+            return border;
         }
 
-        private StackPanel CreateContentPanel()
+        private ControlBase CreateFooter()
         {
-            StackPanel contentPanel = new()
+            var footerGrid = new Grid(2, 3)
             {
-                Margin = 10
+                Margin = 8,
+                VerticalAlignment = VerticalAlignment.Center
             };
-            Grid grid = new(3, 5);
+
+            footerGrid.Columns[0].SetWidthInStars(1);
+            footerGrid.Columns[1].SetWidthInPixels(8);
+            footerGrid.Columns[2].SetWidthToAuto();
+
+            var saveButton = CreateSaveButton();
+            footerGrid.AddChild(saveButton, 0, 2);
+
+            _progressBar = new ProgressBar {
+                Height = 12,
+                Margin = "0 2 0 0"
+            };
+            footerGrid.AddChild(_progressBar, 0, 0);
+
+            footerGrid.AddChild(CreateApplyButton_TextInput(), 1, 0, 1, 3);
+
+            return footerGrid;
+        }
+
+        private Control CreateContentPanel()
+        {
+            var contentPanel = new StackPanel { Margin = 10 };
+
+            // --- Mode controls at the top ---
+            var grid = new Grid(6, 5);
             grid.Columns[1].SetWidthInPixels(5);
             grid.Columns[3].SetWidthInPixels(5);
 
-            Button button_prev = CreatePassButton("<");
-            grid.AddChild(button_prev, 0, 0);
-
-            Button VolumeModeButton = CreateModeInfo_Button(FirstParams.VolMode.ToString());
-            grid.AddChild(VolumeModeButton, 0, 1, 1, 3);
-
-            Button button_next = CreatePassButton(">");
-            grid.AddChild(button_next, 0, 4);
-
-            var Lookback_Input = CreateInputWithLabel("Lookback", FirstParams.LookBack.ToString(), LookBack_InputKey);
-            grid.AddChild(Lookback_Input, 1, 0);
-            var RowHeightInput = CreateInputWithLabel("Row(pips)", FirstParams.RowHeight.ToString("0.############################", CultureInfo.InvariantCulture), RowHeight_InputKey);
-            grid.AddChild(RowHeightInput, 1, 2);
-            var IntervalInput = CreateComboBoxWithLabel("Interval", Interval_InputKey);
-            grid.AddChild(IntervalInput, 1, 4);
-
-            var POCCheckbox = CreateCheckboxWithLabel("POC", FirstParams.KeepPOC, KeepPOC_InputKey);
-            grid.AddChild(POCCheckbox, 2, 0);
-            var ExtendCheckbox = CreateCheckboxWithLabel("Extend", FirstParams.ExtendedPOC, ExtendedPOC_InputKey);
-            grid.AddChild(ExtendCheckbox, 2, 2);
-            var WithVACheckbox = CreateCheckboxWithLabel("VA", FirstParams.ShowVA, ShowVA_InputKey);
-            grid.AddChild(WithVACheckbox, 2, 4);
+            grid.AddChild(CreatePassButton("<"), 0, 0);
+            grid.AddChild(CreateModeInfo_Button(FirstParams.VolMode.ToString()), 0, 1, 1, 3);
+            grid.AddChild(CreatePassButton(">"), 0, 4);
 
             contentPanel.AddChild(grid);
-            return contentPanel;
+
+            // --- Create region sections ---
+            var groups = _paramDefinitions
+                .GroupBy(p => p.Region)
+                .OrderBy(g => g.FirstOrDefault().RegionOrder);
+            // With g.FirstOrDefault().Key => Worked as expected until 2x "Enable[...]Key" appear
+
+            foreach (var group in groups)
+            {
+                var section = new RegionSection(group.Key, group);
+                _regionSections[group.Key] = section;
+
+                // param grid inside section
+                var groupGrid = new Grid(6, 5);
+                groupGrid.Columns[1].SetWidthInPixels(5);
+                groupGrid.Columns[3].SetWidthInPixels(5);
+
+                int row = 0, col = 0;
+                foreach (var param in group)
+                {
+                    var control = CreateParamControl(param);
+                    groupGrid.AddChild(control, row, col);
+                    col += 2;
+                    if (col > 4) { row++; col = 0; }
+                }
+
+                section.AddParamControl(groupGrid);
+                contentPanel.AddChild(section.Container);
+            }
+
+            ScrollViewer scroll = new() {
+                Content = contentPanel,
+                Style = Styles.CreateScrollViewerTransparentStyle(),
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                MaxHeight = Outside.Chart.Height - 100
+            };
+
+            Outside.Chart.SizeChanged += (_) => {
+                scroll.MaxHeight = Outside.Chart.Height - 100;
+            };
+
+            return scroll;
+        }
+
+        private ControlBase CreateParamControl(ParamDefinition param)
+        {
+            return param.InputType switch
+            {
+                ParamInputType.Text => CreateInputWithLabel(param.Label, param.GetDefault(FirstParams).ToString(), param.Key, param.OnChanged),
+                ParamInputType.Checkbox => CreateCheckboxWithLabel(param.Label, (bool)param.GetDefault(FirstParams), param.Key, param.OnChanged),
+                ParamInputType.ComboBox => CreateComboBoxWithLabel(param.Label, param.Key, (string)param.GetDefault(FirstParams), param.EnumOptions(), param.OnChanged),
+                _ => throw new NotSupportedException()
+            };
         }
 
         private Button CreatePassButton(string label)
@@ -1903,18 +3815,10 @@ namespace cAlgo
                 Width = 30,
                 Height = 20,
                 Margin = 0,
-                BackgroundColor = BtnColor,
-                HorizontalAlignment = HorizontalAlignment.Center,
+                BackgroundColor = Color.FromHex("#7F808080"),
+                HorizontalAlignment = HorizontalAlignment.Center
             };
-
-            if (label == ">")
-            {
-                button.Click += NextModeEvent;
-            }
-            else
-            {
-                button.Click += PrevModeEvent;
-            }
+            button.Click += label == ">" ? NextModeEvent : PrevModeEvent;
             return button;
         }
 
@@ -1927,287 +3831,256 @@ namespace cAlgo
                 Width = 70,
                 Height = 30,
                 Margin = 4,
-                HorizontalAlignment = HorizontalAlignment.Center,
+                Style = Styles.CreateButtonStyle(),
+                HorizontalAlignment = HorizontalAlignment.Center
+
             };
-
-            button.Click += ResetParamsEvent;
+            button.Click += _ => ResetParamsEvent();
             ModeBtn = button;
-
             return button;
         }
 
-        private Panel CreateInputWithLabel(string label, string defaultValue, string inputKey)
+        private Button CreateSaveButton()
         {
-            StackPanel stackPanel = new()
+            Button button = new()
             {
-                Orientation = Orientation.Vertical,
-                Margin = "0 10 0 0"
+                Text = "💾 Save",
+                Margin = 5,
+                HorizontalAlignment = HorizontalAlignment.Right,
             };
 
-            TextBlock textBlock = new()
-            {
-                Text = label,
-                TextAlignment = TextAlignment.Center
+            button.Click += (_) => SaveParams();
+            SaveBtn = button;
+            return button;
+        }
+        private Button CreateApplyButton_TextInput()
+        {
+            Button button = new() {
+                Text = "Apply ✓",
+                Padding = 0,
+                Width = 50,
+                Height = 20,
+                Margin = 0,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
             };
 
-            TextBox input = new()
+            button.Click += (_) => RecalculateOutsideWithMsg();
+            ApplyBtn = button;
+            return button;
+        }
+
+        private Panel CreateInputWithLabel(string label, string defaultValue, string key, Action<string> onChanged)
+        {
+            var input = new TextBox
             {
-                Margin = "0 5 0 0",
                 Text = defaultValue,
                 Style = Styles.CreateInputStyle(),
-                TextAlignment = TextAlignment.Center
+                TextAlignment = TextAlignment.Center,
+                Margin = "0 5 0 0"
             };
+            input.TextChanged += _ => onChanged?.Invoke(key);
+            textInputMap[key] = input;
 
-            input.TextChanged += TextChangedEvent;
-            textInputMap.Add(inputKey, input);
-
-            stackPanel.AddChild(textBlock);
-            stackPanel.AddChild(input);
-
-            return stackPanel;
-        }
-        private Panel CreateComboBoxWithLabel(string label, string inputKey)
-        {
-            StackPanel stackPanel = new()
+            var stack = new StackPanel
             {
                 Orientation = Orientation.Vertical,
-                Margin = "0 10 0 0"
-            };
-
-            TextBlock textBlock = new()
-            {
-                Text = label,
-                TextAlignment = TextAlignment.Center
-            };
-
-            ComboBox comboBox = new()
-            {
-                Margin = "0 5 0 0",
-                Style = Styles.CreateInputStyle(),
-            };
-
-            string[] allTF = {
-                // Candles
-                "h1", "h2", "h3", "h4", "h6", "h8", "h12", "D1", "D2", "D3", "W1", "Month1",
-            };
-            for (int i = 0; i < allTF.Length; i++)
-            {
-                comboBox.AddItem(allTF[i]);
-            }
-            comboBox.SelectedItem = FirstParams.Interval.ShortName;
-            comboBox.SelectedItemChanged += ComboBoxSelectedEvent;
-            comboBoxMap.Add(inputKey, comboBox);
-
-            stackPanel.AddChild(textBlock);
-            stackPanel.AddChild(comboBox);
-
-            return stackPanel;
-        }
-
-        private ControlBase CreateCheckboxWithLabel(string label, bool defaultValue, string inputKey)
-        {
-            Border checkBoxBorder = new()
-            {
                 Margin = "0 10 0 0",
-                BorderThickness = "0 1 0 1",
-                Style = Styles.CreateCommonBorderStyle()
             };
 
-            StackPanel stackPanel = new()
+            var text = new TextBlock { Text = label, TextAlignment = TextAlignment.Center };
+            textInputLabelMap[key] = text;
+
+            stack.AddChild(text);
+            stack.AddChild(input);
+            return stack;
+        }
+
+        private Panel CreateComboBoxWithLabel(string label, string key, string selected, IEnumerable<string> options, Action<string> onChanged)
+        {
+            var combo = new ComboBox
             {
-                Orientation = Orientation.Horizontal,
-                Margin = "0 10 0 10"
+                Style = Styles.CreateInputStyle(),
+                Margin = "0 5 0 0",
+
+            };
+            foreach (var option in options)
+                combo.AddItem(option);
+            combo.SelectedItem = selected;
+            combo.SelectedItemChanged += _ => onChanged?.Invoke(key);
+            comboBoxMap[key] = combo;
+
+            var stack = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                Margin = "0 10 0 0",
             };
 
-            CheckBox input = new()
-            {
+            var text = new TextBlock { Text = label, TextAlignment = TextAlignment.Center };
+            comboBoxTextMap[key] = text;
+
+            stack.AddChild(text);
+            stack.AddChild(combo);
+
+            return stack;
+        }
+
+        private ControlBase CreateCheckboxWithLabel(string label, bool defaultValue, string key, Action<string> onChanged)
+        {
+            var checkbox = new CheckBox {
                 Margin = "0 0 5 0",
-                IsChecked = defaultValue
+                IsChecked = defaultValue,
+                HorizontalAlignment = HorizontalAlignment.Center
             };
+            checkbox.Click += _ => onChanged?.Invoke(key);
+            checkBoxMap[key] = checkbox;
 
-            TextBlock textBlock = new()
+            var text = new TextBlock { Text = label, TextAlignment = TextAlignment.Center };
+            checkBoxTextMap[key] = text;
+
+            var stack = new StackPanel
             {
-                Text = label,
+                Orientation = Orientation.Vertical,
+                Margin = "0 10 0 10",
             };
 
-            input.Click += CheckBoxClickEvent;
-            checkBoxMap.Add(inputKey, input);
+            stack.AddChild(text);
+            stack.AddChild(checkbox);
 
-            stackPanel.AddChild(input);
-            stackPanel.AddChild(textBlock);
-
-            checkBoxBorder.Child = stackPanel;
-            return checkBoxBorder;
+            return stack;
         }
 
-        private void RecalculateOutsideWithMsg(bool reloadHistory = false) {
-            string currentMode = ModeBtn.Text;
-            ModeBtn.Text = $"{currentMode}\nCalculating...";
-            
-            Outside.Chart.RemoveAllObjects();
-            
-            Outside.BeginInvokeOnMainThread(() => {
-                if (reloadHistory) {
-                    Outside.SetInterval(Outside.GetInterval());
-                }
-                Outside.ClearAndRecalculate();
-                ModeBtn.Text = currentMode;
-            });
-        }
+        private void ResetParamsEvent() => ChangeParams(FirstParams);
 
-        private void NextModeEvent(ButtonClickEventArgs obj)
+        private void ChangeParams(IndicatorParams p)
         {
-            if (Outside.VolumeModeInput == VolumeModeData.Normal)
+            foreach (var param in _paramDefinitions)
             {
-                Outside.VolumeModeInput = VolumeModeData.Gradient;
-                ModeBtn.Text = "Gradient";
-            } else if (Outside.VolumeModeInput == VolumeModeData.Gradient)
-            {
-                Outside.VolumeModeInput = VolumeModeData.Buy_Sell;
-                ModeBtn.Text = "Buy_Sell";
-            } else if (Outside.VolumeModeInput == VolumeModeData.Buy_Sell)
-            {
-                Outside.VolumeModeInput = VolumeModeData.Delta;
-                ModeBtn.Text = "Delta";
-            } else if (Outside.VolumeModeInput == VolumeModeData.Delta)
-            {
-                Outside.VolumeModeInput = VolumeModeData.Normal_Delta;
-                ModeBtn.Text = "Normal+Delta";
+                switch (param.InputType)
+                {
+                    case ParamInputType.Text:
+                        textInputMap[param.Key].Text = param.GetDefault(p).ToString();
+                        break;
+                    case ParamInputType.Checkbox:
+                        checkBoxMap[param.Key].IsChecked = (bool)param.GetDefault(p);
+                        break;
+                    case ParamInputType.ComboBox:
+                        comboBoxMap[param.Key].SelectedItem = param.GetDefault(p).ToString();
+                        break;
+                }
+            }
+        }
+
+        private void UpdateCheckbox(string key, Action<bool> applyAction)
+        {
+            bool value = checkBoxMap[key].IsChecked ?? false;
+            applyAction(value);
+            CheckboxHandler(key);
+        }
+        private void CheckboxHandler(string key)
+        {
+            switch (key) {
+                case "IntradayVPKey":
+                    RecalculateOutsideWithMsg(false);
+                    return;
+                case "FillIntraVPKey":
+                    RecalculateOutsideWithMsg(false);
+                    return;
+                case "GradientKey":
+                    RecalculateOutsideWithMsg(false);
+                    return;
+                case "ExtendVAKey":
+                    RecalculateOutsideWithMsg(false);
+                    return;
+                case "ExtendPOCKey":
+                    RecalculateOutsideWithMsg(false);
+                    return;
             }
 
             RecalculateOutsideWithMsg();
         }
-        private void PrevModeEvent(ButtonClickEventArgs obj)
-        {
-            if (Outside.VolumeModeInput == VolumeModeData.Normal_Delta)
-            {
-                Outside.VolumeModeInput = VolumeModeData.Delta;
-                ModeBtn.Text = "Delta";
-            } else if (Outside.VolumeModeInput == VolumeModeData.Delta)
-            {
-                Outside.VolumeModeInput = VolumeModeData.Buy_Sell;
-                ModeBtn.Text = "Buy_Sell";
-            } else if (Outside.VolumeModeInput == VolumeModeData.Buy_Sell)
-            {
-                Outside.VolumeModeInput = VolumeModeData.Gradient;
-                ModeBtn.Text = "Gradient";
-            } else if (Outside.VolumeModeInput == VolumeModeData.Gradient)
-            {
-                Outside.VolumeModeInput = VolumeModeData.Normal;
-                ModeBtn.Text = "Normal";
-            }
 
-            RecalculateOutsideWithMsg();
-        }
-        private void ChangeParams(IndicatorParams indicatorParams)
+        // ==== General ====
+        private void UpdateLookback()
         {
-            foreach (var key in checkBoxMap.Keys)
+            int value = int.TryParse(textInputMap["LookbackKey"].Text, out var n) ? n : -2;
+            if (value >= -1 && value != Outside.GetLookback())
             {
-                switch (key)
-                {
-                    case "KeepPOCKey": checkBoxMap[key].IsChecked = indicatorParams.KeepPOC; break;
-                    case "ExtendedPOCKey": checkBoxMap[key].IsChecked = indicatorParams.ExtendedPOC; break;
-                    case "ShowVAKey": checkBoxMap[key].IsChecked = indicatorParams.ShowVA; break;
-                }
+                Outside.SetLookback(value);
+                ApplyBtn.IsVisible = true;
             }
-            foreach (var key in textInputMap.Keys)
+        }
+        private void UpdateRowHeight()
+        {
+            if (double.TryParse(textInputMap["RowHeightKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.1)
             {
-                switch (key)
+                double height = Outside.Symbol.PipSize * value;
+                if (height != Outside.GetRowHeight())
                 {
-                    case "LookBackKey": textInputMap[key].Text = indicatorParams.LookBack.ToString(); break;
-                    case "RowHeightKey": textInputMap[key].Text = indicatorParams.RowHeight.ToString("0.############################", CultureInfo.InvariantCulture); break;
-                }
-            }
-            foreach (var key in comboBoxMap.Keys)
-            {
-                switch (key)
-                {
-                    case "IntervalKey": comboBoxMap[key].SelectedItem = indicatorParams.Interval.ToString(); break;
+                    Outside.SetRowHeight(height);
+                    ApplyBtn.IsVisible = true;
                 }
             }
         }
-        private void ResetParamsEvent(ButtonClickEventArgs obj)
+        private void UpdateVPInterval()
         {
-            ChangeParams(FirstParams);
+            var selected = comboBoxMap["VPIntervalKey"].SelectedItem;
+            if (Enum.TryParse(selected, out VPInterval_Data intervalType) && intervalType != Outside.VPInterval_Input)
+            {
+                Outside.VPInterval_Input = intervalType;
+                Outside.LoadMoreHistory_IfNeeded();
+                RecalculateOutsideWithMsg();
+            }
         }
-        private void TextChangedEvent(TextChangedEventArgs obj)
-        {
-            int lookBack = GetValueFromInput(LookBack_InputKey, -1);
-            double rowPips = GetDoubleFromInput(RowHeight_InputKey, -1);
-            
-            if (rowPips != -1 && rowPips > 0) {
-                double rowHeight = Outside.Symbol.PipSize * rowPips;
 
-                if (rowHeight != Outside.GetRowHeight()) {
-                    Outside.SetRowHeight(rowHeight);
-                    RecalculateOutsideWithMsg();   
-                }
-            }
-            if (lookBack > 0 && lookBack != Outside.GetLookback()) {
-                Outside.SetLookback(lookBack);
-                // Get more lookback/interval Bars if needed
-                // No delay in Panel
-                RecalculateOutsideWithMsg(true);
-            }
-        }
-        private void ComboBoxSelectedEvent(ComboBoxSelectedItemChangedEventArgs obj)
+        // ==== Volume Profile ====
+        private void UpdateSideVP()
         {
-            foreach (var key in comboBoxMap.Keys)
+            var selected = comboBoxMap["SideVPKey"].SelectedItem;
+            if (Enum.TryParse(selected, out HistSide_Data sideType) && sideType != Outside.HistogramSide_Input)
             {
-                switch (key)
-                {
-                    case "IntervalKey": {
-                        string selected = comboBoxMap[key].SelectedItem;
-                        if (selected != Outside.GetInterval().ShortName) {
-                            // Chart/Panel delay is allowed
-                            Outside.SetInterval(StringToTimeframe(selected));
-                            RecalculateOutsideWithMsg();
-                        }
-                        break;
-                    }
-                }
+                Outside.HistogramSide_Input = sideType;
+                RecalculateOutsideWithMsg(false);
             }
         }
-        private void CheckBoxClickEvent(CheckBoxEventArgs obj)
+        private void UpdateWidthVP()
         {
-            foreach (var key in checkBoxMap.Keys)
+            var selected = comboBoxMap["WidthVPKey"].SelectedItem;
+            if (Enum.TryParse(selected, out HistWidth_Data widthType) && widthType != Outside.HistogramWidth_Input)
             {
-                switch (key)
-                {
-                    case "KeepPOCKey": {
-                        bool selected = (bool)checkBoxMap[key].IsChecked;
-                        if (selected != Outside.KeepPOC) {
-                            Outside.KeepPOC = selected;
-                            RecalculateOutsideWithMsg();
-                        }
-                        break;
-                    }
-                    case "ExtendedPOCKey": {
-                        bool selected = (bool)checkBoxMap[key].IsChecked;
-                        if (selected != Outside.ExtendPOC) {
-                            Outside.ExtendPOC = selected;
-                            RecalculateOutsideWithMsg();
-                        }
-                        break;
-                    }
-                    case "ShowVAKey": {
-                        bool selected = (bool)checkBoxMap[key].IsChecked;
-                        if (selected != Outside.ShowVA) {
-                            Outside.ShowVA = selected;
-                            RecalculateOutsideWithMsg();
-                        }
-                        break;
-                    }
-                }
+                Outside.HistogramWidth_Input = widthType;
+                RecalculateOutsideWithMsg(false);
             }
         }
-        private int GetValueFromInput(string inputKey, int defaultValue)
+        private void UpdateIntradayOffset()
         {
-            return int.TryParse(textInputMap[inputKey].Text, out int value) ? value : defaultValue;
+            int value = int.TryParse(textInputMap["IntraOffsetKey"].Text, out var n) ? n : -1;
+            if (value > 0 && value != Outside.OffsetBarsInput)
+            {
+                Outside.OffsetBarsInput = value;
+                RecalculateOutsideWithMsg(false);
+            }
         }
-        private double GetDoubleFromInput(string inputKey, int defaultValue)
+        private void UpdateIntradayTimeframe()
         {
-            return double.TryParse(textInputMap[inputKey].Text, NumberStyles.Number, CultureInfo.InvariantCulture, out double value) ? value : defaultValue;
+            var selected = comboBoxMap["IntraTFKey"].SelectedItem;
+            TimeFrame value = StringToTimeframe(selected);
+            if (value != TimeFrame.Minute && value != Outside.OffsetTimeframeInput)
+            {
+                Outside.OffsetTimeframeInput = value;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
+        private void UpdateMiniVPTimeframe()
+        {
+            var selected = comboBoxMap["MiniTFKey"].SelectedItem;
+            TimeFrame value = StringToTimeframe(selected);
+            if (value != TimeFrame.Minute && value != Outside.MiniVPs_Timeframe)
+            {
+                Outside.MiniVPs_Timeframe = value;
+                Outside.SetMiniVPsBars();
+                RecalculateOutsideWithMsg();
+            }
         }
         private static TimeFrame StringToTimeframe(string inputTF)
         {
@@ -2215,6 +4088,19 @@ namespace cAlgo
             switch (inputTF)
             {
                 // Candles
+                case "m1": return TimeFrame.Minute;
+                case "m2": return TimeFrame.Minute2;
+                case "m3": return TimeFrame.Minute3;
+                case "m4": return TimeFrame.Minute4;
+                case "m5": return TimeFrame.Minute5;
+                case "m6": return TimeFrame.Minute6;
+                case "m7": return TimeFrame.Minute7;
+                case "m8": return TimeFrame.Minute8;
+                case "m9": return TimeFrame.Minute9;
+                case "m10": return TimeFrame.Minute10;
+                case "m15": return TimeFrame.Minute15;
+                case "m30": return TimeFrame.Minute30;
+                case "m45": return TimeFrame.Minute45;
                 case "h1": return TimeFrame.Hour;
                 case "h2": return TimeFrame.Hour2;
                 case "h3": return TimeFrame.Hour3;
@@ -2232,19 +4118,482 @@ namespace cAlgo
             }
             return ifWrong;
         }
-    }
 
-    // ====================== THEME ============================
+        // ==== POC + VA ====
+        private void UpdatePercentVA()
+        {
+            int value = int.TryParse(textInputMap["VAValueKey"].Text, out var n) ? n : -1;
+            if (value > 0 && value <= 100 && value != Outside.PercentVA)
+            {
+                Outside.PercentVA = value;
+                ApplyBtn.IsVisible = true;
+            }
+        }
+        private void UpdateExtendCount()
+        {
+            int value = int.TryParse(textInputMap["ExtendCountKey"].Text, out var n) ? n : -1;
+            if (value > 0 && value != Outside.ExtendCount)
+            {
+                Outside.ExtendCount = value;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
+
+        // ==== Results ====
+        private void UpdateOperator()
+        {
+            var selected = comboBoxMap["OperatorKey"].SelectedItem;
+            if (Enum.TryParse(selected, out OperatorBuySell_Data op) && op != Outside.OperatorBuySell_Input)
+            {
+                Outside.OperatorBuySell_Input = op;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
+
+        // ==== Misc ====
+        private void UpdateVP()
+        {
+            var selected = comboBoxMap["UpdateVPKey"].SelectedItem;
+            if (Enum.TryParse(selected, out UpdateProfile_Data updateType) && updateType != Outside.UpdateProfile_Input)
+            {
+                Outside.UpdateProfile_Input = updateType;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
+        private void UpdateSourceVP()
+        {
+            var selected = comboBoxMap["SourceVPKey"].SelectedItem;
+            TimeFrame value = StringToTimeframe(selected);
+            if (value != Outside.VOL_Timeframe)
+            {
+                Outside.VOL_Timeframe = value;
+                Outside.SetVPBars();
+                RecalculateOutsideWithMsg();
+            }
+        }
+        private void UpdateDistribuition()
+        {
+            var selected = comboBoxMap["DistributionKey"].SelectedItem;
+            if (Enum.TryParse(selected, out Distribution_Data distributionType) && distributionType != Outside.Distribution_Input)
+            {
+                Outside.Distribution_Input = distributionType;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
+
+        private void RecalculateOutsideWithMsg(bool reset = true)
+        {
+            // Avoid multiples calls when loading parameters from LocalStorage
+            if (isLoadingParams)
+                return;
+
+            string current = ModeBtn.Text;
+            ModeBtn.Text = $"{current}\nCalculating...";
+            Outside.BeginInvokeOnMainThread(() => {
+                try { _progressBar.IsIndeterminate = true; } catch { }
+            });
+
+            if (reset) {
+                Outside.BeginInvokeOnMainThread(() =>
+                {
+                    Outside.Chart.RemoveAllObjects();
+                    Outside.Chart.ResetBarColors();
+                });
+            }
+
+            Outside.BeginInvokeOnMainThread(() =>
+            {
+                Outside.ClearAndRecalculate();
+                ModeBtn.Text = current;
+            });
+
+            // Slow down a bit, avoid crash.
+            Thread.Sleep(200);
+
+            Outside.BeginInvokeOnMainThread(() => {
+                try { _progressBar.IsIndeterminate = false; } catch { }
+            });
+
+            // Update UI every OnChange()
+            RefreshVisibility();
+            // Highlight any modified/unsaved parameter
+            // The reset of _originalValues only happens in Load/Save methods
+            RefreshHighlighting();
+        }
+
+        private void NextModeEvent(ButtonClickEventArgs e)
+        {
+            PopupNotification  cleaningProgress = Outside.Notifications.ShowPopup(
+                Outside.NOTIFY_CAPTION,
+                "Cleaning up the chart...",
+                PopupNotificationState.InProgress
+            );
+
+            Outside.VolumeMode_Input = Outside.VolumeMode_Input switch
+            {
+                VolumeMode_Data.Normal => VolumeMode_Data.Buy_Sell,
+                VolumeMode_Data.Buy_Sell => VolumeMode_Data.Delta,
+                _ => VolumeMode_Data.Normal
+            };
+            ModeBtn.Text = Outside.VolumeMode_Input.ToString();
+            RefreshVisibility();
+            RecalculateOutsideWithMsg();
+
+            cleaningProgress.Complete(PopupNotificationState.Success);
+        }
+
+        private void PrevModeEvent(ButtonClickEventArgs e)
+        {
+            PopupNotification  cleaningProgress = Outside.Notifications.ShowPopup(
+                Outside.NOTIFY_CAPTION,
+                "Cleaning up the chart...",
+                PopupNotificationState.InProgress
+            );
+
+            Outside.VolumeMode_Input = Outside.VolumeMode_Input switch
+            {
+                VolumeMode_Data.Delta => VolumeMode_Data.Buy_Sell,
+                VolumeMode_Data.Buy_Sell => VolumeMode_Data.Normal,
+                _ => VolumeMode_Data.Delta
+            };
+            ModeBtn.Text = Outside.VolumeMode_Input.ToString();
+            RefreshVisibility();
+            RecalculateOutsideWithMsg();
+
+            cleaningProgress.Complete(PopupNotificationState.Success);
+        }
+        private void RefreshVisibility()
+        {
+            foreach (var param in _paramDefinitions)
+            {
+                bool isVisible = param.IsVisible();
+                switch (param.InputType)
+                {
+                    case ParamInputType.Text:
+                        textInputMap[param.Key].IsVisible = isVisible;
+                        textInputLabelMap[param.Key].IsVisible = isVisible;
+                        break;
+                    case ParamInputType.ComboBox:
+                        comboBoxMap[param.Key].IsVisible = isVisible;
+                        comboBoxTextMap[param.Key].IsVisible = isVisible;
+                        break;
+                    case ParamInputType.Checkbox:
+                        checkBoxMap[param.Key].IsVisible = isVisible;
+                        checkBoxTextMap[param.Key].IsVisible = isVisible;
+                        break;
+                }
+            }
+
+            // Hide regions if all params are invisible
+            foreach (var section in _regionSections.Values)
+            {
+                bool anyVisible = section.Params.Any(p =>
+                {
+                    return p.InputType switch
+                    {
+                        ParamInputType.Text => textInputMap[p.Key].IsVisible || textInputLabelMap[p.Key].IsVisible,
+                        ParamInputType.ComboBox => comboBoxMap[p.Key].IsVisible || comboBoxTextMap[p.Key].IsVisible,
+                        ParamInputType.Checkbox => checkBoxMap[p.Key].IsVisible || checkBoxTextMap[p.Key].IsVisible,
+                        _ => false
+                    };
+                });
+
+                section.SetVisible(anyVisible);
+            }
+
+            // Manually hidden Apply Button
+            ApplyBtn.IsVisible = false;
+        }
+
+        private void RefreshHighlighting()
+        {
+            bool anyChange = false;
+            foreach (var param in _paramDefinitions)
+            {
+                object currentValue = param.InputType switch
+                {
+                    ParamInputType.Text => (object)textInputMap[param.Key].Text,
+                    ParamInputType.Checkbox => (object)(checkBoxMap[param.Key].IsChecked ?? false),
+                    ParamInputType.ComboBox => (object)comboBoxMap[param.Key].SelectedItem,
+                    _ => null
+                };
+
+                // Save original value if not already saved
+                if (!_originalValues.ContainsKey(param.Key))
+                    _originalValues[param.Key] = currentValue;
+
+                bool isChanged = !Equals(currentValue, _originalValues[param.Key]);
+                if (!anyChange && isChanged)
+                    anyChange = isChanged;
+
+                Color darkColorButton = Styles.ColorDarkTheme_PanelBorder;
+                Color darkColor = Styles.ColorDarkTheme_Input;
+                Color darkHover = Styles.ColorDarkTheme_ButtonHover;
+
+                Color whiteColor = Styles.ColorLightTheme_Input;
+                Color whiteHover = Styles.ColorLightTheme_InputHover;
+
+                Color backgroundThemeColor = ApplicationTheme == ColorTheme.Dark ? darkColor : whiteColor;
+                Color highlightThemeColor = ApplicationTheme == ColorTheme.Dark ? darkHover : whiteHover;
+
+                SaveBtn.BackgroundColor = anyChange ? Color.FromHex("#D4D6262A") : (backgroundThemeColor == darkColor ? darkColorButton : whiteColor);
+                FontStyle fontStyle = isChanged ? FontStyle.Oblique : FontStyle.Normal;
+
+                switch (param.InputType)
+                {
+                    case ParamInputType.Text:
+                        textInputMap[param.Key].BackgroundColor = isChanged ? highlightThemeColor : backgroundThemeColor;
+                        break;
+                    case ParamInputType.Checkbox:
+                        checkBoxTextMap[param.Key].FontStyle = fontStyle;
+                        break;
+                    case ParamInputType.ComboBox:
+                        comboBoxTextMap[param.Key].FontStyle = fontStyle;
+                        comboBoxMap[param.Key].FontStyle = fontStyle;
+                        break;
+                }
+            }
+        }
+
+        public class ParamStorage
+        {
+            public Dictionary<string, object> Values { get; set; } = new();
+        }
+
+
+        private async void AnimateProgressBar()
+        {
+            for (int i = 0; i <= 150; i += 25)
+            {
+                Outside.BeginInvokeOnMainThread(() => _progressBar.Value = i);
+                await Task.Delay(100);
+            }
+
+            await Task.Delay(700);
+
+            Outside.BeginInvokeOnMainThread(() => _progressBar.Value = 0);
+        }
+
+        private string GetStorageKey()
+        {
+            string SymbolPrefix = Outside.SymbolName;
+            string BrokerPrefix = Outside.Account.BrokerName;
+            string TimeframePrefix = Outside.TimeFrame.ShortName;
+
+            BrokerPrefix = BrokerPrefix.ToLowerInvariant();
+            SymbolPrefix = SymbolPrefix.ToUpperInvariant();
+
+            bool selectbyBroker = Outside.StorageKeyConfig_Input == StorageKeyConfig_Data.Broker_Symbol_Timeframe;
+            return selectbyBroker
+                ? $"VP {BrokerPrefix} {SymbolPrefix} {TimeframePrefix}"
+                : $"VP {SymbolPrefix} {TimeframePrefix}";
+        }
+
+        private class ParamStorageModel
+        {
+            public Dictionary<string, object> Params { get; set; } = new();
+        }
+
+        private void SaveParams()
+        {
+            var storageModel = new ParamStorageModel();
+
+            foreach (var param in _paramDefinitions)
+            {
+                object value = param.InputType switch
+                {
+                    ParamInputType.Text => textInputMap[param.Key].Text,
+                    ParamInputType.Checkbox => checkBoxMap[param.Key].IsChecked ?? false,
+                    ParamInputType.ComboBox => comboBoxMap[param.Key].SelectedItem,
+                    _ => null
+                };
+
+                if (value != null)
+                    storageModel.Params[param.Key] = value;
+
+                // Reset highlighting tracking
+                _originalValues[param.Key] = value;
+            }
+
+            // Save current volume mode to start from there later.
+            storageModel.Params["PanelMode"] = Outside.VolumeMode_Input;
+
+            Outside.LocalStorage.SetObject(GetStorageKey(), storageModel, LocalStorageScope.Device);
+            Outside.LocalStorage.Flush(LocalStorageScope.Device);
+
+            // Use loaded params as _originalValues
+            RefreshHighlighting();
+            // Some fancy fake progress
+            AnimateProgressBar();
+        }
+
+        private void LoadParams()
+        {
+            isLoadingParams = true;
+
+            Outside.LocalStorage.Reload(LocalStorageScope.Device);
+            var storageModel = Outside.LocalStorage.GetObject<ParamStorageModel>(GetStorageKey(), LocalStorageScope.Device);
+
+            if (storageModel == null) {
+                // Add keys and use default parameters as _originalValues;
+                RefreshHighlighting();
+                isLoadingParams = false;
+                return;
+            }
+
+            foreach (var param in _paramDefinitions)
+            {
+                if (!storageModel.Params.TryGetValue(param.Key, out var storedValue))
+                    continue;
+
+                switch (param.InputType)
+                {
+                    case ParamInputType.Text:
+                        textInputMap[param.Key].Text = storedValue.ToString();
+                        if (param.Key == "RowHeightKey") {
+                            if (Outside.ReplaceByATR && Outside.RowConfig_Input == RowConfig_Data.ATR) {
+                                textInputMap[param.Key].Text = Outside.heightATR.ToString();
+                            }
+                        }
+                        param.OnChanged?.Invoke(param.Key);
+                        break;
+                    case ParamInputType.Checkbox:
+                        if (storedValue is bool b)
+                            checkBoxMap[param.Key].IsChecked = b;
+                        param.OnChanged?.Invoke(param.Key);
+                        break;
+                    case ParamInputType.ComboBox:
+                        if (comboBoxMap.ContainsKey(param.Key))
+                            comboBoxMap[param.Key].SelectedItem = storedValue.ToString();
+                        param.OnChanged?.Invoke(param.Key);
+                        break;
+                }
+
+                // Reset highlighting tracking
+                _originalValues[param.Key] = storedValue;
+            }
+
+            // Load the previously saved volume mode.
+            string volModeText = storageModel.Params["PanelMode"].ToString();
+            _ = Enum.TryParse(volModeText, out VolumeMode_Data volMode);
+            Outside.VolumeMode_Input = volMode;
+            ModeBtn.Text = volModeText;
+
+            // Use loaded params as _originalValues
+            RefreshHighlighting();
+
+            isLoadingParams = false;
+        }
+
+        public class RegionSection
+        {
+            public string Name { get; }
+            public StackPanel Container { get; }
+            public ControlBase Header { get; }
+            public List<ParamDefinition> Params { get; }
+
+            private bool _isExpanded = false;
+
+            public RegionSection(string name, IEnumerable<ParamDefinition> parameters)
+            {
+                Name = name;
+                Params = parameters.ToList();
+
+                Container = new StackPanel { Margin = "0 0 0 10" };
+
+                // Only expand General region by default
+                _isExpanded = name == "General";
+
+                Header = CreateToggleHeader(name);
+                Container.AddChild(Header);
+            }
+
+            private ControlBase CreateToggleHeader(string text)
+            {
+                var btn = new Button
+                {
+                    Text = (_isExpanded ? "▼ " : "► ") + text, // ▼ expanded / ► collapsed
+                    Padding = 0,
+                    // Width = 200,
+                    Width = 230, // ParamsPanel Width
+                    Height = 25,
+                    Margin = "0 10 0 0",
+                    Style = Styles.CreateButtonStyle(),
+                    HorizontalAlignment = HorizontalAlignment.Left
+                };
+
+                btn.Click += _ => ToggleExpandCollapse(btn);
+                return btn;
+            }
+
+            private void ToggleExpandCollapse(Button btn)
+            {
+                _isExpanded = !_isExpanded;
+                btn.Text = (_isExpanded ? "▼ " : "► ") + Name;
+
+                foreach (var child in Container.Children.Skip(1)) // skip header
+                    child.IsVisible = _isExpanded;
+            }
+
+            public void AddParamControl(ControlBase control)
+            {
+                control.IsVisible = _isExpanded;
+                Container.AddChild(control);
+            }
+
+            public void SetVisible(bool visible)
+            {
+                Container.IsVisible = visible;
+            }
+        }
+    }
+    // ========= THEME =========
     public static class Styles
     {
+        public static readonly Color ColorDarkTheme_Panel = GetColorWithOpacity(Color.FromHex("#292929"), 0.85);
+        public static readonly Color ColorLightTheme_Panel = GetColorWithOpacity(Color.FromHex("#FFFFFF"), 0.85);
+
+        public static readonly Color ColorDarkTheme_PanelBorder = Color.FromHex("#3C3C3C");
+        public static readonly Color ColorLightTheme_PanelBorder = Color.FromHex("#C3C3C3");
+
+        public static readonly Color ColorDarkTheme_CommonBorder = GetColorWithOpacity(Color.FromHex("#FFFFFF"), 0.12);
+        public static readonly Color ColorLightTheme_CommonBorder = GetColorWithOpacity(Color.FromHex("#000000"), 0.12);
+
+        public static readonly Color ColorDarkTheme_Header = GetColorWithOpacity(Color.FromHex("#FFFFFF"), 0.70);
+        public static readonly Color ColorLightTheme_Header = GetColorWithOpacity(Color.FromHex("#000000"), 0.65);
+
+        public static readonly Color ColorDarkTheme_Input = Color.FromHex("#1A1A1A");
+        public static readonly Color ColorDarkTheme_InputHover = Color.FromHex("#111111");
+        public static readonly Color ColorLightTheme_Input = Color.FromHex("#E7EBED");
+        public static readonly Color ColorLightTheme_InputHover = Color.FromHex("#D6DADC");
+
+        public static readonly Color ColorDarkTheme_ButtonHover = Color.FromHex("#444444");
+
         public static Style CreatePanelBackgroundStyle()
         {
             Style style = new();
             style.Set(ControlProperty.CornerRadius, 3);
-            style.Set(ControlProperty.BackgroundColor, GetColorWithOpacity(Color.FromHex("#292929"), 0.85m), ControlState.DarkTheme);
-            style.Set(ControlProperty.BackgroundColor, GetColorWithOpacity(Color.FromHex("#FFFFFF"), 0.85m), ControlState.LightTheme);
-            style.Set(ControlProperty.BorderColor, Color.FromHex("#3C3C3C"), ControlState.DarkTheme);
-            style.Set(ControlProperty.BorderColor, Color.FromHex("#C3C3C3"), ControlState.LightTheme);
+            style.Set(ControlProperty.BackgroundColor, ColorDarkTheme_Panel, ControlState.DarkTheme);
+            style.Set(ControlProperty.BackgroundColor, ColorLightTheme_Panel, ControlState.LightTheme);
+            style.Set(ControlProperty.BorderColor, ColorDarkTheme_PanelBorder, ControlState.DarkTheme);
+            style.Set(ControlProperty.BorderColor, ColorLightTheme_PanelBorder, ControlState.LightTheme);
+            style.Set(ControlProperty.BorderThickness, new Thickness(1));
+
+            return style;
+        }
+        public static Style CreateButtonStyle()
+        {
+            Style style = new(DefaultStyles.TextBoxStyle);
+            style.Set(ControlProperty.CornerRadius, 3);
+
+            style.Set(ControlProperty.BackgroundColor, ColorDarkTheme_PanelBorder, ControlState.DarkTheme);
+            style.Set(ControlProperty.BackgroundColor, ColorDarkTheme_ButtonHover, ControlState.DarkTheme | ControlState.Hover);
+
+            style.Set(ControlProperty.BackgroundColor, ColorLightTheme_Input, ControlState.LightTheme);
+            style.Set(ControlProperty.BackgroundColor, ColorLightTheme_InputHover, ControlState.LightTheme | ControlState.Hover);
+
+            style.Set(ControlProperty.BorderColor, ColorDarkTheme_PanelBorder, ControlState.DarkTheme);
+            style.Set(ControlProperty.BorderColor, ColorLightTheme_PanelBorder, ControlState.LightTheme);
             style.Set(ControlProperty.BorderThickness, new Thickness(1));
 
             return style;
@@ -2252,31 +4601,62 @@ namespace cAlgo
         public static Style CreateCommonBorderStyle()
         {
             Style style = new();
-            style.Set(ControlProperty.BorderColor, GetColorWithOpacity(Color.FromHex("#FFFFFF"), 0.12m), ControlState.DarkTheme);
-            style.Set(ControlProperty.BorderColor, GetColorWithOpacity(Color.FromHex("#000000"), 0.12m), ControlState.LightTheme);
+            style.Set(ControlProperty.BorderColor, ColorDarkTheme_CommonBorder, ControlState.DarkTheme);
+            style.Set(ControlProperty.BorderColor, ColorLightTheme_CommonBorder, ControlState.LightTheme);
             return style;
         }
         public static Style CreateHeaderStyle()
         {
             Style style = new();
-            style.Set(ControlProperty.ForegroundColor, GetColorWithOpacity("#FFFFFF", 0.70m), ControlState.DarkTheme);
-            style.Set(ControlProperty.ForegroundColor, GetColorWithOpacity("#000000", 0.65m), ControlState.LightTheme);
+            style.Set(ControlProperty.ForegroundColor, ColorDarkTheme_Header, ControlState.DarkTheme);
+            style.Set(ControlProperty.ForegroundColor, ColorLightTheme_Header, ControlState.LightTheme);
             return style;
         }
         public static Style CreateInputStyle()
         {
             Style style = new(DefaultStyles.TextBoxStyle);
-            style.Set(ControlProperty.BackgroundColor, Color.FromHex("#1A1A1A"), ControlState.DarkTheme);
-            style.Set(ControlProperty.BackgroundColor, Color.FromHex("#111111"), ControlState.DarkTheme | ControlState.Hover);
-            style.Set(ControlProperty.BackgroundColor, Color.FromHex("#E7EBED"), ControlState.LightTheme);
-            style.Set(ControlProperty.BackgroundColor, Color.FromHex("#D6DADC"), ControlState.LightTheme | ControlState.Hover);
             style.Set(ControlProperty.CornerRadius, 3);
+            style.Set(ControlProperty.BackgroundColor, ColorDarkTheme_Input, ControlState.DarkTheme);
+            style.Set(ControlProperty.BackgroundColor, ColorDarkTheme_InputHover, ControlState.DarkTheme | ControlState.Hover);
+            style.Set(ControlProperty.BackgroundColor, ColorLightTheme_Input, ControlState.LightTheme);
+            style.Set(ControlProperty.BackgroundColor, ColorLightTheme_InputHover, ControlState.LightTheme | ControlState.Hover);
             return style;
         }
-        private static Color GetColorWithOpacity(Color baseColor, decimal opacity)
+        public static Style CreateComboBoxStyle()
         {
-            int alpha = (int)Math.Round(byte.MaxValue * opacity, MidpointRounding.AwayFromZero);
+            Style style = new(DefaultStyles.TextBoxStyle);
+            style.Set(ControlProperty.CornerRadius, 3);
+            style.Set(ControlProperty.BackgroundColor, ColorDarkTheme_Input, ControlState.DarkTheme);
+            style.Set(ControlProperty.BackgroundColor, ColorDarkTheme_InputHover, ControlState.DarkTheme | ControlState.Hover);
+            style.Set(ControlProperty.BackgroundColor, ColorLightTheme_Input, ControlState.LightTheme);
+            style.Set(ControlProperty.BackgroundColor, ColorLightTheme_InputHover, ControlState.LightTheme | ControlState.Hover);
+            return style;
+        }
+        public static Style CreateScrollViewerTransparentStyle()
+        {
+            var style = new Style();
+
+            style.Set(ControlProperty.BackgroundColor, Color.Transparent, ControlState.DarkTheme);
+            style.Set(ControlProperty.BackgroundColor, Color.Transparent, ControlState.LightTheme);
+
+            style.Set(ControlProperty.BorderColor, Color.Transparent, ControlState.DarkTheme);
+            style.Set(ControlProperty.BorderColor, Color.Transparent, ControlState.LightTheme);
+
+            style.Set(ControlProperty.BorderThickness, new Thickness(0));
+            style.Set(ControlProperty.CornerRadius, 0);
+            style.Set(ControlProperty.Padding, new Thickness(0));
+            style.Set(ControlProperty.Margin, new Thickness(0));
+
+            return style;
+        }
+        private static Color GetColorWithOpacity(Color baseColor, double opacity)
+        {
+            if (opacity < 0.0 || opacity > 1.0)
+                throw new ArgumentOutOfRangeException(nameof(opacity), "Opacity must be between 0.0 and 1.0");
+
+            byte alpha = (byte)Math.Round(255 * opacity, MidpointRounding.AwayFromZero);
             return Color.FromArgb(alpha, baseColor);
         }
     }
+
 }
