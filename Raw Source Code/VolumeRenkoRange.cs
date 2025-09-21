@@ -300,7 +300,6 @@ namespace cAlgo
                     FadingUpVolume[index] = double.NaN;
                     Chart.SetBarColor(index, HeatmapLow_Color);
                 }
-
             }
         }
 
@@ -345,19 +344,83 @@ namespace cAlgo
 
         private void Recalculate() {
             int startIndex = Bars.OpenTimes.GetIndexByTime(TicksOHLC.OpenTimes.FirstOrDefault());
-            for (int i = startIndex; i < Bars.Count; i++)
+            for (int index = startIndex; index < Bars.Count; index++)
             {
-                bool currentIsUp = Bars.ClosePrices[i] > Bars.OpenPrices[i];
+                VolumeSeries[index] = VolumeTick(index);
+                MovingAverageLine[index] = maVol.Result[index];
+                StdDevLine[index] = stdDev.Result[index];
 
-                VolumeSeries[i] = VolumeTick(i);
-
-                if (currentIsUp) {
-                    UpVolume[i] = VolumeSeries[i];
-                    DownVolume[i] = 0;
+                bool isUp = Bars.ClosePrices[index] > Bars.OpenPrices[index];
+                double volume = VolumeSeries[index];
+                if (VolumeColoring_Input == VolumeColoring_Data.Up_Down) {
+                    if (isUp) {
+                        UpVolume[index] = volume;
+                        DownVolume[index] = double.NaN;
+                    }
+                    else {
+                        DownVolume[index] = volume;
+                        UpVolume[index] = double.NaN;
+                    }
                 }
-                else {
-                    DownVolume[i] = VolumeSeries[i];
-                    UpVolume[i] = 0;
+                if (VolumeColoring_Input == VolumeColoring_Data.Heatmap) {
+                    double filterValue = VolumeFilter_Input == VolumeFilter_Data.MA ?
+                                         maVol.Result[index] : stdDev.Result[index];
+                    double volumeStrength = volume / filterValue;
+
+                    if (VolumeFilter_Input == VolumeFilter_Data.Both)
+                        volumeStrength = (volume - maVol.Result[index]) / stdDev.Result[index];
+
+                    volumeStrength = Math.Round(Math.Abs(volumeStrength), 2);
+                    if (ShowStrengthValue) {
+                        double y1 = isUp ? Bars[index].High : Bars[index].Low;
+                        ChartText text = Chart.DrawText($"strength_{index}", $"{volumeStrength}", Bars[index].OpenTime, y1, HeatmapLow_Color);
+                        text.HorizontalAlignment = HorizontalAlignment.Center;
+                        text.VerticalAlignment = isUp ? VerticalAlignment.Top : VerticalAlignment.Bottom;
+                    }
+
+                    _ = volumeStrength < HeatmapLowest_Value ? heatmapSeries(HeatmapSwitch.Lowest) :
+                            volumeStrength < HeatmapLow_Value ? heatmapSeries(HeatmapSwitch.Low) :
+                            volumeStrength < HeatmapAverage_Value ? heatmapSeries(HeatmapSwitch.Average) :
+                            volumeStrength < HeatmapHigh_Value ? heatmapSeries(HeatmapSwitch.High) :
+                            volumeStrength >= HeatmapUltra_Value ? heatmapSeries(HeatmapSwitch.Ultra) : heatmapSeries(HeatmapSwitch.Ultra);
+
+                    if (ColoringBars) {
+                        _ = volumeStrength < HeatmapLowest_Value ? heatmapColor(HeatmapLowest_Color) :
+                             volumeStrength < HeatmapLow_Value ? heatmapColor(HeatmapLow_Color) :
+                             volumeStrength < HeatmapAverage_Value ? heatmapColor(HeatmapAverage_Color) :
+                             volumeStrength < HeatmapHigh_Value ? heatmapColor(HeatmapHigh_Color) :
+                             volumeStrength >= HeatmapUltra_Value ? heatmapColor(HeatmapUltra_Color) : heatmapColor(HeatmapUltra_Color);
+                    }
+                    bool heatmapSeries(HeatmapSwitch heatSwitch) {
+                        HeatmapLowestVolume[index] = heatSwitch == HeatmapSwitch.Lowest ? volume : double.NaN;
+                        HeatmapLowVolume[index] = heatSwitch == HeatmapSwitch.Low ? volume : double.NaN;
+                        HeatmapAverageVolume[index] = heatSwitch == HeatmapSwitch.Average ? volume : double.NaN;
+                        HeatmapHighVolume[index] = heatSwitch == HeatmapSwitch.High ? volume : double.NaN;
+                        HeatmapUltraVolume[index] = heatSwitch == HeatmapSwitch.Ultra ? volume : double.NaN;
+                        return true;
+                    }
+                    bool heatmapColor(Color color) {
+                        Chart.SetBarColor(index, color);
+                        return true;
+                    }
+
+                }
+                if (VolumeColoring_Input == VolumeColoring_Data.Fading) {
+                    if (volume > VolumeSeries[index - 1]) {
+                        FadingUpVolume[index] = volume;
+                        FadingDownVolume[index] = double.NaN;
+                        Chart.SetBarColor(index, FadingUp_Color);
+                    }
+                    if (volume < VolumeSeries[index - 1]) {
+                        FadingDownVolume[index] = volume;
+                        FadingUpVolume[index] = double.NaN;
+                        Chart.SetBarColor(index, FadingDown_Color);
+                    }
+                    if (volume == VolumeSeries[index - 1]) {
+                        FadingDownVolume[index] = double.NaN;
+                        FadingUpVolume[index] = double.NaN;
+                        Chart.SetBarColor(index, HeatmapLow_Color);
+                    }
                 }
             }
         }
