@@ -59,24 +59,14 @@ Fix => Concurrent Live VP:
 
 ===========================
 
-Additional Features compared to Python version (first release)
-
-- Bars Profile (ODF_Ticks) =>
-    - [Delta / Cumulative / Subtract] in Bubbles Chart
-        - HeatMap Coloring
-        - Momentum Coloring [fading, positive/negative]
-        - Ultra Levels [positive/negative]
-    - Tick Spike Filter
-        - Spike Levels
-        - Spike Chart
-        - Both above with heatmap, positive/negative coloring
-    - Large Filter to Subtract
-
-- Volume Profile Ticks =>
-    - Monthly/Weekly SEGMENTS as base to Weekly or Daily Profiles as well as Order Flow of Bars.
-    - Mini-VPs that uses the current shared Segments.
-    - (ODF_Agg VP only) Subtract Profile (plain delta)
-        - Only useful when used as counterpart of Buy_Sell
+"Final" revision (2025)
+- (VP) Fixed Range Profiles
+- (VP) Code optimization/readability, mostly switch expressions
+- TODO: Params Panel on MacOs
+    - Supposedly cut short/half the size (Can't reproduce it through VM)
+    - WrapPanel isn't fully supported (The button is hidden)
+    - MissingMethodException on cAlgo.API.Panel.get_Children()
+        - At ToggleExpandCollapse event.
 
 ==========================
 
@@ -213,6 +203,16 @@ namespace cAlgo
         public bool UseCustomMAs { get; set; }
 
 
+        [Parameter("Show Controls at Zoom(%):", DefaultValue = 10, Group = "==== Fixed Range ====")]
+        public int FixedHiddenZoom { get; set; }
+
+        [Parameter("Show Info?", DefaultValue = true, Group = "==== Fixed Range ====")]
+        public bool ShowFixedInfo { get; set; }
+
+        [Parameter("Rectangle Color:", DefaultValue = "#6087CEEB", Group = "==== Fixed Range ====")]
+        public Color FixedColor { get; set; }
+
+
         public enum FormatMaxDigits_Data
         {
             Zero,
@@ -262,7 +262,7 @@ namespace cAlgo
         public bool ShowTickStrengthValue { get; set; }
 
         [Parameter("[Levels] Show Touch Value?", DefaultValue = false, Group = "==== Tick Spike Filter ====")]
-        public bool SpikeLevels_ShowValue { get; set; } = false;
+        public bool SpikeLevels_ShowValue { get; set; }
 
 
         [Parameter("Bubbles Chart Opacity(%):", DefaultValue = 40, MinValue = 1, MaxValue = 100, Group = "==== Spike HeatMap Coloring ====")]
@@ -298,7 +298,7 @@ namespace cAlgo
         public bool ShowStrengthValue { get; set; }
 
         [Parameter("[Levels] Show Touch Value?", DefaultValue = false, Group = "==== Bubbles Chart ====")]
-        public bool UltraBubbles_ShowValue { get; set; } = false;
+        public bool UltraBubbles_ShowValue { get; set; }
 
 
         [Parameter("Opacity(%):", DefaultValue = 70, MinValue = 1, Step = 1, MaxValue = 100, Group = "==== Bubbles HeatMap Coloring ====")]
@@ -372,36 +372,36 @@ namespace cAlgo
             Buy_Sell,
             Delta,
         }
-        public VolumeMode_Data VolumeMode_Input { get; set; } = VolumeMode_Data.Delta;
+        public VolumeMode_Data VolumeMode_Input = VolumeMode_Data.Delta;
 
         public enum VolumeView_Data
         {
             Divided,
             Profile,
         }
-        public VolumeView_Data VolumeView_Input { get; set; } = VolumeView_Data.Profile;
+        public VolumeView_Data VolumeView_Input = VolumeView_Data.Profile;
 
-        public bool ColoringOnlyLarguest { get; set; } = true;
+        public bool ColoringOnlyLarguest = true;
 
 
         // ==== Volume Profile ====
-        public bool EnableVP { get; set; } = false;
+        public bool EnableVP = false;
         public enum UpdateProfile_Data
         {
             EveryTick_CPU_Workout,
             ThroughSegments_Balanced,
             Through_2_Segments_Best,
         }
-        public UpdateProfile_Data UpdateProfile_Input { get; set; } = UpdateProfile_Data.Through_2_Segments_Best;
-        public bool FillHist_VP { get; set; } = false;
-        public bool ShowHistoricalNumbers_VP { get; set; } = false;
+        public UpdateProfile_Data UpdateProfile_Input = UpdateProfile_Data.Through_2_Segments_Best;
+        public bool FillHist_VP = false;
+        public bool ShowHistoricalNumbers_VP = false;
 
         public enum HistSide_Data
         {
             Left,
             Right,
         }
-        public HistSide_Data HistogramSide_Input { get; set; } = HistSide_Data.Left;
+        public HistSide_Data HistogramSide_Input = HistSide_Data.Left;
 
         public enum HistWidth_Data
         {
@@ -411,32 +411,33 @@ namespace cAlgo
             _70,
             _100
         }
-        public HistWidth_Data HistogramWidth_Input { get; set; } = HistWidth_Data._70;
+        public HistWidth_Data HistogramWidth_Input = HistWidth_Data._70;
 
-        public bool EnableWeeklyProfile { get; set; } = false;
-        public bool EnableMonthlyProfile { get; set; } = false;
+        public bool EnableFixedRange = false;
+        public bool EnableWeeklyProfile = false;
+        public bool EnableMonthlyProfile = false;
 
 
         // ==== Intraday Profiles ====
-        public bool ShowIntradayProfile { get; set; } = false;
-        public bool ShowIntradayNumbers { get; set; } = false;
-        public int OffsetBarsInput { get; set; } = 1;
-        public TimeFrame OffsetTimeframeInput { get; set; } = TimeFrame.Hour;
+        public bool ShowIntradayProfile = false;
+        public bool ShowIntradayNumbers = false;
+        public int OffsetBarsInput = 1;
+        public TimeFrame OffsetTimeframeInput = TimeFrame.Hour;
         public bool FillIntradaySpace { get; set; }
 
 
         // ==== Mini VPs ====
-        public bool EnableMiniProfiles { get; set; } = false;
-        public TimeFrame MiniVPs_Timeframe { get; set; } = TimeFrame.Hour4;
-        public bool ShowMiniResults { get; set; } = true;
+        public bool EnableMiniProfiles = false;
+        public TimeFrame MiniVPs_Timeframe = TimeFrame.Hour4;
+        public bool ShowMiniResults = true;
 
 
         // ==== Results ====
-        public bool ShowResults { get; set; } = true;
-        public bool EnableLargeFilter { get; set; } = true;
-        public MovingAverageType MAtype_Large { get; set; } = MovingAverageType.Exponential;
-        public int MAperiod_Large { get; set; } = 5;
-        public double LargeFilter_Ratio { get; set; } = 1.5;
+        public bool ShowResults = true;
+        public bool EnableLargeFilter = true;
+        public MovingAverageType MAtype_Large = MovingAverageType.Exponential;
+        public int MAperiod_Large = 5;
+        public double LargeFilter_Ratio = 1.5;
 
         public enum ResultsView_Data
         {
@@ -444,34 +445,34 @@ namespace cAlgo
             Value,
             Both
         }
-        public ResultsView_Data ResultsView_Input { get; set; } = ResultsView_Data.Percentage;
+        public ResultsView_Data ResultsView_Input = ResultsView_Data.Percentage;
 
-        public bool ShowSideTotal { get; set; } = true;
+        public bool ShowSideTotal = true;
 
         public enum OperatorBuySell_Data
         {
             Sum,
             Subtraction,
         }
-        public OperatorBuySell_Data OperatorBuySell_Input { get; set; } = OperatorBuySell_Data.Subtraction;
+        public OperatorBuySell_Data OperatorBuySell_Input = OperatorBuySell_Data.Subtraction;
 
-        public bool ShowMinMaxDelta { get; set; } = false;
-        public bool ShowOnlySubtDelta { get; set; } = true;
+        public bool ShowMinMaxDelta = false;
+        public bool ShowOnlySubtDelta = true;
 
 
         // ==== Spike Filter ====
-        public bool EnableSpikeFilter { get; set; } = true;
-        public bool EnableSpikeNotification { get; set; } = true;
-        public bool EnableSpikeChart { get; set; } = false;
+        public bool EnableSpikeFilter = true;
+        public bool EnableSpikeNotification = true;
+        public bool EnableSpikeChart = false;
 
         public enum SpikeView_Data
         {
             Bubbles,
             Icon,
         }
-        public SpikeView_Data SpikeView_Input { get; set; } = SpikeView_Data.Icon;
+        public SpikeView_Data SpikeView_Input = SpikeView_Data.Icon;
 
-        public ChartIconType IconView_Input { get; set; } = ChartIconType.Square;
+        public ChartIconType IconView_Input = ChartIconType.Square;
 
         public enum NotificationType_Data
         {
@@ -479,9 +480,9 @@ namespace cAlgo
             Sound,
             Both
         }
-        public NotificationType_Data Spike_NotificationType_Input { get; set; } = NotificationType_Data.Both;
+        public NotificationType_Data Spike_NotificationType_Input = NotificationType_Data.Both;
 
-        public SoundType Spike_SoundType { get; set; } = SoundType.Confirmation;
+        public SoundType Spike_SoundType = SoundType.Confirmation;
 
         public enum SpikeChartColoring_Data
         {
@@ -489,37 +490,37 @@ namespace cAlgo
             Positive_Negative,
             PlusMinus_Highlight_Heatmap,
         }
-        public SpikeChartColoring_Data SpikeChartColoring_Input { get; set; } = SpikeChartColoring_Data.Heatmap;
+        public SpikeChartColoring_Data SpikeChartColoring_Input = SpikeChartColoring_Data.Heatmap;
 
         public enum SpikeFilter_Data
         {
             MA,
             Standard_Deviation,
         }
-        public SpikeFilter_Data SpikeFilter_Input { get; set; } = SpikeFilter_Data.MA;
+        public SpikeFilter_Data SpikeFilter_Input = SpikeFilter_Data.MA;
 
-        public MovingAverageType MAtype_Spike { get; set; } = MovingAverageType.Simple;
+        public MovingAverageType MAtype_Spike = MovingAverageType.Simple;
 
-        public int MAperiod_Spike { get; set; } = 20;
+        public int MAperiod_Spike = 20;
 
 
         // ==== Spike Levels ====
-        public bool ShowSpikeLevels { get; set; } = false;
-        public bool SpikeLevels_ResetDaily { get; set; } = true;
-        public int SpikeLevels_MaxCount { get; set; } = 2;
+        public bool ShowSpikeLevels = false;
+        public bool SpikeLevels_ResetDaily = true;
+        public int SpikeLevels_MaxCount = 2;
 
         public enum SpikeLevelsColoring_Data
         {
             Heatmap,
             Positive_Negative
         }
-        public SpikeLevelsColoring_Data SpikeLevelsColoring_Input { get; set; } = SpikeLevelsColoring_Data.Positive_Negative;
+        public SpikeLevelsColoring_Data SpikeLevelsColoring_Input = SpikeLevelsColoring_Data.Positive_Negative;
 
 
         // ==== Bubbles Chart ====
-        public bool EnableBubblesChart { get; set; } = false;
+        public bool EnableBubblesChart = false;
 
-        public double BubblesSizeMultiplier { get; set; } = 2;
+        public double BubblesSizeMultiplier = 2;
 
         public enum BubblesSource_Data
         {
@@ -527,7 +528,7 @@ namespace cAlgo
             Subtract_Delta,
             Cumulative_Delta_Change,
         }
-        public BubblesSource_Data BubblesSource_Input { get; set; } = BubblesSource_Data.Delta;
+        public BubblesSource_Data BubblesSource_Input = BubblesSource_Data.Delta;
 
         public enum BubblesFilter_Data
         {
@@ -535,35 +536,35 @@ namespace cAlgo
             Standard_Deviation,
             Both
         }
-        public BubblesFilter_Data BubblesFilter_Input { get; set; } = BubblesFilter_Data.MA;
+        public BubblesFilter_Data BubblesFilter_Input = BubblesFilter_Data.MA;
         public enum BubblesColoring_Data
         {
             Heatmap,
             Momentum,
         }
-        public BubblesColoring_Data BubblesColoring_Input { get; set; } = BubblesColoring_Data.Heatmap;
+        public BubblesColoring_Data BubblesColoring_Input = BubblesColoring_Data.Heatmap;
 
         public enum BubblesMomentumStrategy_Data
         {
             Fading,
             Positive_Negative,
         }
-        public BubblesMomentumStrategy_Data BubblesMomentumStrategy_Input { get; set; } = BubblesMomentumStrategy_Data.Fading;
+        public BubblesMomentumStrategy_Data BubblesMomentumStrategy_Input = BubblesMomentumStrategy_Data.Fading;
 
-        public MovingAverageType MAtype_Bubbles { get; set; } = MovingAverageType.Exponential;
+        public MovingAverageType MAtype_Bubbles = MovingAverageType.Exponential;
 
-        public int MAperiod_Bubbles { get; set; } = 20;
+        public int MAperiod_Bubbles = 20;
 
 
         // ==== Ultra Bubbles Levels ====
-        public bool ShowUltraBubblesLevels { get; set; } = false;
-        public bool EnableUltraBubblesNotification { get; set; } = true;
+        public bool ShowUltraBubblesLevels = false;
+        public bool EnableUltraBubblesNotification = true;
 
-        public NotificationType_Data UltraBubbles_NotificationType_Input { get; set; } = NotificationType_Data.Both;
-        public SoundType UltraBubbles_SoundType { get; set; } = SoundType.PositiveNotification;
+        public NotificationType_Data UltraBubbles_NotificationType_Input = NotificationType_Data.Both;
+        public SoundType UltraBubbles_SoundType = SoundType.PositiveNotification;
 
-        public bool UltraBubbles_ResetDaily { get; set; } = true;
-        public int UltraBubbles_MaxCount { get; set; } = 5;
+        public bool UltraBubbles_ResetDaily = true;
+        public int UltraBubbles_MaxCount = 5;
 
         public enum UltraBubbles_RectSizeData
         {
@@ -571,7 +572,7 @@ namespace cAlgo
             HighOrLow_Close,
             Bubble_Size,
         }
-        public UltraBubbles_RectSizeData UltraBubbles_RectSizeInput { get; set; } = UltraBubbles_RectSizeData.Bubble_Size;
+        public UltraBubbles_RectSizeData UltraBubbles_RectSizeInput = UltraBubbles_RectSizeData.Bubble_Size;
 
         public enum UltraBubblesBreak_Data
         {
@@ -579,35 +580,36 @@ namespace cAlgo
             Close_plus_BarBody,
             OHLC_plus_BarBody,
         }
-        public UltraBubblesBreak_Data UltraBubblesBreak_Input { get; set; } = UltraBubblesBreak_Data.Close_Only;
+        public UltraBubblesBreak_Data UltraBubblesBreak_Input = UltraBubblesBreak_Data.Close_Only;
 
         public enum UltraBubblesColoring_Data
         {
             Bubble_Color,
             Positive_Negative
         }
-        public UltraBubblesColoring_Data UltraBubblesColoring_Input { get; set; } = UltraBubblesColoring_Data.Positive_Negative;
+        public UltraBubblesColoring_Data UltraBubblesColoring_Input = UltraBubblesColoring_Data.Positive_Negative;
 
 
         // ==== Misc ====
-        public bool ShowHist { get; set; } = true;
-        public bool FillHist { get; set; } = true;
-        public bool ShowNumbers { get; set; } = true;
-        public int DrawAtZoom_Value { get; set; } = 80;
+        public bool ShowHist = true;
+        public bool FillHist = true;
+        public bool ShowNumbers = true;
+        public int DrawAtZoom_Value = 80;
         public enum SegmentsInterval_Data
         {
             Daily,
             Weekly,
             Monthly
         }
-        public SegmentsInterval_Data SegmentsInterval_Input { get; set; } = SegmentsInterval_Data.Weekly;
+        public SegmentsInterval_Data SegmentsInterval_Input = SegmentsInterval_Data.Weekly;
         public enum ODFInterval_Data
         {
             Daily,
             Weekly,
         }
-        public ODFInterval_Data ODFInterval_Input { get; set; } = ODFInterval_Data.Daily;
-        public bool ShowBubbleValue { get; set; } = true;
+        public ODFInterval_Data ODFInterval_Input = ODFInterval_Data.Daily;
+        public bool ShowBubbleValue = true;
+
         // ======================================================
 
         public readonly string NOTIFY_CAPTION = "Order Flow Ticks \n    Aɢɢʀᴇɢᴀᴛᴇᴅ";
@@ -621,6 +623,7 @@ namespace cAlgo
         // intKey is the intervalIndex
         // value is the last updated Highest/Lowest
         private readonly IDictionary<int, SegmentsExtremumInfo> segmentInfo = new Dictionary<int, SegmentsExtremumInfo>();
+        private readonly IDictionary<int, List<double>> segmentsDict = new Dictionary<int, List<double>>();
 
         // Order Flow Ticks
         private List<double> Segments_Bar = new();
@@ -652,7 +655,8 @@ namespace cAlgo
         }
         private readonly VolumeRankType MonthlyRank = new();
         private readonly VolumeRankType WeeklyRank = new();
-        private readonly VolumeRankType miniVPsRank = new();
+        private readonly VolumeRankType MiniRank = new();
+        private readonly IDictionary<string, VolumeRankType> FixedRank = new Dictionary<string, VolumeRankType>();
 
         private Bars MiniVPs_Bars;
         private Bars DailyBars;
@@ -664,6 +668,7 @@ namespace cAlgo
             MiniVP,
             Weekly,
             Monthly,
+            Fixed
         }
 
         // Its a annoying behavior that happens even in Candles Chart (Time-Based) on any symbol/broker.
@@ -718,6 +723,11 @@ namespace cAlgo
         private int lastTick_VP = 0;
         private int lastTick_Wicks = 0;
 
+        // Fixed Range Profile
+        private readonly List<ChartRectangle> _rectangles = new();
+        private readonly Dictionary<string, List<ChartText>> _infoObjects = new();
+        private readonly Dictionary<string, Border> _controlGrids = new();
+
         // Shared rowHeight
         private double heightPips = 4;
         private double rowHeight = 0;
@@ -736,17 +746,17 @@ namespace cAlgo
         private bool segmentsConflict = false;
         private bool configHasChanged = false;
         private bool isUpdateVP = false;
-        private double prevUpdatePrice;
         public bool isPriceBased_Chart = false;
         private bool isPriceBased_NewBar = false;
         public bool isRenkoChart = false;
+        private double prevUpdatePrice;
 
         // lock[...] mainly because of the Segments loop
         // Avoid Historical Data
         private bool lockTickNotify = true;
         private bool lockUltraNotify = true;
         private bool ultraNotify_NewBar = false;
-        private bool LastIsUltra = false;
+        private bool lastIsUltra = false;
         // Allow Historical Data
         // Although it needs to be redefined to false before each OrderFlow() call in Historical Data.
         private bool lockUltraLevels = false;
@@ -902,7 +912,8 @@ namespace cAlgo
             public bool FillIntradaySpace { get; set; }
             public int OffsetBarsIntraday { get; set; }
             public TimeFrame OffsetTimeframeIntraday { get; set; }
-            // Weekly/Monthly
+            // Fixed/Weekly/Monthly
+            public bool FixedRange { get; set; }
             public bool EnableWeeklyProfile { get; set; }
             public bool EnableMonthlyProfile { get; set; }
             // Mini VPs
@@ -1083,7 +1094,7 @@ namespace cAlgo
                     // works as expected in live market though
                 };
             }
-            isRenkoChart = Chart.TimeFrame.ToString().Contains("Renko");
+            isRenkoChart = currentTimeframe.Contains("Renko");
 
             // Spike Filter + Ultra Bubbles + Spike Levels
             Bars.BarOpened += (_) =>
@@ -1098,6 +1109,9 @@ namespace cAlgo
                     prevUpdatePrice = _.Bars.LastBar.Close;
                 try { PerformanceDrawing(true); } catch { } // Draw without scroll or zoom
             };
+
+            // Fixed Range Profiles
+            RangeInitialize();
 
             // Params Panel
             VerticalAlignment vAlign = VerticalAlignment.Bottom;
@@ -1155,7 +1169,8 @@ namespace cAlgo
                 OffsetBarsIntraday = OffsetBarsInput,
                 OffsetTimeframeIntraday = OffsetTimeframeInput,
                 FillIntradaySpace = FillIntradaySpace,
-                // Weekly/Monthly
+                // Fixed/Weekly/Monthly
+                FixedRange = EnableFixedRange,
                 EnableWeeklyProfile = EnableWeeklyProfile,
                 EnableMonthlyProfile = EnableMonthlyProfile,
                 // Mini VPs
@@ -1330,6 +1345,7 @@ namespace cAlgo
 
             // LookBack
             Bars ODF_Bars = ODFInterval_Input == ODFInterval_Data.Daily ? DailyBars : WeeklyBars;
+
             // Get Index of ODF Interval to continue only in Lookback
             int iVerify = ODF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
             if (ODF_Bars.ClosePrices.Count - iVerify > Lookback)
@@ -1350,6 +1366,7 @@ namespace cAlgo
                 // Required for [Ultra Bubbles, Spike] Levels in Historical Data
                 lockUltraLevels = false;
                 lockSpikeLevels = false;
+
                 if (!isPriceBased_Chart)
                     CreateOrderFlow(index);
                 else {
@@ -1389,7 +1406,6 @@ namespace cAlgo
                 }
                 else
                     LiveVP_Concurrent(index, indexStart);
-
             }
 
             void CreateOrderFlow(int idx)
@@ -1586,13 +1602,14 @@ namespace cAlgo
             LockODFTemplate();
 
             // For results
-            double highestHalf = Bars.HighPrices[iStart] + ((rowHeight + rowHeight) / 2);
-            double lowestHalf = Bars.LowPrices[iStart] - ((rowHeight + rowHeight) / 2);
+            double rowHeightHalf = (rowHeight + rowHeight) / 2;
+            double highestHalf = Bars.HighPrices[iStart] + rowHeightHalf;
+            double lowestHalf = Bars.LowPrices[iStart] - rowHeightHalf;
             if (isRenkoChart && ShowWicks) {
                 lowest += rowHeight;
                 highest -= rowHeight;
-                highestHalf = highest + ((rowHeight + rowHeight) / 2);
-                lowestHalf = lowest - ((rowHeight + rowHeight) / 2);
+                highestHalf = highest + rowHeightHalf;
+                lowestHalf = lowest - rowHeightHalf;
             }
 
             DateTime xBar = Bars.OpenTimes[iStart];
@@ -2543,7 +2560,7 @@ namespace cAlgo
                             });
                         }
 
-                        if (EnableUltraBubblesNotification && LastIsUltra && !lockUltraNotify && ultraNotify_NewBar) {
+                        if (EnableUltraBubblesNotification && lastIsUltra && !lockUltraNotify && ultraNotify_NewBar) {
                             string symbolName = $"{Symbol.Name} ({Chart.TimeFrame.ShortName})";
                             string sourceString = sourceIsDelta ? "Delta" : sourceIsCumul ? "Cumulative Change Delta" : "Subtract Delta";
                             string popupText = $"{symbolName} => Ultra {sourceString} at {Server.Time}";
@@ -2566,11 +2583,11 @@ namespace cAlgo
                         // When Backtesting in Price-Based Charts, this condition doesn't seem to be triggered,
                         // Works fine in real-time market though.
                         if (filterSize == 5) {
-                            LastIsUltra = true;
+                            lastIsUltra = true;
                             ultraNotify_NewBar = false;
                         }
                         else
-                            LastIsUltra = false;
+                            lastIsUltra = false;
 
                         // === Ultra Bubbles Levels ====
                         if (ShowUltraBubblesLevels)
@@ -3399,6 +3416,11 @@ namespace cAlgo
                     updateSegments();
                     segmentInfo[startKey].LastLowest = lowest;
                 }
+
+                if (!segmentsDict.ContainsKey(startKey))
+                    segmentsDict.Add(startKey, Segments_VP);
+                else
+                    segmentsDict[startKey] = Segments_VP;
             }
 
             void updateSegments() {
@@ -3421,31 +3443,44 @@ namespace cAlgo
                 Segments_VP = currentSegments.OrderBy(x => x).ToList();
             }
         }
+        private int GetSegmentIndex(int index) {
+            return SegmentsInterval_Input switch
+            {
+                SegmentsInterval_Data.Monthly => MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]),
+                SegmentsInterval_Data.Weekly => WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]),
+                _ => DailyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index])
+            };
+        }
 
         // *********** VOLUME PROFILE TICKS ***********
-        private void VolumeProfile(int iStart, int index, ExtraProfiles extraProfiles = ExtraProfiles.No, bool isLoop = false, bool drawOnly = false)
+        private void VolumeProfile(int iStart, int index, ExtraProfiles extraProfiles = ExtraProfiles.No, bool isLoop = false, bool drawOnly = false, string fixedKey = "", double fixedLowest = 0)
         {
-            // Mini/Weekly/Monthly on Buy_Sell is a waste of time
-            if (VolumeMode_Input == VolumeMode_Data.Buy_Sell && extraProfiles != ExtraProfiles.No)
-                return;
+            // Weekly/Monthly on Buy_Sell is a waste of time
+            if (VolumeMode_Input == VolumeMode_Data.Buy_Sell && (extraProfiles == ExtraProfiles.Weekly || extraProfiles == ExtraProfiles.Monthly))
+               return;
 
             // ==== VP ====
             if (!drawOnly)
-                VP_Tick(index, true, extraProfiles);
+                VP_Tick(index, true, extraProfiles, fixedKey);
 
             // ==== Drawing ====
             if (Segments_VP.Count == 0 || isLoop)
                 return;
 
             // For Results
-            Bars mainTF = ODFInterval_Input == ODFInterval_Data.Daily ? DailyBars : WeeklyBars;
+            Bars mainTF = ODFInterval_Input == ODFInterval_Data.Daily ? DailyBars :
+                           ODFInterval_Input == ODFInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
             Bars TF_Bars = extraProfiles == ExtraProfiles.No ? mainTF:
                            extraProfiles == ExtraProfiles.MiniVP ? MiniVPs_Bars :
                            extraProfiles == ExtraProfiles.Weekly ? WeeklyBars : MonthlyBars;
+
             int TF_idx = TF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
             double lowest = TF_Bars.LowPrices[TF_idx];
-            if (double.IsNaN(lowest)) // Mini VPs avoid crash after recalculating
+
+            // Mini VPs avoid crash after recalculating
+            if (double.IsNaN(lowest))
                 lowest = TF_Bars.LowPrices.LastValue;
+
 
             bool gapWeekend = Bars.OpenTimes[iStart].DayOfWeek == DayOfWeek.Friday && Bars.OpenTimes[iStart].Hour < 2;
             DateTime x1_Start = Bars.OpenTimes[iStart + (gapWeekend ? 1 : 0)];
@@ -3469,28 +3504,28 @@ namespace cAlgo
             if (selectedWidth == HistWidth_Data._100)
                 proportion_VP = maxLength;
 
+            string prefix = extraProfiles == ExtraProfiles.Fixed ? fixedKey : $"{iStart}";
+            double y1_lowest = extraProfiles == ExtraProfiles.Fixed ? fixedLowest : lowest;
+
+            int segmentIdx = extraProfiles == ExtraProfiles.Fixed ? GetSegmentIndex(index) : index;
+            List<double> whichSegment = extraProfiles == ExtraProfiles.Fixed ? segmentsDict[segmentIdx] : Segments_VP;
+
             // Manual Refactoring.
             // LLM allucinates.
-            for (int i = 0; i < Segments_VP.Count; i++)
+            for (int i = 0; i < whichSegment.Count; i++)
             {
-                double priceKey = Segments_VP[i];
+                double priceKey = whichSegment[i];
 
-                if (extraProfiles == ExtraProfiles.Monthly) {
-                    if (!MonthlyRank.Normal.ContainsKey(priceKey))
-                        continue;
-                }
-                else if (extraProfiles == ExtraProfiles.Weekly) {
-                    if (!WeeklyRank.Normal.ContainsKey(priceKey))
-                        continue;
-                }
-                else if (extraProfiles == ExtraProfiles.MiniVP) {
-                    if (!miniVPsRank.Normal.ContainsKey(priceKey))
-                        continue;
-                }
-                else if (extraProfiles == ExtraProfiles.No) {
-                    if (!VP_VolumesRank.ContainsKey(priceKey))
-                        continue;
-                }
+                bool skip = extraProfiles switch
+                {
+                    ExtraProfiles.Monthly => !MonthlyRank.Normal.ContainsKey(priceKey),
+                    ExtraProfiles.Weekly => !WeeklyRank.Normal.ContainsKey(priceKey),
+                    ExtraProfiles.MiniVP => !MiniRank.Normal.ContainsKey(priceKey),
+                    ExtraProfiles.Fixed => !FixedRank[fixedKey].Normal.ContainsKey(priceKey),
+                    _ => !VP_VolumesRank.ContainsKey(priceKey),
+                };
+                if (skip)
+                    continue;
 
                 /*
                 Indeed, the value of X-Axis is simply a rule of three,
@@ -3505,8 +3540,8 @@ namespace cAlgo
                   We'll skip 1 bar (friday) since Bar Index as X-axis didn't resolve the problem.
                 */
 
-                double lowerSegmentY1 = Segments_VP[i] - rowHeight;
-                double upperSegmentY2 = Segments_VP[i];
+                double lowerSegmentY1 = whichSegment[i] - rowHeight;
+                double upperSegmentY2 = whichSegment[i];
 
                 double y1_text = priceKey;
 
@@ -3517,14 +3552,14 @@ namespace cAlgo
 
                     DateTime x2 = x1_Start.AddMilliseconds(dynLength);
 
-                    string extraName = extraProfiles == ExtraProfiles.No ? "" :
-                                       extraProfiles == ExtraProfiles.MiniVP ? "Mini" :
-                                       extraProfiles == ExtraProfiles.Weekly ? "Weekly" : "Monthly";
-                    Color histColor =  extraProfiles == ExtraProfiles.No ? VolumeColor :
-                                       extraProfiles == ExtraProfiles.MiniVP ? VolumeColor :
-                                       extraProfiles == ExtraProfiles.Weekly ? WeeklyColor : MonthlyColor;
+                    Color histogramColor = extraProfiles switch
+                    {
+                        ExtraProfiles.Monthly => MonthlyColor,
+                        ExtraProfiles.Weekly => WeeklyColor,
+                        _ => VolumeColor,
+                    };
 
-                    ChartRectangle volHist = Chart.DrawRectangle($"{iStart}_{i}_VP{extraName}_Normal", x1_Start, lowerSegmentY1, x2, upperSegmentY2, histColor);
+                    ChartRectangle volHist = Chart.DrawRectangle($"{prefix}_{i}_VP_{extraProfiles}_Normal", x1_Start, lowerSegmentY1, x2, upperSegmentY2, histogramColor);
 
                     if (FillHist_VP)
                         volHist.IsFilled = true;
@@ -3539,8 +3574,7 @@ namespace cAlgo
                         double volumeNumber = currentVolume;
                         string volumeNumberFmtd = FormatNumbers ? FormatBigNumber(volumeNumber) : $"{volumeNumber}";
 
-                        ChartText Center = Chart.DrawText($"{iStart}_{i}_VP{extraName}_NumberNormal",
-                            volumeNumberFmtd, histRightSide ? xBar : x1_Start, y1_text, RtnbFixedColor);
+                        ChartText Center = Chart.DrawText($"{prefix}_{i}_VP_{extraProfiles}_Number_Normal", volumeNumberFmtd, histRightSide ? xBar : x1_Start, y1_text, RtnbFixedColor);
                         Center.HorizontalAlignment = histRightSide ? HorizontalAlignment.Right : HorizontalAlignment.Left;
                         Center.FontSize = FontSizeNumbers;
 
@@ -3548,19 +3582,19 @@ namespace cAlgo
                             Center.Time = xBar;
                     }
 
-                    if (intradayProfile && extraProfiles != ExtraProfiles.MiniVP) {
+                    if (intradayProfile && extraProfiles != ExtraProfiles.MiniVP)
+                    {
                         DateTime dateOffset = TimeBasedOffset(xBar);
                         DateTime dateOffset_Duo = TimeBasedOffset(dateOffset, true);
                         DateTime dateOffset_Triple = TimeBasedOffset(dateOffset_Duo, true);
 
                         double maxLength_Intraday = dateOffset.Subtract(xBar).TotalMilliseconds;
 
-                        if (extraName == "Weekly")
+                        if (extraProfiles == ExtraProfiles.Weekly)
                             maxLength_Intraday = dateOffset_Duo.Subtract(dateOffset).TotalMilliseconds;
 
-                        if (extraName == "Monthly")
+                        if (extraProfiles == ExtraProfiles.Monthly)
                             maxLength_Intraday = dateOffset_Triple.Subtract(dateOffset_Duo).TotalMilliseconds;
-
 
                         // Recalculate histograms 'X' position
                         double proportion_Intraday = currentVolume * (maxLength_Intraday - (maxLength_Intraday / maxWidth));
@@ -3573,15 +3607,18 @@ namespace cAlgo
                         volHist.Time1 = dateOffset;
                         volHist.Time2 = dateOffset.AddMilliseconds(-dynLength_Intraday);
 
-                        if (extraName == "Weekly") {
+                        if (extraProfiles == ExtraProfiles.Weekly)
+                        {
                             volHist.Time1 = dateOffset_Duo;
                             volHist.Time2 = dateOffset_Duo.AddMilliseconds(-dynLength_Intraday);
-                            if (!EnableMonthlyProfile && FillIntradaySpace) {
+                            if (!EnableMonthlyProfile && FillIntradaySpace)
+                            {
                                 volHist.Time1 = dateOffset;
                                 volHist.Time2 = dateOffset.AddMilliseconds(dynLength_Intraday);
                             }
                         }
-                        if (extraName == "Monthly") {
+                        if (extraProfiles == ExtraProfiles.Monthly)
+                        {
                             if (EnableWeeklyProfile) {
                                 // Show after
                                 volHist.Time1 = dateOffset_Triple;
@@ -3607,16 +3644,16 @@ namespace cAlgo
                             double volumeNumber = currentVolume;
                             string volumeNumberFmtd = FormatNumbers ? FormatBigNumber(volumeNumber) : $"{volumeNumber}";
 
-                            ChartText Center = Chart.DrawText($"{iStart}_{i}_VP{extraName}_NumberNormal",
+                            ChartText Center = Chart.DrawText($"{prefix}_{i}_VP_{extraProfiles}_Number_Normal",
                                 volumeNumberFmtd, volHist.Time1, y1_text, RtnbFixedColor);
                             Center.FontSize = FontSizeResults;
 
                             Center.HorizontalAlignment = HorizontalAlignment.Left;
-                             if (extraName == "Weekly") {
+                            if (extraProfiles == ExtraProfiles.Weekly) {
                                 if (!EnableMonthlyProfile && FillIntradaySpace)
                                     Center.HorizontalAlignment = HorizontalAlignment.Right;
                             }
-                            if (extraName == "Monthly") {
+                            if (extraProfiles == ExtraProfiles.Monthly) {
                                 if (FillIntradaySpace)
                                     Center.HorizontalAlignment = HorizontalAlignment.Right;
                             }
@@ -3626,13 +3663,12 @@ namespace cAlgo
 
                 void DrawRectangle_BuySell(
                     double currentBuy, double currentSell,
+                    double buyMax, double sellMax,
                     bool intradayProfile = false)
                 {
                     // Buy vs Sell - already
-                    double maxBuyVolume = 0;
-                    try { maxBuyVolume = VP_VolumesRank_Up.Values.Max(); } catch { };
-                    double maxSellVolume = 0;
-                    try { maxSellVolume = VP_VolumesRank_Down.Values.Max(); } catch { };
+                    double maxBuyVolume = buyMax;
+                    double maxSellVolume = sellMax;
 
                     double maxSideVolume = maxBuyVolume > maxSellVolume ? maxBuyVolume : maxSellVolume;
 
@@ -3647,133 +3683,130 @@ namespace cAlgo
                     try { proportionSell = currentSell * proportion_VP; } catch { };
                     double dynLengthSell = proportionSell / maxSideVolume;
 
+                    DateTime x2_Sell = x1_Start.AddMilliseconds(dynLengthSell);
+                    DateTime x2_Buy = x1_Start.AddMilliseconds(dynLengthBuy);
+
                     ChartRectangle buyHist, sellHist;
-                    if (VP_VolumesRank_Down.ContainsKey(priceKey) && VP_VolumesRank_Up.ContainsKey(priceKey))
+                    sellHist = Chart.DrawRectangle($"{prefix}_{i}_VP_{extraProfiles}_Sell", x1_Start, lowerSegmentY1, x2_Sell, upperSegmentY2, SellColor);
+                    buyHist = Chart.DrawRectangle($"{prefix}_{i}_VP_{extraProfiles}_Buy", x1_Start, lowerSegmentY1, x2_Buy, upperSegmentY2, BuyColor);
+                    if (FillHist_VP)
                     {
-                        DateTime x2_Sell = x1_Start.AddMilliseconds(dynLengthSell);
-                        DateTime x2_Buy = x1_Start.AddMilliseconds(dynLengthBuy);
+                        buyHist.IsFilled = true;
+                        sellHist.IsFilled = true;
+                    }
+                    if (HistogramSide_Input == HistSide_Data.Right)
+                    {
+                        sellHist.Time1 = xBar;
+                        sellHist.Time2 = xBar.AddMilliseconds(-dynLengthSell);
+                        buyHist.Time1 = xBar;
+                        buyHist.Time2 = xBar.AddMilliseconds(-dynLengthBuy);
+                    }
 
-                        sellHist = Chart.DrawRectangle($"{iStart}_{i}_VPSell", x1_Start, lowerSegmentY1, x2_Sell, upperSegmentY2, SellColor);
-                        buyHist = Chart.DrawRectangle($"{iStart}_{i}_VPBuy", x1_Start, lowerSegmentY1, x2_Buy, upperSegmentY2, BuyColor);
+                    if (ShowHistoricalNumbers_VP) {
+                        double buyNumber = currentBuy;
+                        string buyNumberFmtd = FormatNumbers ? FormatBigNumber(buyNumber) : $"{buyNumber}";
+                        double sellNumber = currentSell;
+                        string sellNumberFmtd = FormatNumbers ? FormatBigNumber(sellNumber) : $"{sellNumber}";
+
+                        ChartText Left, Right;
+                        Left = Chart.DrawText($"{prefix}_{i}_VP_{extraProfiles}_Number_Sell", sellNumberFmtd, x1_Start, y1_text, RtnbFixedColor);
+                        Right = Chart.DrawText($"{prefix}_{i}_VP_{extraProfiles}_Number_Buy", buyNumberFmtd, x1_Start, y1_text, RtnbFixedColor);
+
+                        Left.HorizontalAlignment = HorizontalAlignment.Left;
+                        Right.HorizontalAlignment = HorizontalAlignment.Right;
+
+                        Left.FontSize = FontSizeNumbers;
+                        Right.FontSize = FontSizeNumbers;
+
+                        if (HistogramSide_Input == HistSide_Data.Right) {
+                            Left.Time = xBar;
+                            Right.Time = xBar;
+                        }
+                    }
+
+                    // Intraday Right Profile
+                    if (intradayProfile && extraProfiles != ExtraProfiles.MiniVP)
+                    {
+                        // ==== Subtract Profile / Plain Delta - Profile View ====
+                        // Recalculate histograms 'X' position
+                        DateTime dateOffset_Subt = TimeBasedOffset(xBar);
+
+                        double maxPositive = VP_VolumesRank_Subt.Values.Max();
+                        IEnumerable<double> negativeVolumeList = VP_VolumesRank_Subt.Values.Where(n => n < 0);
+                        double maxNegative = 0;
+                        try { maxNegative = Math.Abs(negativeVolumeList.Min()); } catch { }
+
+                        double subtMax = maxPositive > maxNegative ? maxPositive : maxNegative;
+
+                        double maxLength_Intraday = dateOffset_Subt.Subtract(xBar).TotalMilliseconds;
+                        double proportion_Intraday = VP_VolumesRank_Subt[priceKey] * (maxLength_Intraday - (maxLength_Intraday / maxWidth));
+                        double dynLength = proportion_Intraday / subtMax;
+
+                        // Set 'X'
+                        DateTime x1 = dateOffset_Subt;
+                        DateTime x2 = x1.AddMilliseconds(dynLength);
+
+                        Color colorHist = dynLength > 0 ? BuyColor : SellColor;
+                        ChartRectangle subtHist = Chart.DrawRectangle($"{iStart}_{i}_VP_Subt", x1, lowerSegmentY1, x2, upperSegmentY2, colorHist);
+
+                        dynLength = -Math.Abs(dynLength);
+                        subtHist.Time1 = dateOffset_Subt;
+                        subtHist.Time2 = subtHist.Time2 != dateOffset_Subt ? dateOffset_Subt.AddMilliseconds(dynLength) : dateOffset_Subt;
+
                         if (FillHist_VP)
-                        {
-                            buyHist.IsFilled = true;
-                            sellHist.IsFilled = true;
-                        }
-                        if (HistogramSide_Input == HistSide_Data.Right)
-                        {
-                            sellHist.Time1 = xBar;
-                            sellHist.Time2 = xBar.AddMilliseconds(-dynLengthSell);
-                            buyHist.Time1 = xBar;
-                            buyHist.Time2 = xBar.AddMilliseconds(-dynLengthBuy);
+                            subtHist.IsFilled = true;
+
+                        if (ShowIntradayNumbers) {
+                            double volumeNumber = VP_VolumesRank_Subt[priceKey];
+                            string volumeNumberFmtd = volumeNumber > 0 ? FormatBigNumber(volumeNumber) : $"-{FormatBigNumber(Math.Abs(volumeNumber))}";
+
+                            ChartText Center;
+                            Center = Chart.DrawText($"{iStart}_{i}_VP_Number_Subt", volumeNumberFmtd, x1, y1_text, RtnbFixedColor);
+                            Center.HorizontalAlignment = HorizontalAlignment.Left;
+                            Center.FontSize = FontSizeResults;
                         }
 
-                        if (ShowHistoricalNumbers_VP) {
+                        // ==== Buy_Sell - Divided View - Half Width ====
+                        // Recalculate histograms 'X' position
+                        DateTime dateOffset = TimeBasedOffset(dateOffset_Subt, true);
+                        maxLength_Intraday = dateOffset.Subtract(dateOffset_Subt).TotalMilliseconds;
+
+                        // Replaced maxHalfWidth to maxWidth since it's Divided View
+                        proportionBuy = 0;
+                        try { proportionBuy = currentBuy * (maxLength_Intraday - (maxLength_Intraday / maxHalfWidth)); } catch { };
+                        if (selectedWidth == HistWidth_Data._100)
+                            try { proportionBuy = currentBuy * maxLength_Intraday; } catch { };
+
+                        dynLengthBuy = proportionBuy / maxBuyVolume; ;
+
+                        proportionSell = 0;
+                        try { proportionSell = currentSell * (maxLength_Intraday - (maxLength_Intraday / maxHalfWidth)); } catch { };
+                        if (selectedWidth == HistWidth_Data._100)
+                            try { proportionSell = currentSell * maxLength_Intraday; } catch { };
+
+                        dynLengthSell = proportionSell / maxSellVolume;
+
+                        // Set 'X'
+                        sellHist.Time1 = dateOffset;
+                        sellHist.Time2 = dateOffset.AddMilliseconds(-dynLengthSell);
+                        buyHist.Time1 = dateOffset;
+                        buyHist.Time2 = dateOffset.AddMilliseconds(dynLengthBuy);
+
+                        if (ShowIntradayNumbers) {
                             double buyNumber = currentBuy;
                             string buyNumberFmtd = FormatNumbers ? FormatBigNumber(buyNumber) : $"{buyNumber}";
                             double sellNumber = currentSell;
                             string sellNumberFmtd = FormatNumbers ? FormatBigNumber(sellNumber) : $"{sellNumber}";
 
                             ChartText Left, Right;
-                            Left = Chart.DrawText($"{iStart}_{i}_VPNumberSell", sellNumberFmtd, x1_Start, y1_text, RtnbFixedColor);
-                            Right = Chart.DrawText($"{iStart}_{i}_VPNumberBuy", buyNumberFmtd, x1_Start, y1_text, RtnbFixedColor);
+                            Left = Chart.DrawText($"{prefix}_{i}_VP_{extraProfiles}_Number_Sell", sellNumberFmtd, dateOffset, y1_text, RtnbFixedColor);
+                            Right = Chart.DrawText($"{prefix}_{i}_VP_{extraProfiles}_Number_Buy", buyNumberFmtd, dateOffset, y1_text, RtnbFixedColor);
 
                             Left.HorizontalAlignment = HorizontalAlignment.Left;
                             Right.HorizontalAlignment = HorizontalAlignment.Right;
 
-                            Left.FontSize = FontSizeNumbers;
-                            Right.FontSize = FontSizeNumbers;
-
-                            if (HistogramSide_Input == HistSide_Data.Right) {
-                                Left.Time = xBar;
-                                Right.Time = xBar;
-                            }
-                        }
-
-                        // Intraday Right Profile
-                        if (intradayProfile)
-                        {
-                            // ==== Subtract Profile / Plain Delta - Profile View ====
-                            // Recalculate histograms 'X' position
-                            DateTime dateOffset_Subt = TimeBasedOffset(xBar);
-
-                            double maxPositive = VP_VolumesRank_Subt.Values.Max();
-                            IEnumerable<double> negativeVolumeList = VP_VolumesRank_Subt.Values.Where(n => n < 0);
-                            double maxNegative = 0;
-                            try { maxNegative = Math.Abs(negativeVolumeList.Min()); } catch { }
-
-                            double subtMax = maxPositive > maxNegative ? maxPositive : maxNegative;
-
-                            double maxLength_Intraday = dateOffset_Subt.Subtract(xBar).TotalMilliseconds;
-                            double proportion_Intraday = VP_VolumesRank_Subt[priceKey] * (maxLength_Intraday - (maxLength_Intraday / maxWidth));
-                            double dynLength = proportion_Intraday / subtMax;
-
-                            // Set 'X'
-                            DateTime x1 = dateOffset_Subt;
-                            DateTime x2 = x1.AddMilliseconds(dynLength);
-
-                            Color colorHist = dynLength > 0 ? BuyColor : SellColor;
-                            ChartRectangle subtHist = Chart.DrawRectangle($"{iStart}_{i}_VPSubt", x1, lowerSegmentY1, x2, upperSegmentY2, colorHist);
-
-                            dynLength = -Math.Abs(dynLength);
-                            subtHist.Time1 = dateOffset_Subt;
-                            subtHist.Time2 = subtHist.Time2 != dateOffset_Subt ? dateOffset_Subt.AddMilliseconds(dynLength) : dateOffset_Subt;
-
-                            if (FillHist_VP)
-                                subtHist.IsFilled = true;
-
-                            if (ShowIntradayNumbers) {
-                                double volumeNumber = VP_VolumesRank_Subt[priceKey];
-                                string volumeNumberFmtd = volumeNumber > 0 ? FormatBigNumber(volumeNumber) : $"-{FormatBigNumber(Math.Abs(volumeNumber))}";
-
-                                ChartText Center;
-                                Center = Chart.DrawText($"{iStart}_{i}_VPNumberSubt", volumeNumberFmtd, x1, y1_text, RtnbFixedColor);
-                                Center.HorizontalAlignment = HorizontalAlignment.Left;
-                                Center.FontSize = FontSizeResults;
-                            }
-
-                            // ==== Buy_Sell - Divided View - Half Width ====
-                            // Recalculate histograms 'X' position
-                            DateTime dateOffset = TimeBasedOffset(dateOffset_Subt, true);
-                            maxLength_Intraday = dateOffset.Subtract(dateOffset_Subt).TotalMilliseconds;
-
-                            // Replaced maxHalfWidth to maxWidth since it's Divided View
-                            proportionBuy = 0;
-                            try { proportionBuy = currentBuy * (maxLength_Intraday - (maxLength_Intraday / maxHalfWidth)); } catch { };
-                            if (selectedWidth == HistWidth_Data._100)
-                                try { proportionBuy = currentBuy * maxLength_Intraday; } catch { };
-
-                            dynLengthBuy = proportionBuy / maxBuyVolume; ;
-
-                            proportionSell = 0;
-                            try { proportionSell = currentSell * (maxLength_Intraday - (maxLength_Intraday / maxHalfWidth)); } catch { };
-                            if (selectedWidth == HistWidth_Data._100)
-                                try { proportionSell = currentSell * maxLength_Intraday; } catch { };
-
-                            dynLengthSell = proportionSell / maxSellVolume;
-
-                            // Set 'X'
-                            sellHist.Time1 = dateOffset;
-                            sellHist.Time2 = dateOffset.AddMilliseconds(-dynLengthSell);
-                            buyHist.Time1 = dateOffset;
-                            buyHist.Time2 = dateOffset.AddMilliseconds(dynLengthBuy);
-
-                            if (ShowIntradayNumbers) {
-                                double buyNumber = currentBuy;
-                                string buyNumberFmtd = FormatNumbers ? FormatBigNumber(buyNumber) : $"{buyNumber}";
-                                double sellNumber = currentSell;
-                                string sellNumberFmtd = FormatNumbers ? FormatBigNumber(sellNumber) : $"{sellNumber}";
-
-                                ChartText Left, Right;
-                                Left = Chart.DrawText($"{iStart}_{i}_VPNumberSell", sellNumberFmtd, dateOffset, y1_text, RtnbFixedColor);
-                                Right = Chart.DrawText($"{iStart}_{i}_VPNumberBuy", buyNumberFmtd, dateOffset, y1_text, RtnbFixedColor);
-
-                                Left.HorizontalAlignment = HorizontalAlignment.Left;
-                                Right.HorizontalAlignment = HorizontalAlignment.Right;
-
-                                Left.FontSize = FontSizeResults;
-                                Right.FontSize = FontSizeResults;
-                            }
+                            Left.FontSize = FontSizeResults;
+                            Right.FontSize = FontSizeResults;
                         }
                     }
                 }
@@ -3791,11 +3824,7 @@ namespace cAlgo
                     Color colorHist = currentDelta >= 0 ? BuyColor : SellColor;
                     DateTime x2 = x1_Start.AddMilliseconds(dynLength_Delta);
 
-                    string extraName = extraProfiles == ExtraProfiles.No ? "" :
-                                       extraProfiles == ExtraProfiles.MiniVP ? "Mini" :
-                                       extraProfiles == ExtraProfiles.Weekly ? "Weekly" : "Monthly";
-
-                    ChartRectangle deltaHist = Chart.DrawRectangle($"{iStart}_{i}_VP{extraName}_Delta", x1_Start, lowerSegmentY1, x2, upperSegmentY2, colorHist);
+                    ChartRectangle deltaHist = Chart.DrawRectangle($"{prefix}_{i}_VP_{extraProfiles}_Delta", x1_Start, lowerSegmentY1, x2, upperSegmentY2, colorHist);
 
                     if (FillHist_VP)
                         deltaHist.IsFilled = true;
@@ -3811,13 +3840,14 @@ namespace cAlgo
                         string deltaNumberFmtd = deltaNumber > 0 ? FormatBigNumber(deltaNumber) : $"-{FormatBigNumber(Math.Abs(deltaNumber))}";
                         string deltaString = FormatNumbers ? deltaNumberFmtd : $"{deltaNumber}";
 
-                        ChartText Center = Chart.DrawText($"{iStart}_{i}_VP{extraName}NumberDelta", deltaString, x1_Start, y1_text, RtnbFixedColor);
+                        ChartText Center = Chart.DrawText($"{prefix}_{i}_VP_{extraProfiles}_Number_Delta", deltaString, x1_Start, y1_text, RtnbFixedColor);
                         Center.HorizontalAlignment = histRightSide ? HorizontalAlignment.Right : HorizontalAlignment.Left;
                         Center.FontSize = FontSizeNumbers;
 
                         if (HistogramSide_Input == HistSide_Data.Right)
                             Center.Time = xBar;
                     }
+
                     // Intraday Right Profile
                     if (intradayProfile && extraProfiles != ExtraProfiles.MiniVP)
                     {
@@ -3826,10 +3856,10 @@ namespace cAlgo
                         DateTime dateOffset_Triple = TimeBasedOffset(dateOffset_Duo, true);
                         double maxLength_Intraday = dateOffset.Subtract(xBar).TotalMilliseconds;
 
-                        if (extraName == "Weekly")
+                        if (extraProfiles == ExtraProfiles.Weekly)
                             maxLength_Intraday = dateOffset_Duo.Subtract(dateOffset).TotalMilliseconds;
 
-                        if (extraName == "Monthly")
+                        if (extraProfiles == ExtraProfiles.Monthly)
                             maxLength_Intraday = dateOffset_Triple.Subtract(dateOffset_Duo).TotalMilliseconds;
 
                         // Recalculate histograms 'X' position
@@ -3846,7 +3876,7 @@ namespace cAlgo
                         deltaHist.Time2 = deltaHist.Time2 != dateOffset ? dateOffset.AddMilliseconds(-dynLength_Delta) : dateOffset;
                         deltaHist.Color = colorHist;
 
-                        if (extraName == "Weekly") {
+                        if (extraProfiles == ExtraProfiles.Weekly) {
                             deltaHist.Time1 = dateOffset_Duo;
                             deltaHist.Time2 = dateOffset_Duo.AddMilliseconds(-dynLength_Delta);
                             if (!EnableMonthlyProfile && FillIntradaySpace) {
@@ -3854,7 +3884,8 @@ namespace cAlgo
                                 deltaHist.Time2 = dateOffset.AddMilliseconds(dynLength_Delta);
                             }
                         }
-                        if (extraName == "Monthly") {
+
+                        if (extraProfiles == ExtraProfiles.Monthly) {
                             if (EnableWeeklyProfile) {
                                 // Show after
                                 deltaHist.Time1 = dateOffset_Triple;
@@ -3881,15 +3912,15 @@ namespace cAlgo
                             string deltaNumberFmtd = deltaNumber > 0 ? FormatBigNumber(deltaNumber) : $"-{FormatBigNumber(Math.Abs(deltaNumber))}";
                             string deltaString = FormatNumbers ? deltaNumberFmtd : $"{deltaNumber}";
 
-                            ChartText Center = Chart.DrawText($"{iStart}_{i}_VP{extraName}_NumberDelta", deltaString, deltaHist.Time1, y1_text, RtnbFixedColor);
+                            ChartText Center = Chart.DrawText($"{prefix}_{i}_VP_{extraProfiles}_Number_Delta", deltaString, deltaHist.Time1, y1_text, RtnbFixedColor);
                             Center.FontSize = FontSizeResults;
 
                             Center.HorizontalAlignment = HorizontalAlignment.Left;
-                             if (extraName == "Weekly") {
+                            if (extraProfiles == ExtraProfiles.Weekly) {
                                 if (!EnableMonthlyProfile && FillIntradaySpace)
                                     Center.HorizontalAlignment = HorizontalAlignment.Right;
                             }
-                            if (extraName == "Monthly") {
+                            if (extraProfiles == ExtraProfiles.Monthly) {
                                 if (FillIntradaySpace)
                                     Center.HorizontalAlignment = HorizontalAlignment.Right;
                             }
@@ -3899,39 +3930,40 @@ namespace cAlgo
 
                 if (VolumeMode_Input == VolumeMode_Data.Normal)
                 {
-                    if (extraProfiles == ExtraProfiles.No)
-                        DrawRectangle_Normal(VP_VolumesRank[priceKey], VP_VolumesRank.Values.Max(), isIntraday);
+                    IDictionary<double, double> vpNormal = extraProfiles switch
+                    {
+                        ExtraProfiles.Monthly => MonthlyRank.Normal,
+                        ExtraProfiles.Weekly => WeeklyRank.Normal,
+                        ExtraProfiles.MiniVP => MiniRank.Normal,
+                        ExtraProfiles.Fixed => FixedRank[fixedKey].Normal,
+                        _ => VP_VolumesRank
+                    };
 
-                    if (extraProfiles == ExtraProfiles.MiniVP)
-                        DrawRectangle_Normal(miniVPsRank.Normal[priceKey], miniVPsRank.Normal.Values.Max(), false);
+                    bool intraBool = extraProfiles switch
+                    {
+                        ExtraProfiles.Monthly => isIntraday,
+                        ExtraProfiles.Weekly => isIntraday,
+                        ExtraProfiles.MiniVP => false,
+                        ExtraProfiles.Fixed => false,
+                        _ => isIntraday
+                    };
 
-                    if (extraProfiles == ExtraProfiles.Weekly)
-                        DrawRectangle_Normal(WeeklyRank.Normal[priceKey], WeeklyRank.Normal.Values.Max(), isIntraday);
+                    double value = vpNormal[priceKey];
+                    double maxValue = vpNormal.Values.Max();
 
-                    if (extraProfiles == ExtraProfiles.Monthly)
-                        DrawRectangle_Normal(MonthlyRank.Normal[priceKey], MonthlyRank.Normal.Values.Max(), isIntraday);
+                    DrawRectangle_Normal(value, maxValue, intraBool);
 
                     if (ShowResults || ShowMiniResults)
                     {
                         if (extraProfiles == ExtraProfiles.MiniVP && !ShowMiniResults)
                             continue;
+                        if (extraProfiles != ExtraProfiles.MiniVP && !ShowResults && extraProfiles != ExtraProfiles.Fixed)
+                            continue;
 
-                        double sum = 0;
-                        if (extraProfiles == ExtraProfiles.No)
-                            sum = Math.Round(VP_VolumesRank.Values.Sum());
-                        if (extraProfiles == ExtraProfiles.MiniVP)
-                            sum = Math.Round(miniVPsRank.Normal.Values.Sum());
-                        if (extraProfiles == ExtraProfiles.Weekly)
-                            sum = Math.Round(WeeklyRank.Normal.Values.Sum());
-                        if (extraProfiles == ExtraProfiles.Monthly)
-                            sum = Math.Round(MonthlyRank.Normal.Values.Sum());
-
+                        double sum = Math.Round(vpNormal.Values.Sum());
                         string strValue = FormatResults ? FormatBigNumber(sum) : $"{sum}";
 
-                        string extraName = extraProfiles == ExtraProfiles.No ? "" :
-                                           extraProfiles == ExtraProfiles.MiniVP ? "Mini" :
-                                           extraProfiles == ExtraProfiles.Weekly ? "Weekly" : "Monthly";
-                        ChartText Center = Chart.DrawText($"{iStart}_VPNormal{extraName}Result", $"\n{strValue}", x1_Start, lowest, VolumeColor);
+                        ChartText Center = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Normal_Result", $"\n{strValue}", x1_Start, y1_lowest, VolumeColor);
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
                         Center.FontSize = FontSizeResults - 1;
 
@@ -3947,20 +3979,45 @@ namespace cAlgo
                 }
                 else if (VolumeMode_Input == VolumeMode_Data.Buy_Sell)
                 {
-                    DrawRectangle_BuySell(VP_VolumesRank_Up[priceKey], VP_VolumesRank_Down[priceKey], isIntraday);
-
-                    if (ShowResults)
+                    IDictionary<double, double> vpBuy = extraProfiles switch
                     {
-                        double volBuy = VP_VolumesRank_Up.Values.Sum();
-                        double volSell = VP_VolumesRank_Down.Values.Sum();
+                        ExtraProfiles.MiniVP => MiniRank.Up,
+                        ExtraProfiles.Fixed => FixedRank[fixedKey].Up,
+                        _ => VP_VolumesRank_Up
+                    };
+                    IDictionary<double, double> vpSell = extraProfiles switch
+                    {
+                        ExtraProfiles.MiniVP => MiniRank.Down,
+                        ExtraProfiles.Fixed => FixedRank[fixedKey].Down,
+                        _ => VP_VolumesRank_Down
+                    };
+
+                    double buyMax = 0;
+                    try { buyMax = vpBuy.Values.Max(); } catch { }
+                    double sellMax = 0;
+                    try { sellMax = vpSell.Values.Max(); } catch { }
+
+                    if (vpBuy.ContainsKey(priceKey) && vpSell.ContainsKey(priceKey))
+                        DrawRectangle_BuySell(vpBuy[priceKey], vpSell[priceKey], buyMax, sellMax, isIntraday);
+
+                    if (ShowResults || ShowMiniResults)
+                    {
+                        if (extraProfiles == ExtraProfiles.MiniVP && !ShowMiniResults)
+                            continue;
+                        if (extraProfiles != ExtraProfiles.MiniVP && !ShowResults && extraProfiles != ExtraProfiles.Fixed)
+                            continue;
+
+                        double volBuy = vpBuy.Values.Sum();
+                        double volSell = vpSell.Values.Sum();
+
                         double percentBuy = (volBuy * 100) / (volBuy + volSell);
                         double percentSell = (volSell * 100) / (volBuy + volSell);
                         percentBuy = Math.Round(percentBuy);
                         percentSell = Math.Round(percentSell);
 
                         ChartText Left, Right;
-                        Left = Chart.DrawText($"{iStart}_VPSellSum", $"{percentSell}%", x1_Start, lowest, SellColor);
-                        Right = Chart.DrawText($"{iStart}_VPBuySum", $"{percentBuy}%", x1_Start, lowest, BuyColor);
+                        Left = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Sell_Sum", $"{percentSell}%", x1_Start, y1_lowest, SellColor);
+                        Right = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Buy_Sum", $"{percentBuy}%", x1_Start, y1_lowest, BuyColor);
                         Left.HorizontalAlignment = HorizontalAlignment.Left;
                         Right.HorizontalAlignment = HorizontalAlignment.Right;
                         Left.FontSize = FontSizeResults;
@@ -3982,7 +4039,7 @@ namespace cAlgo
 
                         Color centerColor = Math.Round(percentBuy) > Math.Round(percentSell) ? BuyColor : SellColor;
 
-                        Center = Chart.DrawText($"{iStart}_VPBuySellResult", $"\n{strFormated}", x1_Start, lowest, centerColor);
+                        Center = Chart.DrawText($"{prefix}_VP_{extraProfiles}_BuySell_Result", $"\n{strFormated}", x1_Start, y1_lowest, centerColor);
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
                         Center.FontSize = FontSizeResults - 1;
 
@@ -4004,59 +4061,40 @@ namespace cAlgo
                 }
                 else
                 {
-                    if (extraProfiles == ExtraProfiles.No)
-                        DrawRectangle_Delta(VP_DeltaRank[priceKey],
-                                            VP_DeltaRank.Values.Max(),
-                                            VP_DeltaRank.Values.Where(n => n < 0), isIntraday);
+                    IDictionary<double, double> vpDelta = extraProfiles switch
+                    {
+                        ExtraProfiles.Monthly => MonthlyRank.Delta,
+                        ExtraProfiles.Weekly => WeeklyRank.Delta,
+                        ExtraProfiles.MiniVP => MiniRank.Delta,
+                        ExtraProfiles.Fixed => FixedRank[fixedKey].Delta,
+                        _ => VP_DeltaRank
+                    };
 
-                    if (extraProfiles == ExtraProfiles.MiniVP)
-                        DrawRectangle_Delta(miniVPsRank.Delta[priceKey],
-                                                miniVPsRank.Delta.Values.Max(),
-                                                miniVPsRank.Delta.Values.Where(n => n < 0), false);
+                    bool intraBool = extraProfiles switch
+                    {
+                        ExtraProfiles.Monthly => isIntraday,
+                        ExtraProfiles.Weekly => isIntraday,
+                        ExtraProfiles.MiniVP => false,
+                        ExtraProfiles.Fixed => false,
+                        _ => isIntraday
+                    };
 
-                    if (extraProfiles == ExtraProfiles.Weekly)
-                        DrawRectangle_Delta(WeeklyRank.Delta[priceKey],
-                                                WeeklyRank.Delta.Values.Max(),
-                                                WeeklyRank.Delta.Values.Where(n => n < 0), isIntraday);
+                    double value = vpDelta[priceKey];
+                    double maxValue = vpDelta.Values.Max();
+                    IEnumerable<double> negativeList = vpDelta.Values.Where(n => n < 0);
 
-                    if (extraProfiles == ExtraProfiles.Monthly)
-                        DrawRectangle_Delta(MonthlyRank.Delta[priceKey],
-                                                MonthlyRank.Delta.Values.Max(),
-                                                MonthlyRank.Delta.Values.Where(n => n < 0), isIntraday);
-
+                    DrawRectangle_Delta(value, maxValue, negativeList, intraBool);
 
                     if (ShowResults || ShowMiniResults)
                     {
                         if (extraProfiles == ExtraProfiles.MiniVP && !ShowMiniResults)
                             continue;
+                        if (extraProfiles != ExtraProfiles.MiniVP && !ShowResults && extraProfiles != ExtraProfiles.Fixed)
+                            continue;
 
-                        string extraName = extraProfiles == ExtraProfiles.No ? "" :
-                                           extraProfiles == ExtraProfiles.MiniVP ? "Mini" :
-                                           extraProfiles == ExtraProfiles.Weekly ? "Weekly" : "Monthly";
-                        double deltaBuy = 0;
-                        double deltaSell = 0;
-                        double totalDelta = 0;
-
-                        if (extraProfiles == ExtraProfiles.No) {
-                            deltaBuy = VP_DeltaRank.Values.Where(n => n > 0).Sum();
-                            deltaSell = VP_DeltaRank.Values.Where(n => n < 0).Sum();
-                            totalDelta = Math.Round(VP_DeltaRank.Values.Sum());
-                        }
-                        if (extraProfiles == ExtraProfiles.MiniVP) {
-                            deltaBuy = miniVPsRank.Delta.Values.Where(n => n > 0).Sum();
-                            deltaSell = miniVPsRank.Delta.Values.Where(n => n < 0).Sum();
-                            totalDelta = Math.Round(miniVPsRank.Delta.Values.Sum());
-                        }
-                        if (extraProfiles == ExtraProfiles.Weekly) {
-                            deltaBuy = WeeklyRank.Delta.Values.Where(n => n > 0).Sum();
-                            deltaSell = WeeklyRank.Delta.Values.Where(n => n < 0).Sum();
-                            totalDelta = Math.Round(WeeklyRank.Delta.Values.Sum());
-                        }
-                        if (extraProfiles == ExtraProfiles.Monthly) {
-                            deltaBuy = MonthlyRank.Delta.Values.Where(n => n > 0).Sum();
-                            deltaSell = MonthlyRank.Delta.Values.Where(n => n < 0).Sum();
-                            totalDelta = Math.Round(MonthlyRank.Delta.Values.Sum());
-                        }
+                        double deltaBuy = vpDelta.Values.Where(n => n > 0).Sum();
+                        double deltaSell = vpDelta.Values.Where(n => n < 0).Sum();
+                        double totalDelta = vpDelta.Values.Sum();
 
                         double percentBuy = 0;
                         double percentSell = 0;
@@ -4066,8 +4104,8 @@ namespace cAlgo
                         percentSell = Math.Round(percentSell);
 
                         ChartText Left, Right;
-                        Right = Chart.DrawText($"{iStart}_VP{extraName}DeltaBuySum", $"{percentBuy}%", x1_Start, lowest, BuyColor);
-                        Left = Chart.DrawText($"{iStart}_VP{extraName}DeltaSellSum", $"{percentSell}%", x1_Start, lowest, SellColor);
+                        Right = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_BuySum", $"{percentBuy}%", x1_Start, y1_lowest, BuyColor);
+                        Left = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_SellSum", $"{percentSell}%", x1_Start, y1_lowest, SellColor);
                         Left.HorizontalAlignment = HorizontalAlignment.Left;
                         Right.HorizontalAlignment = HorizontalAlignment.Right;
                         Left.FontSize = FontSizeResults;
@@ -4078,7 +4116,7 @@ namespace cAlgo
                         string totalDeltaString = FormatResults ? totalDeltaFmtd : $"{totalDelta}";
 
                         Color centerColor = totalDelta > 0 ? BuyColor : SellColor;
-                        Center = Chart.DrawText($"{iStart}_VP{extraName}DeltaResult", $"\n{totalDeltaString}", x1_Start, lowest, centerColor);
+                        Center = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_Result", $"\n{totalDeltaString}", x1_Start, y1_lowest, centerColor);
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
                         Center.FontSize = FontSizeResults - 1;
 
@@ -4101,29 +4139,18 @@ namespace cAlgo
                         {
                             ChartText MinText, MaxText, SubText;
 
-                            double minDelta = 0;
-                            double maxDelta = 0;
-                            double subDelta = 0;
-                            if (extraProfiles == ExtraProfiles.No) {
-                                minDelta = Math.Round(VP_MinMaxDelta[0]);
-                                maxDelta = Math.Round(VP_MinMaxDelta[1]);
-                                subDelta = Math.Round(minDelta - maxDelta);
-                            }
-                            if (extraProfiles == ExtraProfiles.MiniVP) {
-                                minDelta = Math.Round(miniVPsRank.MinMaxDelta[0]);
-                                maxDelta = Math.Round(miniVPsRank.MinMaxDelta[1]);
-                                subDelta = Math.Round(minDelta - maxDelta);
-                            }
-                            if (extraProfiles == ExtraProfiles.Weekly) {
-                                minDelta = Math.Round(WeeklyRank.MinMaxDelta[0]);
-                                maxDelta = Math.Round(WeeklyRank.MinMaxDelta[1]);
-                                subDelta = Math.Round(minDelta - maxDelta);
-                            }
-                            if (extraProfiles == ExtraProfiles.Monthly) {
-                                minDelta = Math.Round(MonthlyRank.MinMaxDelta[0]);
-                                maxDelta = Math.Round(MonthlyRank.MinMaxDelta[1]);
-                                subDelta = Math.Round(minDelta - maxDelta);
-                            }
+                            double[] vpMinMax = extraProfiles switch
+                            {
+                                ExtraProfiles.Monthly => MonthlyRank.MinMaxDelta,
+                                ExtraProfiles.Weekly => WeeklyRank.MinMaxDelta,
+                                ExtraProfiles.MiniVP => MiniRank.MinMaxDelta,
+                                ExtraProfiles.Fixed => FixedRank[fixedKey].MinMaxDelta,
+                                _ => VP_MinMaxDelta
+                            };
+
+                            double minDelta = Math.Round(vpMinMax[0]);
+                            double maxDelta = Math.Round(vpMinMax[1]);
+                            double subDelta = Math.Round(minDelta - maxDelta);
 
                             string minDeltaFmtd = minDelta > 0 ? FormatBigNumber(minDelta) : $"-{FormatBigNumber(Math.Abs(minDelta))}";
                             string maxDeltaFmtd = maxDelta > 0 ? FormatBigNumber(maxDelta) : $"-{FormatBigNumber(Math.Abs(maxDelta))}";
@@ -4137,9 +4164,9 @@ namespace cAlgo
 
                             if (!ShowOnlySubtDelta)
                             {
-                                MinText = Chart.DrawText($"{iStart}_VP{extraName}DeltaMinResult", $"\n\nMin: {minDeltaString}", x1_Start, lowest, SellColor);
-                                MaxText = Chart.DrawText($"{iStart}_VP{extraName}DeltaMaxResult", $"\n\n\nMax: {maxDeltaString}", x1_Start, lowest, BuyColor);
-                                SubText = Chart.DrawText($"{iStart}_VP{extraName}DeltaSubResult", $"\n\n\n\nSub: {subDeltaString}", x1_Start, lowest, subColor);
+                                MinText = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_MinResult", $"\n\nMin: {minDeltaString}", x1_Start, lowest, SellColor);
+                                MaxText = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_MaxResult", $"\n\n\nMax: {maxDeltaString}", x1_Start, lowest, BuyColor);
+                                SubText = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_SubResult", $"\n\n\n\nSub: {subDeltaString}", x1_Start, lowest, subColor);
                                 MinText.HorizontalAlignment = HorizontalAlignment.Center;
                                 MaxText.HorizontalAlignment = HorizontalAlignment.Center;
                                 SubText.HorizontalAlignment = HorizontalAlignment.Center;
@@ -4163,7 +4190,7 @@ namespace cAlgo
                                 }
                             }
                             else {
-                                SubText = Chart.DrawText($"{iStart}_VP{extraName}DeltaSubResult", $"\n\nSub: {subDeltaString}", x1_Start, lowest, subColor);
+                                SubText = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_SubResult", $"\n\nSub: {subDeltaString}", x1_Start, lowest, subColor);
                                 SubText.HorizontalAlignment = HorizontalAlignment.Center;
                                 SubText.FontSize = FontSizeResults - 1;
 
@@ -4181,6 +4208,141 @@ namespace cAlgo
             }
         }
 
+        // *********** MWM PROFILES ***********
+        private void CreateMiniVPs(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
+            if (EnableMiniProfiles)
+            {
+                int miniIndex = MiniVPs_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+                int miniStart = Bars.OpenTimes.GetIndexByTime(MiniVPs_Bars.OpenTimes[miniIndex]);
+
+                if (index == miniStart ||
+                    (index - 1) == miniStart && isPriceBased_Chart ||
+                    (index - 1) == miniStart && (index - 1) != lastCleaned._Mini || loopStart
+                ) {
+                    if (!IsLastBar)
+                        lastTick_ExtraVPs._MiniStart = lastTick_ExtraVPs._Mini;
+                    MiniRank.Normal.Clear();
+                    MiniRank.Up.Clear();
+                    MiniRank.Down.Clear();
+                    MiniRank.Delta.Clear();
+                    double[] resetDelta = {0, 0};
+                    MiniRank.MinMaxDelta = resetDelta;
+                    lastCleaned._Mini = index == miniStart ? index : (index - 1);
+                }
+                if (!isConcurrent)
+                    VolumeProfile(miniStart, index, ExtraProfiles.MiniVP, isLoop);
+                else
+                {
+                    miniVP_Task ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.MiniVP, cts.Token));
+
+                    liveVP_StartIndexes.Mini = miniStart;
+
+                    if (index != miniStart) {
+                        lock (_miniLock)
+                        VolumeProfile(miniStart, index, ExtraProfiles.MiniVP, false, true);
+                    }
+                }
+            }
+        }
+        private void CreateWeeklyVP(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
+            if (EnableVP && EnableWeeklyProfile)
+            {
+                // Avoid recalculating the same period.
+                if (ODFInterval_Input == ODFInterval_Data.Weekly)
+                    return;
+
+                int weekIndex = WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+                int weekStart = Bars.OpenTimes.GetIndexByTime(WeeklyBars.OpenTimes[weekIndex]);
+
+                if (index == weekStart ||
+                    (index - 1) == weekStart && isPriceBased_Chart || loopStart
+                ) {
+                    if (!IsLastBar)
+                        lastTick_ExtraVPs._WeeklyStart = lastTick_ExtraVPs._Weekly;
+                    WeeklyRank.Normal.Clear();
+                    WeeklyRank.Up.Clear();
+                    WeeklyRank.Down.Clear();
+                    WeeklyRank.Delta.Clear();
+                    double[] resetDelta = {0, 0};
+                    WeeklyRank.MinMaxDelta = resetDelta;
+                }
+
+                if (!isConcurrent)
+                    VolumeProfile(weekStart, index, ExtraProfiles.Weekly, isLoop);
+                else
+                {
+                    weeklyVP_Task ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.Weekly, cts.Token));
+
+                    liveVP_StartIndexes.Weekly = weekStart;
+
+                    if (index != weekStart) {
+                        lock (_weeklyLock)
+                            VolumeProfile(weekStart, index, ExtraProfiles.Weekly, false, true);
+                    }
+
+                    DateTime weekStartDate = WeeklyBars.OpenTimes[weekIndex];
+                    firstTickTime = firstTickTime > weekStartDate ? TicksOHLC.OpenTimes.FirstOrDefault() : firstTickTime;
+                    if (firstTickTime > weekStartDate)
+                    {
+                        DrawOnScreen("Not enough Tick data to calculate Weekly Profile \n Zoom out to see the vertical Aqua line");
+                        Chart.DrawVerticalLine("WeekStart", weekStartDate, Color.Aqua);
+                        ChartText text = Chart.DrawText("WeekStartText", "Target Weekly Tick Data", weekStartDate,
+                                    WeeklyBars.HighPrices[weekIndex], Color.Aqua);
+                        text.HorizontalAlignment = HorizontalAlignment.Right;
+                        text.VerticalAlignment = VerticalAlignment.Top;
+                        text.FontSize = 8;
+                    }
+                }
+            }
+        }
+        private void CreateMonthlyVP(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
+            if (EnableVP && EnableMonthlyProfile)
+            {
+                int monthIndex = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+                int monthStart = Bars.OpenTimes.GetIndexByTime(MonthlyBars.OpenTimes[monthIndex]);
+
+                if (index == monthStart ||
+                    (index - 1) == monthStart && isPriceBased_Chart || loopStart
+                ) {
+                    if (!IsLastBar)
+                        lastTick_ExtraVPs._MonthlyStart = lastTick_ExtraVPs._Monthly;
+                    MonthlyRank.Normal.Clear();
+                    MonthlyRank.Up.Clear();
+                    MonthlyRank.Down.Clear();
+                    MonthlyRank.Delta.Clear();
+                    double[] resetDelta = {0, 0};
+                    MonthlyRank.MinMaxDelta = resetDelta;
+                }
+                if (!isConcurrent)
+                    VolumeProfile(monthStart, index, ExtraProfiles.Monthly, isLoop);
+                else
+                {
+                    monthlyVP_Task ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.Monthly, cts.Token));
+
+                    liveVP_StartIndexes.Monthly = monthStart;
+
+                    if (index != monthStart) {
+                        lock (_monthlyLock)
+                            VolumeProfile(monthStart, index, ExtraProfiles.Monthly, false, true);
+                    }
+
+                    DateTime monthStartDate = MonthlyBars.OpenTimes[monthIndex];
+                    firstTickTime = firstTickTime > monthStartDate ? TicksOHLC.OpenTimes.FirstOrDefault() : firstTickTime;
+                    if (firstTickTime > monthStartDate)
+                    {
+                        Second_DrawOnScreen("Not enough Tick data to calculate Monthly Profile \n- Zoom out to see the vertical Aqua line");
+                        Chart.DrawVerticalLine("MonthStart", monthStartDate, Color.Aqua);
+                        ChartText text = Chart.DrawText("MonthStartText", "Target Monthly Tick Data", monthStartDate,
+                                    MonthlyBars.HighPrices[monthIndex], Color.Aqua);
+                        text.HorizontalAlignment = HorizontalAlignment.Right;
+                        text.VerticalAlignment = VerticalAlignment.Top;
+                        text.FontSize = 8;
+                    }
+                }
+            }
+        }
+
+        // *********** LIVE PROFILE UPDATE ***********
         private void LiveVP_Update(int indexStart, int index, bool onlyMini = false) {
             double price = Bars.ClosePrices[index];
 
@@ -4457,11 +4619,11 @@ namespace cAlgo
                         switch (extraID)
                         {
                             case ExtraProfiles.MiniVP:
-                                miniVPsRank.Normal = Worker_VolumesRank;
-                                miniVPsRank.Up = Worker_VolumesRank_Up;
-                                miniVPsRank.Down = Worker_VolumesRank_Down;
-                                miniVPsRank.Delta = Worker_DeltaRank;
-                                miniVPsRank.MinMaxDelta = Worker_MinMaxDelta;
+                                MiniRank.Normal = Worker_VolumesRank;
+                                MiniRank.Up = Worker_VolumesRank_Up;
+                                MiniRank.Down = Worker_VolumesRank_Down;
+                                MiniRank.Delta = Worker_DeltaRank;
+                                MiniRank.MinMaxDelta = Worker_MinMaxDelta;
                                 break;
                             case ExtraProfiles.Weekly:
                                 WeeklyRank.Normal = Worker_VolumesRank;
@@ -4604,6 +4766,10 @@ namespace cAlgo
         protected override void OnDestroy()
         {
             cts.Cancel();
+            if (EnableFixedRange) {
+                foreach (ChartRectangle item in _rectangles)
+                    Chart.RemoveObject(item.Name);
+            }
         }
 
         // Code generated by LLM.
@@ -4645,141 +4811,299 @@ namespace cAlgo
             return result;
         }
 
-        private void CreateMiniVPs(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
-            if (EnableMiniProfiles)
+
+        // *********** FIXED RANGE PROFILE ***********
+        // LLM code generating was used to quickly get the Drawings (Rectangles/Texts/ControlGrid) logic.
+        void RangeInitialize()
+        {
+            Chart.ObjectsUpdated += OnObjectsUpdated;
+            Chart.ZoomChanged += HiddenRangeControls;
+        }
+
+        private void OnObjectsUpdated(ChartObjectsEventArgs args)
+        {
+            if (!EnableFixedRange)
+                return;
+
+            foreach (var rect in _rectangles.ToArray())
             {
-                int miniIndex = MiniVPs_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
-                int miniStart = Bars.OpenTimes.GetIndexByTime(MiniVPs_Bars.OpenTimes[miniIndex]);
+                if (rect == null) continue;
 
-                if (index == miniStart ||
-                    (index - 1) == miniStart && isPriceBased_Chart ||
-                    (index - 1) == miniStart && (index - 1) != lastCleaned._Mini || loopStart
-                ) {
-                    if (!IsLastBar)
-                        lastTick_ExtraVPs._MiniStart = lastTick_ExtraVPs._Mini;
-                    miniVPsRank.Normal.Clear();
-                    miniVPsRank.Up.Clear();
-                    miniVPsRank.Down.Clear();
-                    miniVPsRank.Delta.Clear();
-                    double[] resetDelta = {0, 0};
-                    miniVPsRank.MinMaxDelta = resetDelta;
-                    lastCleaned._Mini = index == miniStart ? index : (index - 1);
-                }
-                if (!isConcurrent)
-                    VolumeProfile(miniStart, index, ExtraProfiles.MiniVP, isLoop);
-                else
-                {
-                    miniVP_Task ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.MiniVP, cts.Token));
+                if (rect.IsInteractive)
+                    UpdateRectangle(rect);
 
-                    liveVP_StartIndexes.Mini = miniStart;
+                if (ShowFixedInfo)
+                    UpdateInfoBox(rect);
 
-                    if (index != miniStart) {
-                        lock (_miniLock)
-                        VolumeProfile(miniStart, index, ExtraProfiles.MiniVP, false, true);
-                    }
-                }
+                UpdateControlGrid(rect);
             }
         }
-        private void CreateWeeklyVP(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
-            if (EnableVP && EnableWeeklyProfile)
-            {
-                // Avoid recalculating the same period.
-                if (ODFInterval_Input == ODFInterval_Data.Weekly)
-                    return;
-
-                int weekIndex = WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
-                int weekStart = Bars.OpenTimes.GetIndexByTime(WeeklyBars.OpenTimes[weekIndex]);
-
-                if (index == weekStart ||
-                    (index - 1) == weekStart && isPriceBased_Chart || loopStart
-                ) {
-                    if (!IsLastBar)
-                        lastTick_ExtraVPs._WeeklyStart = lastTick_ExtraVPs._Weekly;
-                    WeeklyRank.Normal.Clear();
-                    WeeklyRank.Up.Clear();
-                    WeeklyRank.Down.Clear();
-                    WeeklyRank.Delta.Clear();
-                    double[] resetDelta = {0, 0};
-                    WeeklyRank.MinMaxDelta = resetDelta;
-                }
-
-                if (!isConcurrent)
-                    VolumeProfile(weekStart, index, ExtraProfiles.Weekly, isLoop);
-                else
-                {
-                    weeklyVP_Task ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.Weekly, cts.Token));
-
-                    liveVP_StartIndexes.Weekly = weekStart;
-
-                    if (index != weekStart) {
-                        lock (_weeklyLock)
-                            VolumeProfile(weekStart, index, ExtraProfiles.Weekly, false, true);
-                    }
-
-                    DateTime weekStartDate = WeeklyBars.OpenTimes[weekIndex];
-                    firstTickTime = firstTickTime > weekStartDate ? TicksOHLC.OpenTimes.FirstOrDefault() : firstTickTime;
-                    if (firstTickTime > weekStartDate)
-                    {
-                        DrawOnScreen("Not enough Tick data to calculate Weekly Profile \n Zoom out to see the vertical Aqua line");
-                        Chart.DrawVerticalLine("WeekStart", weekStartDate, Color.Aqua);
-                        ChartText text = Chart.DrawText("WeekStartText", "Target Weekly Tick Data", weekStartDate,
-                                    WeeklyBars.HighPrices[weekIndex], Color.Aqua);
-                        text.HorizontalAlignment = HorizontalAlignment.Right;
-                        text.VerticalAlignment = VerticalAlignment.Top;
-                        text.FontSize = 8;
-                    }
-                }
-            }
+        private void HiddenRangeControls(ChartZoomEventArgs args)
+        {
+            foreach (var control in _controlGrids.Values)
+                control.IsVisible = args.Chart.ZoomLevel >= FixedHiddenZoom;
         }
-        private void CreateMonthlyVP(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
-            if (EnableVP && EnableMonthlyProfile)
-            {
-                int monthIndex = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
-                int monthStart = Bars.OpenTimes.GetIndexByTime(MonthlyBars.OpenTimes[monthIndex]);
 
-                if (index == monthStart ||
-                    (index - 1) == monthStart && isPriceBased_Chart || loopStart
-                ) {
-                    if (!IsLastBar)
-                        lastTick_ExtraVPs._MonthlyStart = lastTick_ExtraVPs._Monthly;
-                    MonthlyRank.Normal.Clear();
-                    MonthlyRank.Up.Clear();
-                    MonthlyRank.Down.Clear();
-                    MonthlyRank.Delta.Clear();
-                    double[] resetDelta = {0, 0};
-                    MonthlyRank.MinMaxDelta = resetDelta;
-                }
-                if (!isConcurrent)
-                    VolumeProfile(monthStart, index, ExtraProfiles.Monthly, isLoop);
-                else
-                {
-                    monthlyVP_Task ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.Monthly, cts.Token));
+        public void CreateNewRange()
+        {
+            // Use Mini Interval as first X/Y axis
+            DateTime lastBarDate = Bars.LastBar.OpenTime;
+            int miniIndex = MiniVPs_Bars.OpenTimes.GetIndexByTime(lastBarDate);
+            int miniStart = Bars.OpenTimes.GetIndexByTime(MiniVPs_Bars.OpenTimes[miniIndex]);
 
-                    liveVP_StartIndexes.Monthly = monthStart;
+            string nameKey = $"FixedRange_{DateTime.UtcNow.Ticks}";
+            ChartRectangle rect = Chart.DrawRectangle(
+                nameKey,
+                Bars.OpenTimes[miniStart],
+                MiniVPs_Bars.LowPrices[miniIndex],
+                lastBarDate,
+                MiniVPs_Bars.HighPrices[miniIndex],
+                FixedColor,
+                2,
+                LineStyle.Lines
+            );
 
-                    if (index != monthStart) {
-                        lock (_monthlyLock)
-                            VolumeProfile(monthStart, index, ExtraProfiles.Monthly, false, true);
-                    }
+            rect.IsInteractive = true;
+            _rectangles.Add(rect);
 
-                    DateTime monthStartDate = MonthlyBars.OpenTimes[monthIndex];
-                    firstTickTime = firstTickTime > monthStartDate ? TicksOHLC.OpenTimes.FirstOrDefault() : firstTickTime;
-                    if (firstTickTime > monthStartDate)
-                    {
-                        Second_DrawOnScreen("Not enough Tick data to calculate Monthly Profile \n- Zoom out to see the vertical Aqua line");
-                        Chart.DrawVerticalLine("MonthStart", monthStartDate, Color.Aqua);
-                        ChartText text = Chart.DrawText("MonthStartText", "Target Monthly Tick Data", monthStartDate,
-                                    MonthlyBars.HighPrices[monthIndex], Color.Aqua);
-                        text.HorizontalAlignment = HorizontalAlignment.Right;
-                        text.VerticalAlignment = VerticalAlignment.Top;
-                        text.FontSize = 8;
-                    }
-                }
+            FixedRank.Add(nameKey, new VolumeRankType());
+
+            if (ShowFixedInfo)
+                CreateInfoBox(rect);
+
+            CreateControlGrid(rect);
+        }
+
+        private void CreateInfoBox(ChartRectangle rect)
+        {
+            string prefixName = $"{rect.Name}_InfoBox";
+
+            List<ChartText> list = new();
+            ChartText fromTxt = Chart.DrawText(prefixName + "_From", "", rect.Time1, rect.Y1, FixedColor);
+            ChartText toTxt = Chart.DrawText(prefixName + "_To", "", rect.Time1, rect.Y1, FixedColor);
+            ChartText spanTxt = Chart.DrawText(prefixName + "_Span", "", rect.Time1, rect.Y1, FixedColor);
+
+            foreach (ChartText t in new[] { fromTxt, toTxt, spanTxt }) {
+                t.FontSize = 11;
+                t.VerticalAlignment = VerticalAlignment.Bottom;
+                list.Add(t);
             }
+
+            _infoObjects[rect.Name] = list;
+            UpdateInfoBox(rect);
+        }
+
+        private void CreateControlGrid(ChartRectangle rect)
+        {
+            Grid grid = new(2, 1)
+            {
+                Style = Styles.CreateButtonStyle(),
+                Margin = 0,
+                Height = 75,
+                Width = 25,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            CheckBox fixCheck = new()
+            {
+                IsChecked = false,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            fixCheck.Click += (s) =>
+            {
+                bool isFixed = (bool)fixCheck.IsChecked;
+                rect.IsInteractive = !isFixed;
+                rect.LineStyle = isFixed ? LineStyle.Solid : LineStyle.Lines;
+            };
+
+            Button delBtn = new()
+            {
+                Text = "🗑️",
+                Width = 20,
+                Height = 20,
+                FontSize = 11,
+                Padding = 0,
+                Margin = "0 0 0 0",
+                BackgroundColor = Color.Crimson,
+                ForegroundColor = Color.White,
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            delBtn.Click += (_) => DeleteRectangle(rect);
+
+            grid.AddChild(fixCheck, 0, 0);
+            grid.AddChild(delBtn, 1, 0);
+
+            Border border = new()
+            {
+                Child = grid
+            };
+
+            Chart.AddControl(border, rect.Time2, rect.Y2);
+            _controlGrids[rect.Name] = border;
+        }
+
+        private void UpdateRectangle(ChartRectangle rect)
+        {
+            DateTime start = rect.Time1 < rect.Time2 ? rect.Time1 : rect.Time2;
+            DateTime end = rect.Time1 < rect.Time2 ? rect.Time2 : rect.Time1;
+
+            int startIdx = Bars.OpenTimes.GetIndexByTime(start);
+            int endIdx = Bars.OpenTimes.GetIndexByTime(end);
+            if (startIdx < 0 || endIdx < 0 || endIdx <= startIdx) return;
+
+            double high = double.MinValue;
+            double low = double.MaxValue;
+            for (int i = startIdx; i <= endIdx; i++)
+            {
+                if (Bars.HighPrices[i] > high) high = Bars.HighPrices[i];
+                if (Bars.LowPrices[i] < low) low = Bars.LowPrices[i];
+            }
+
+            rect.Y1 = high;
+            rect.Y2 = low;
+            rect.Time1 = Bars.OpenTimes[startIdx];
+            rect.Time2 = Bars.OpenTimes[endIdx];
+
+            // Update/Draw
+            double bottomY = Math.Min(rect.Y1, rect.Y2);
+
+            ResetFixedRange(rect.Name, end);
+
+            for (int i = startIdx; i <= endIdx; i++)
+                VolumeProfile(startIdx, i, ExtraProfiles.Fixed, fixedKey: rect.Name, fixedLowest: bottomY);
+        }
+
+        private void UpdateInfoBox(ChartRectangle rect)
+        {
+            if (!_infoObjects.TryGetValue(rect.Name, out var objs)) return;
+            if (objs.Count < 3) return;
+
+            ChartText fromTxt = objs[0];
+            ChartText toTxt = objs[1];
+            ChartText spanTxt = objs[2];
+
+            DateTime start = rect.Time1 < rect.Time2 ? rect.Time1 : rect.Time2;
+            DateTime end = rect.Time1 < rect.Time2 ? rect.Time2 : rect.Time1;
+            TimeSpan interval = end.Subtract(start);
+            double interval_ms = interval.TotalMilliseconds;
+
+            // Dynamic TimeLapse Format
+            string[] interval_timelapse = GetTimeLapse(interval_ms);
+            string timelapse_Fmtd = interval_timelapse[0] + interval_timelapse[1];
+
+            int startIdx = Bars.OpenTimes.GetIndexByTime(start);
+            int endIdx = Bars.OpenTimes.GetIndexByTime(end);
+            if (startIdx < 0 || endIdx < 0 || endIdx <= startIdx) return;
+
+            fromTxt.Text = $"{start:MM/dd HH:mm}";
+            toTxt.Text = $"{end:MM/dd HH:mm}";
+            spanTxt.Text = timelapse_Fmtd;
+
+            double maxLength = end.Subtract(start).TotalMilliseconds;
+            DateTime midTime = start.AddMilliseconds(maxLength / 2);
+            double textY = Math.Max(rect.Y1, rect.Y2);
+
+            fromTxt.Time = rect.Time1;
+            fromTxt.Y = textY;
+
+            spanTxt.Time = midTime;
+            spanTxt.Y = textY;
+            spanTxt.HorizontalAlignment = HorizontalAlignment.Center;
+
+            toTxt.Time = rect.Time2;
+            toTxt.Y = textY;
+            toTxt.HorizontalAlignment = HorizontalAlignment.Left;
+        }
+
+        private void UpdateControlGrid(ChartRectangle rect)
+        {
+            if (!_controlGrids.TryGetValue(rect.Name, out var grid)) return;
+            double topY = Math.Max(rect.Y1, rect.Y2);
+            DateTime rightTime = rect.Time1 > rect.Time2 ? rect.Time1 : rect.Time2;
+            Chart.MoveControl(grid, rightTime, topY);
+        }
+
+        public void DeleteRectangle(ChartRectangle rect)
+        {
+            if (rect == null) return;
+            Chart.RemoveObject(rect.Name);
+            _rectangles.Remove(rect);
+
+            // remove info objects
+            if (_infoObjects.TryGetValue(rect.Name, out var objs))
+            {
+                foreach (var o in objs)
+                    Chart.RemoveObject(o.Name);
+                _infoObjects.Remove(rect.Name);
+            }
+
+            // remove control grid
+            if (_controlGrids.TryGetValue(rect.Name, out var grid))
+            {
+                Chart.RemoveControl(grid);
+                _controlGrids.Remove(rect.Name);
+            }
+
+            // remove histograms/lines drawings
+            DateTime end = rect.Time1 < rect.Time2 ? rect.Time2 : rect.Time1;
+            ResetFixedRange(rect.Name, end);
+        }
+
+        private void ResetFixedRange(string fixedKey, DateTime end)
+        {
+            FixedRank[fixedKey].Normal.Clear();
+            FixedRank[fixedKey].Up.Clear();
+            FixedRank[fixedKey].Down.Clear();
+            FixedRank[fixedKey].Delta.Clear();
+            FixedRank[fixedKey].MinMaxDelta = new double[2];
+
+            int endIdx = Bars.OpenTimes.GetIndexByTime(end);
+            int TF_idx = GetSegmentIndex(endIdx);
+
+            for (int i = 0; i < segmentsDict[TF_idx].Count; i++)
+            {
+                Chart.RemoveObject($"{fixedKey}_{i}_VP_Fixed_Normal");
+                Chart.RemoveObject($"{fixedKey}_{i}_VP_Fixed_Number_Normal");
+
+                Chart.RemoveObject($"{fixedKey}_{i}_VP_Fixed_Sell");
+                Chart.RemoveObject($"{fixedKey}_{i}_VP_Fixed_Buy");
+                Chart.RemoveObject($"{fixedKey}_{i}_VP_Fixed_Number_Sell");
+                Chart.RemoveObject($"{fixedKey}_{i}_VP_Fixed_Number_Buy");
+
+                Chart.RemoveObject($"{fixedKey}_{i}_VP_Fixed_Delta");
+                Chart.RemoveObject($"{fixedKey}_{i}_VP_Fixed_Number_Delta");
+            }
+
+            string[] objsNames = new string[10] {
+                $"{fixedKey}_VP_Fixed_Normal_Result",
+
+                $"{fixedKey}_VP_Fixed_Sell_Sum",
+                $"{fixedKey}_VP_Fixed_Buy_Sum",
+                $"{fixedKey}_VP_Fixed_BuySell_Result",
+
+                $"{fixedKey}_VP_Fixed_Delta_BuySum",
+                $"{fixedKey}_VP_Fixed_Delta_SellSum",
+                $"{fixedKey}_VP_Fixed_Delta_Result",
+
+                $"{fixedKey}_VP_Fixed_Delta_MinResult",
+                $"{fixedKey}_VP_Fixed_Delta_MaxResult",
+                $"{fixedKey}_VP_Fixed_Delta_SubResult",
+            };
+
+            foreach (string name in objsNames)
+                Chart.RemoveObject(name);
+        }
+
+        public void ResetFixedRange_Dicts() {
+            _rectangles.Clear();
+            _infoObjects.Clear();
+            _controlGrids.Clear();
         }
 
         // *********** SOME SHARED FUCTIONS ***********
-        private void VP_Tick(int index, bool isVP = false, ExtraProfiles extraVP = ExtraProfiles.No)
+        private void VP_Tick(int index, bool isVP = false, ExtraProfiles extraVP = ExtraProfiles.No, string fixedKey = "")
         {
             DateTime startTime = Bars.OpenTimes[index];
             DateTime endTime = Bars.OpenTimes[index + 1];
@@ -4801,23 +5125,17 @@ namespace cAlgo
                 Just doing a simple thing, which is keeping the last used tickIndex for both VP/ODF.
                 Performs the calculations/drawings at the speed of light, even for 1 month of ticks!
             */
-
-            int startIndex = isVP ? lastTick_VPStart : lastTick_Bars;
-
-            if (extraVP == ExtraProfiles.Monthly) {
-                startIndex = lastTick_ExtraVPs._Monthly;
-                if (IsLastBar)
-                    startIndex = lastTick_ExtraVPs._MonthlyStart;
-            }
-            if (extraVP == ExtraProfiles.Weekly) {
-                startIndex = lastTick_ExtraVPs._Weekly;
-                if (IsLastBar)
-                    startIndex = lastTick_ExtraVPs._WeeklyStart;
-            }
-            if (extraVP == ExtraProfiles.MiniVP) {
-                startIndex = lastTick_ExtraVPs._Mini;
-                if (IsLastBar)
-                    startIndex = lastTick_ExtraVPs._MiniStart;
+            int startIndex = extraVP switch
+            {
+                ExtraProfiles.Monthly => !IsLastBar ? lastTick_ExtraVPs._Monthly : lastTick_ExtraVPs._MonthlyStart,
+                ExtraProfiles.Weekly => !IsLastBar ? lastTick_ExtraVPs._Weekly : lastTick_ExtraVPs._WeeklyStart,
+                ExtraProfiles.MiniVP => !IsLastBar ? lastTick_ExtraVPs._Mini : lastTick_ExtraVPs._MiniStart,
+                _ => isVP ? lastTick_VPStart : lastTick_Bars
+            };
+            if (extraVP == ExtraProfiles.Fixed) {
+                ChartRectangle rect = _rectangles.Where(x => x.Name == fixedKey).FirstOrDefault();
+                DateTime start = rect.Time1 < rect.Time2 ? rect.Time1 : rect.Time2;
+                startIndex = Bars.OpenTimes.GetIndexByTime(start);
             }
 
             // For real-time market - ODF
@@ -4827,8 +5145,11 @@ namespace cAlgo
 
                 lastTick_Bars = startIndex;
             }
-            // =======================
 
+            int TF_idx = extraVP == ExtraProfiles.Fixed ? GetSegmentIndex(index) : index;
+            List<double> whichSegment_VP = extraVP == ExtraProfiles.Fixed ? segmentsDict[TF_idx] : Segments_VP;
+
+            // =======================
             double prevLoopTick = 0;
             for (int tickIndex = startIndex; tickIndex < TicksOHLC.Count; tickIndex++)
             {
@@ -4837,17 +5158,16 @@ namespace cAlgo
                 if (tickBar.OpenTime < startTime || tickBar.OpenTime > endTime)
                 {
                     if (tickBar.OpenTime > endTime) {
+                        // ODF
                         lastTick_Bars = !isVP ? tickIndex : lastTick_Bars;
-
-                        if (extraVP == ExtraProfiles.No)
-                            lastTick_VP = isVP ? tickIndex : lastTick_VP;
-                        if (extraVP == ExtraProfiles.Monthly)
-                            lastTick_ExtraVPs._Monthly = tickIndex;
-                        if (extraVP == ExtraProfiles.Weekly)
-                            lastTick_ExtraVPs._Weekly = tickIndex;
-                        if (extraVP == ExtraProfiles.MiniVP)
-                            lastTick_ExtraVPs._Mini = tickIndex;
-
+                        // VP
+                        _ = extraVP switch
+                        {
+                            ExtraProfiles.Monthly => lastTick_ExtraVPs._Monthly = tickIndex,
+                            ExtraProfiles.Weekly => lastTick_ExtraVPs._Weekly = tickIndex,
+                            ExtraProfiles.MiniVP => lastTick_ExtraVPs._Mini = tickIndex,
+                            _ => isVP ? tickIndex : lastTick_VP
+                        };
                         break;
                     } else
                         continue;
@@ -4862,7 +5182,7 @@ namespace cAlgo
             // =======================
             void RankVolume(double tickPrice, double prevTick)
             {
-                var segmentsSource = isVP ? Segments_VP : Segments_Bar;
+                List<double> segmentsSource = isVP ? whichSegment_VP : Segments_Bar;
 
                 double prevSegmentValue = 0.0;
                 for (int i = 0; i < segmentsSource.Count; i++)
@@ -4873,17 +5193,18 @@ namespace cAlgo
 
                         if (isVP)
                         {
-                            if (EnableMonthlyProfile && extraVP == ExtraProfiles.Monthly)
-                                UpdateExtraProfiles(MonthlyRank, priceKey, tickPrice, prevTick);
-
-                            if (EnableWeeklyProfile && extraVP == ExtraProfiles.Weekly)
-                                UpdateExtraProfiles(WeeklyRank, priceKey, tickPrice, prevTick);
-
-                            if (EnableMiniProfiles && extraVP == ExtraProfiles.MiniVP)
-                                UpdateExtraProfiles(miniVPsRank, priceKey, tickPrice, prevTick);
-
                             if (extraVP != ExtraProfiles.No)
-                                break;
+                            {
+                                VolumeRankType extraRank = extraVP switch
+                                {
+                                    ExtraProfiles.Monthly => MonthlyRank,
+                                    ExtraProfiles.Weekly => WeeklyRank,
+                                    ExtraProfiles.Fixed => FixedRank[fixedKey],
+                                    _ => MiniRank
+                                };
+                                UpdateExtraProfiles(extraRank, priceKey, tickPrice, prevTick);
+                                return;
+                            }
 
                             double prevDelta = 0;
                             if (ShowMinMaxDelta)
@@ -5150,10 +5471,59 @@ namespace cAlgo
             return dateToReturn;
         }
 
+        private static string[] GetTimeLapse(double interval_ms)
+        {
+            // Dynamic TimeLapse Format
+            // from Weis & Wykoff System
+            TimeSpan ts = TimeSpan.FromMilliseconds(interval_ms);
+
+            string timelapse_Suffix = "";
+            double timelapse_Value = 0;
+
+            double[] dividedTimestamp = { ts.Days, ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds };
+            for (int i = 0; i < dividedTimestamp.Length; i++)
+            {
+                if (dividedTimestamp[i] != 0)
+                {
+                    string suffix = i == 4 ? "ms" : i == 3 ? "s" : i == 2 ? "m" : i == 1 ? "h" : "d";
+
+                    if (suffix == "ms")
+                    {
+                        timelapse_Value = ts.TotalMilliseconds;
+                        timelapse_Suffix = suffix;
+                    }
+                    else if (suffix == "s")
+                    {
+                        timelapse_Value = ts.TotalSeconds;
+                        timelapse_Suffix = suffix;
+                    }
+                    else if (suffix == "m")
+                    {
+                        timelapse_Value = ts.TotalMinutes;
+                        timelapse_Suffix = suffix;
+                    }
+                    else if (suffix == "h")
+                    {
+                        timelapse_Value = ts.TotalHours;
+                        timelapse_Suffix = suffix;
+                    }
+                    else if (suffix == "d")
+                    {
+                        timelapse_Value = ts.TotalDays;
+                        timelapse_Suffix = suffix;
+                    }
+                    break;
+                }
+            }
+            string[] interval_timelapse = { $"{Math.Round(timelapse_Value, 1)}", timelapse_Suffix };
+            return interval_timelapse;
+        }
+
         private void DrawOnScreen(string msg)
         {
             Chart.DrawStaticText("txt", $"{msg}", VerticalAlignment.Top, HorizontalAlignment.Center, Color.LightBlue);
         }
+
         private void Second_DrawOnScreen(string msg)
         {
             Chart.DrawStaticText("txt2", $"{msg}", VerticalAlignment.Top, HorizontalAlignment.Left, Color.LightBlue);
@@ -5625,28 +5995,30 @@ namespace cAlgo
 
             // LookBack from VP
             Bars ODF_Bars = ODFInterval_Input == ODFInterval_Data.Daily ? DailyBars : WeeklyBars;
-            int FirstIndex = Bars.OpenTimes.GetIndexByTime(ODF_Bars.OpenTimes.FirstOrDefault());
+            int firstIndex = Bars.OpenTimes.GetIndexByTime(ODF_Bars.OpenTimes.FirstOrDefault());
+
             // Get Index of ODF Interval to continue only in Lookback
-            int iVerify = ODF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[FirstIndex]);
+            int iVerify = ODF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[firstIndex]);
             while (ODF_Bars.ClosePrices.Count - iVerify > Lookback) {
-                FirstIndex++;
-                iVerify = ODF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[FirstIndex]);
+                firstIndex++;
+                iVerify = ODF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[firstIndex]);
             }
 
             // Daily or Weekly ODF
-            int TF_idx = ODF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[FirstIndex]);
+            int TF_idx = ODF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[firstIndex]);
             int indexStart = Bars.OpenTimes.GetIndexByTime(ODF_Bars.OpenTimes[TF_idx]);
 
             // Weekly Profile but Daily ODF
             bool extraWeekly = EnableVP && EnableWeeklyProfile && ODFInterval_Input == ODFInterval_Data.Daily;
             if (extraWeekly) {
-                TF_idx = WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[FirstIndex]);
+                TF_idx = WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[firstIndex]);
                 indexStart = Bars.OpenTimes.GetIndexByTime(WeeklyBars.OpenTimes[TF_idx]);
             }
+
             // Monthly Profile
             bool extraMonthly = EnableVP && EnableMonthlyProfile;
             if (extraMonthly) {
-                TF_idx = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[FirstIndex]);
+                TF_idx = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[firstIndex]);
                 indexStart = Bars.OpenTimes.GetIndexByTime(MonthlyBars.OpenTimes[TF_idx]);
             }
 
@@ -5671,6 +6043,14 @@ namespace cAlgo
 
             // Reset last update
             lastCleaned._ODF_Interval = 0;
+            lastCleaned._Mini = 0;
+
+            // Reset Fixed Range
+            foreach (ChartRectangle rect in _rectangles)
+            {
+                DateTime end = rect.Time1 < rect.Time2 ? rect.Time2 : rect.Time1;
+                ResetFixedRange(rect.Name, end);
+            }
 
             // Historical data
             for (int index = indexStart; index < Bars.Count; index++)
@@ -5790,6 +6170,7 @@ namespace cAlgo
         private Button ModeBtn;
         private Button SaveBtn;
         private Button ApplyBtn;
+        private Button RangeBtn;
         private ProgressBar _progressBar;
         private bool isLoadingParams;
 
@@ -5981,7 +6362,7 @@ namespace cAlgo
                     InputType = ParamInputType.Checkbox,
                     GetDefault = p => p.EnableMiniProfiles,
                     OnChanged = _ => UpdateCheckbox("MiniVPsKey", val => Outside.EnableMiniProfiles = val),
-                    IsVisible = () => Outside.VolumeMode_Input != VolumeMode_Data.Buy_Sell && !Outside.EnableBubblesChart
+                    IsVisible = () => !Outside.EnableBubblesChart
                 },
                 new()
                 {
@@ -5993,7 +6374,7 @@ namespace cAlgo
                     GetDefault = p => p.MiniVPsTimeframe.ShortName.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(Supported_Timeframes)),
                     OnChanged = _ => UpdateMiniVPTimeframe(),
-                    IsVisible = () => Outside.VolumeMode_Input != VolumeMode_Data.Buy_Sell && Outside.EnableMiniProfiles && !Outside.EnableBubblesChart
+                    IsVisible = () => Outside.EnableMiniProfiles && !Outside.EnableBubblesChart
                 },
                 new()
                 {
@@ -6004,7 +6385,17 @@ namespace cAlgo
                     InputType = ParamInputType.Checkbox,
                     GetDefault = p => p.ShowMiniResults,
                     OnChanged = _ => UpdateCheckbox("MiniResultKey", val => Outside.ShowMiniResults = val),
-                    IsVisible = () => Outside.VolumeMode_Input != VolumeMode_Data.Buy_Sell && Outside.EnableMiniProfiles && !Outside.EnableBubblesChart
+                    IsVisible = () => Outside.EnableMiniProfiles && !Outside.EnableBubblesChart
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "FixedRangeKey",
+                    Label = "Fixed Range?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.FixedRange,
+                    OnChanged = _ => UpdateCheckbox("FixedRangeKey", val => Outside.EnableFixedRange = val),
                 },
                 new()
                 {
@@ -6664,7 +7055,7 @@ namespace cAlgo
 
         private ControlBase CreateFooter()
         {
-            var footerGrid = new Grid(2, 3)
+            var footerGrid = new Grid(3, 3)
             {
                 Margin = 8,
                 VerticalAlignment = VerticalAlignment.Center
@@ -6684,6 +7075,7 @@ namespace cAlgo
             footerGrid.AddChild(_progressBar, 0, 0);
 
             footerGrid.AddChild(CreateApplyButton_TextInput(), 1, 0, 1, 3);
+            footerGrid.AddChild(CreateFixedRangeButton(), 2, 0, 2, 3);
 
             return footerGrid;
         }
@@ -6819,6 +7211,27 @@ namespace cAlgo
 
             button.Click += (_) => RecalculateOutsideWithMsg();
             ApplyBtn = button;
+            return button;
+        }
+
+        private void SetApplyVisibility() {
+            ApplyBtn.IsVisible = true;
+            RangeBtn.IsVisible = false;
+        }
+        private Button CreateFixedRangeButton()
+        {
+            Button button = new() {
+                Text = "➕ Range",
+                Padding = 0,
+                Width = 50,
+                Height = 20,
+                Margin = 0,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            button.Click += (_) => Outside.CreateNewRange();
+            RangeBtn = button;
             return button;
         }
 
@@ -6979,6 +7392,9 @@ namespace cAlgo
                 case "FillHistKey":
                     RecalculateOutsideWithMsg(false);
                     return;
+                case "FixedRangeKey":
+                    RangeBtn.IsVisible = value;
+                    return;
             }
 
             RecalculateOutsideWithMsg();
@@ -6991,7 +7407,7 @@ namespace cAlgo
             if (value >= -1 && value != Outside.GetLookback())
             {
                 Outside.SetLookback(value);
-                ApplyBtn.IsVisible = true;
+                SetApplyVisibility();
             }
         }
         private void UpdateRowHeight()
@@ -7002,7 +7418,7 @@ namespace cAlgo
                 if (height != Outside.GetRowHeight())
                 {
                     Outside.SetRowHeight(height);
-                    ApplyBtn.IsVisible = true;
+                    SetApplyVisibility();
                 }
             }
         }
@@ -7155,7 +7571,7 @@ namespace cAlgo
                 if (value != Outside.MAperiod_Spike)
                 {
                     Outside.MAperiod_Spike = value;
-                    ApplyBtn.IsVisible = true;
+                    SetApplyVisibility();
                 }
             }
         }
@@ -7184,7 +7600,7 @@ namespace cAlgo
                 if (value != Outside.SpikeLevels_MaxCount)
                 {
                     Outside.SpikeLevels_MaxCount = value;
-                    ApplyBtn.IsVisible = true;
+                    SetApplyVisibility();
                 }
             }
         }
@@ -7259,7 +7675,7 @@ namespace cAlgo
                 if (value != Outside.MAperiod_Bubbles)
                 {
                     Outside.MAperiod_Bubbles = value;
-                    ApplyBtn.IsVisible = true;
+                    SetApplyVisibility();
                 }
             }
         }
@@ -7306,7 +7722,7 @@ namespace cAlgo
                 if (value != Outside.UltraBubbles_MaxCount)
                 {
                     Outside.UltraBubbles_MaxCount = value;
-                    ApplyBtn.IsVisible = true;
+                    SetApplyVisibility();
                 }
             }
         }
@@ -7373,7 +7789,7 @@ namespace cAlgo
                 if (value != Outside.MAperiod_Large)
                 {
                     Outside.MAperiod_Large = value;
-                    ApplyBtn.IsVisible = true;
+                    SetApplyVisibility();
                 }
             }
         }
@@ -7384,7 +7800,7 @@ namespace cAlgo
                 if (value != Outside.LargeFilter_Ratio)
                 {
                     Outside.LargeFilter_Ratio = value;
-                    ApplyBtn.IsVisible = true;
+                    SetApplyVisibility();
                 }
             }
         }
@@ -7445,6 +7861,7 @@ namespace cAlgo
                 {
                     Outside.Chart.RemoveAllObjects();
                     Outside.Chart.ResetBarColors();
+                    Outside.ResetFixedRange_Dicts();
                 });
             }
 
@@ -7550,6 +7967,7 @@ namespace cAlgo
 
             // Manually hidden Apply Button
             ApplyBtn.IsVisible = false;
+            RangeBtn.IsVisible = Outside.EnableFixedRange;
         }
 
         private void RefreshHighlighting()
