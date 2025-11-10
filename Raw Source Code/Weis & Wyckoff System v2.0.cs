@@ -32,8 +32,20 @@ What's new in rev. 1? (after ODF_AGG)
 
 Days without coding => 12 days
 
-Last update => 10/10/2025
-=========================================================================
+Last update => 10/11/2025
+===========================
+
+Final revision (2025)
+
+- Fix: Params Panel on MacOs
+    - Supposedly cut short/half the size (Can't reproduce it through VM)
+    - WrapPanel isn't fully supported (The button is hidden)
+    - MissingMethodException on cAlgo.API.Panel.get_Children() (...)
+        - At ToggleExpandCollapse event.
+
+- Tested on MacOS (12 Monterey / 13 Ventura) without 3D accelerated graphics
+
+========================================================================
 
               Transcribed & Improved for cTrader/C#
                           by srlcarlg
@@ -596,6 +608,7 @@ namespace cAlgo
                 Text = "WWS",
                 Padding = 0,
                 Height = 22,
+                Width = 40, // Fix MacOS => stretching button when StackPanel is used.
                 Margin = 2,
                 BackgroundColor = btnColor
             };
@@ -769,19 +782,19 @@ namespace cAlgo
                 Style = Styles.CreatePanelBackgroundStyle(),
                 Margin = "20 40 20 20",
                 // ParamsPanel - Lock Width
-                Width = 255,
+                Width = 262,
                 Child = ParamPanel
             };
             Chart.AddControl(borderParam);
             ParamBorder = borderParam;
 
-            var wrapPanel = new WrapPanel
+            var stackPanel = new StackPanel
             {
                 VerticalAlignment = vAlign,
                 HorizontalAlignment = hAlign,
             };
-            AddHiddenButton(wrapPanel, Color.FromHex("#7F808080"));
-            Chart.AddControl(wrapPanel);
+            AddHiddenButton(stackPanel, Color.FromHex("#7F808080"));
+            Chart.AddControl(stackPanel);
         }
 
         public override void Calculate(int index)
@@ -3544,6 +3557,9 @@ namespace cAlgo
             footerGrid.Columns[1].SetWidthInPixels(8);
             footerGrid.Columns[2].SetWidthToAuto();
 
+            // Fix MacOS => small size button (save)
+            footerGrid.Rows[0].SetHeightInPixels(35);
+
             var saveButton = CreateSaveButton();
             footerGrid.AddChild(saveButton, 0, 2);
 
@@ -3558,14 +3574,24 @@ namespace cAlgo
             return footerGrid;
         }
 
-        private Control CreateContentPanel()
+        private ScrollViewer CreateContentPanel()
         {
-            var contentPanel = new StackPanel { Margin = 10 };
+            var contentPanel = new StackPanel
+            {
+                Margin = 10,
+                // Fix MacOS => large string increase column and hidden others
+                Width = 230, // ParamsPanel Width
+                // Fix MacOS(maybe) => panel is cut short/half the size
+                VerticalAlignment = VerticalAlignment.Top,
+            };
 
             // --- Mode controls at the top ---
-            var grid = new Grid(6, 5);
+            var grid = new Grid(2, 5);
             grid.Columns[1].SetWidthInPixels(5);
             grid.Columns[3].SetWidthInPixels(5);
+
+            // Fix MacOS => small size button (modeinfo)
+            grid.Rows[0].SetHeightInPixels(45);
 
             grid.AddChild(CreatePassButton("<"), 0, 0);
             grid.AddChild(CreateModeInfo_Button(FirstParams.Template.ToString()), 0, 1, 1, 3);
@@ -3607,11 +3633,6 @@ namespace cAlgo
                 Style = Styles.CreateScrollViewerTransparentStyle(),
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                MaxHeight = Outside.Chart.Height - 100
-            };
-
-            Outside.Chart.SizeChanged += (_) => {
-                scroll.MaxHeight = Outside.Chart.Height - 100;
             };
 
             return scroll;
@@ -4735,6 +4756,9 @@ namespace cAlgo
 
             private bool _isExpanded = false;
 
+            // Fix MacOS => MissingMethodException <cAlgo.API.Panel.get_Children()>
+            private readonly List<ControlBase> _panelChildren = new();
+
             public RegionSection(string name, IEnumerable<ParamDefinition> parameters)
             {
                 Name = name;
@@ -4772,7 +4796,7 @@ namespace cAlgo
                 _isExpanded = !_isExpanded;
                 btn.Text = (_isExpanded ? "▼ " : "► ") + Name;
 
-                foreach (var child in Container.Children.Skip(1)) // skip header
+                foreach (var child in _panelChildren)
                     child.IsVisible = _isExpanded;
             }
 
@@ -4780,6 +4804,7 @@ namespace cAlgo
             {
                 control.IsVisible = _isExpanded;
                 Container.AddChild(control);
+                _panelChildren.Add(control);
             }
 
             public void SetVisible(bool visible)

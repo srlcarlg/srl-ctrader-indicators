@@ -26,12 +26,22 @@ What's new in rev. 1? (after ODF_AGG)
 - Concurrent Live VP Update
 - Show Any or All (Mini-VPs/Daily/Weekly/Monthly) Profiles at once!
 
-"Final" revision (2025)
+Last update => 10/11/2025
+===========================
+
+Final revision (2025)
+
 - Fixed Range Profiles
 - Code optimization/readability, mostly switch expressions
-- TODO: Params Panel on MacOs is supposedly cut short/half the size
+- Fix: Params Panel on MacOs
+    - Supposedly cut short/half the size (Can't reproduce it through VM)
+    - WrapPanel isn't fully supported (The button is hidden)
+    - MissingMethodException on cAlgo.API.Panel.get_Children() (...)
+        - At ToggleExpandCollapse event.
 
-Last update => 06/11/2025
+- Tested on MacOS (12 Monterey / 13 Ventura) without 3D accelerated graphics
+
+===========================
 
 AUTHOR: srlcarlg
 
@@ -527,6 +537,7 @@ namespace cAlgo
                 Text = "VP",
                 Padding = 0,
                 Height = 22,
+                Width = 30, // Fix MacOS => stretching button when StackPanel is used.
                 Margin = 2,
                 BackgroundColor = btnColor
             };
@@ -734,18 +745,18 @@ namespace cAlgo
                 Style = Styles.CreatePanelBackgroundStyle(),
                 Margin = "20 40 20 20",
                 // ParamsPanel - Lock Width
-                Width = 255,
+                Width = 262,
                 Child = ParamPanel
             };
             Chart.AddControl(borderParam);
             ParamBorder = borderParam;
 
-            WrapPanel wrapPanel = new() {
+            StackPanel stackPanel = new() {
                 VerticalAlignment = vAlign,
                 HorizontalAlignment = hAlign,
             };
-            AddHiddenButton(wrapPanel, Color.FromHex("#7F808080"));
-            Chart.AddControl(wrapPanel);
+            AddHiddenButton(stackPanel, Color.FromHex("#7F808080"));
+            Chart.AddControl(stackPanel);
         }
 
         public override void Calculate(int index)
@@ -1630,7 +1641,7 @@ namespace cAlgo
                         string totalDeltaString = FormatResults ? totalDeltaFmtd : $"{totalDelta}";
 
                         Color centerColor = totalDelta > 0 ? BuyColor : SellColor;
-                        Center = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_Result", $"\n{totalDeltaString}", x1_Start, lowest, centerColor);
+                        Center = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_Result", $"\n{totalDeltaString}", x1_Start, y1_lowest, centerColor);
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
                         Center.FontSize = FontSizeResults - 1;
 
@@ -2797,7 +2808,8 @@ namespace cAlgo
                 Margin = "0 0 0 0",
                 BackgroundColor = Color.Crimson,
                 ForegroundColor = Color.White,
-                HorizontalAlignment = HorizontalAlignment.Center
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
             };
             delBtn.Click += (_) => DeleteRectangle(rect);
 
@@ -4128,7 +4140,7 @@ namespace cAlgo
 
         private ControlBase CreateFooter()
         {
-            var footerGrid = new Grid(3, 3)
+            var footerGrid = new Grid(2, 3)
             {
                 Margin = 8,
                 VerticalAlignment = VerticalAlignment.Center
@@ -4137,6 +4149,9 @@ namespace cAlgo
             footerGrid.Columns[0].SetWidthInStars(1);
             footerGrid.Columns[1].SetWidthInPixels(8);
             footerGrid.Columns[2].SetWidthToAuto();
+
+            // Fix MacOS => small size button (save)
+            footerGrid.Rows[0].SetHeightInPixels(35);
 
             var saveButton = CreateSaveButton();
             footerGrid.AddChild(saveButton, 0, 2);
@@ -4148,19 +4163,29 @@ namespace cAlgo
             footerGrid.AddChild(_progressBar, 0, 0);
 
             footerGrid.AddChild(CreateApplyButton_TextInput(), 1, 0, 1, 3);
-            footerGrid.AddChild(CreateFixedRangeButton(), 2, 0, 2, 3);
+            footerGrid.AddChild(CreateFixedRangeButton(), 1, 0, 1, 3);
 
             return footerGrid;
         }
 
-        private Control CreateContentPanel()
+        private ScrollViewer CreateContentPanel()
         {
-            var contentPanel = new StackPanel { Margin = 10 };
+            var contentPanel = new StackPanel
+            {
+                Margin = 10,
+                // Fix MacOS => large string increase column and hidden others
+                Width = 230, // ParamsPanel Width
+                // Fix MacOS(maybe) => panel is cut short/half the size
+                VerticalAlignment = VerticalAlignment.Top,
+            };
 
             // --- Mode controls at the top ---
-            var grid = new Grid(6, 5);
+            var grid = new Grid(2, 5);
             grid.Columns[1].SetWidthInPixels(5);
             grid.Columns[3].SetWidthInPixels(5);
+
+            // Fix MacOS => small size button (modeinfo)
+            grid.Rows[0].SetHeightInPixels(45);
 
             grid.AddChild(CreatePassButton("<"), 0, 0);
             grid.AddChild(CreateModeInfo_Button(FirstParams.VolMode.ToString()), 0, 1, 1, 3);
@@ -4202,11 +4227,6 @@ namespace cAlgo
                 Style = Styles.CreateScrollViewerTransparentStyle(),
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                MaxHeight = Outside.Chart.Height - 100
-            };
-
-            Outside.Chart.SizeChanged += (_) => {
-                scroll.MaxHeight = Outside.Chart.Height - 100;
             };
 
             return scroll;
@@ -4934,6 +4954,8 @@ namespace cAlgo
             public List<ParamDefinition> Params { get; }
 
             private bool _isExpanded = false;
+            // Fix MacOS => MissingMethodException <cAlgo.API.Panel.get_Children()>
+            private readonly List<ControlBase> _panelChildren = new();
 
             public RegionSection(string name, IEnumerable<ParamDefinition> parameters)
             {
@@ -4972,7 +4994,7 @@ namespace cAlgo
                 _isExpanded = !_isExpanded;
                 btn.Text = (_isExpanded ? "▼ " : "► ") + Name;
 
-                foreach (var child in Container.Children.Skip(1)) // skip header
+                foreach (var child in _panelChildren)
                     child.IsVisible = _isExpanded;
             }
 
@@ -4980,6 +5002,7 @@ namespace cAlgo
             {
                 control.IsVisible = _isExpanded;
                 Container.AddChild(control);
+                _panelChildren.Add(control);
             }
 
             public void SetVisible(bool visible)

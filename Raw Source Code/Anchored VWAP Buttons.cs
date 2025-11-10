@@ -10,13 +10,23 @@ What's new in rev.1?
 -Added StdDev to any VWAP (one StdDev per instance)
 -Great refactor
 
-Last update => 15/09/2025
-
 Usage:
 Create VWAP: Click on the button and select the bar for the VWAP
 Remove VWAP: Click the button again when it is activated.
 
 VWAP will be updated with each new bar
+
+Last update => 10/11/2025
+===========================
+
+Final revision (2025)
+
+- Fix: UI Panel on MacOs
+    - WrapPanel isn't fully supported (The buttons are hidden)
+    
+- Tested on MacOS (12 Monterey / 13 Ventura) without 3D accelerated graphics
+
+===========================
 AUTHOR: srlcarlg
 ----------------------------------------------------------------------------------------------------------------------------
 */
@@ -194,7 +204,7 @@ namespace cAlgo
                     break;
             }
 
-            var wrapPanel = new WrapPanel
+            StackPanel stackPanel = new()
             {
                 HorizontalAlignment = hAlign,
                 VerticalAlignment = vAlign,
@@ -202,13 +212,13 @@ namespace cAlgo
             };
 
             // For Loop slowdown indicator startup
-            AddButton(wrapPanel, BtnColor, 0);
-            AddButton(wrapPanel, BtnColor, 1);
-            AddButton(wrapPanel, BtnColor, 2);
-            AddButton(wrapPanel, BtnColor, 3);
-            AddButton(wrapPanel, BtnColor, 4);
+            AddButton(stackPanel, BtnColor, 0);
+            AddButton(stackPanel, BtnColor, 1);
+            AddButton(stackPanel, BtnColor, 2);
+            AddButton(stackPanel, BtnColor, 3);
+            AddButton(stackPanel, BtnColor, 4);
 
-            Chart.AddControl(wrapPanel);
+            Chart.AddControl(stackPanel);
             Chart.MouseMove += DrawVerticalLine;
             Chart.MouseDown += AddVWAP;
             Bars.BarOpened += UpdateVWAP;
