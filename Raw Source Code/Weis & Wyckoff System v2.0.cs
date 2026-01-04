@@ -30,10 +30,21 @@ What's new in rev. 1? (after ODF_AGG)
     - High-performance GetWicks()
     - Asynchronous Tick Data Collection
 
-Days without coding => 12 days
-
-Last update => 10/11/2025
+Last update => 04/01/2026
 ===========================
+
+What's new in rev.2 (2026)?
+
+- New features for 'Wyckoff Bars' => 'Coloring':
+    - "L1Norm" to Strength Filter
+    - "Percentile" Ratio
+    - Independent Ratios on Params-Panel
+        - for [Fixed, Percentile] types
+        - and [Normalized_Emphasized] filter
+- Move '[Wyckoff] Show Strength?' debug parameter to Params-Panel
+- Fix (params-panel) => Normalized_Emphasized parameters (Period, Multiplier) doesn't set new values.
+- Fix (custom-mas) => StdDev was using the MA values instead of respective MA-Source values
+
 
 Final revision (2025)
 
@@ -42,7 +53,6 @@ Final revision (2025)
     - WrapPanel isn't fully supported (The button is hidden)
     - MissingMethodException on cAlgo.API.Panel.get_Children() (...)
         - At ToggleExpandCollapse event.
-
 - Tested on MacOS (12 Monterey / 13 Ventura) without 3D accelerated graphics
 
 ========================================================================
@@ -212,9 +222,6 @@ namespace cAlgo
         public bool ShowTurningPoint { get; set; }
         [Parameter("[ZigZag] Invert Turning Color?", DefaultValue = true, Group = "==== Debug ====")]
         public bool InvertTurningColor { get; set; }
-
-        [Parameter("[Wyckoff] Show Strength?", DefaultValue = false, Group = "==== Debug ====")]
-        public bool ShowStrengthValue { get; set; }
         [Parameter("[Weis] Show Wave Ratio?", DefaultValue = false, Group = "==== Debug ====")]
         public bool ShowRatioValue { get; set; }
 
@@ -267,10 +274,10 @@ namespace cAlgo
             BigBrain,
             Custom
         }
-        public Template_Data Template_Input { get; set; } = Template_Data.Insider;
+        public Template_Data Template_Input = Template_Data.Insider;
 
         // Wyckoff Bars
-        public bool EnableWyckoff { get; set; } = true;
+        public bool EnableWyckoff = true;
         public enum Numbers_Data
         {
             Both,
@@ -278,21 +285,21 @@ namespace cAlgo
             Time,
             None
         }
-        public Numbers_Data Numbers_Input { get; set; } = Numbers_Data.Both;
+        public Numbers_Data Numbers_Input = Numbers_Data.Both;
 
         public enum NumbersPosition_Data
         {
             Inside,
             Outside,
         }
-        public NumbersPosition_Data NumbersPosition_Input { get; set; } = NumbersPosition_Data.Inside;
+        public NumbersPosition_Data NumbersPosition_Input = NumbersPosition_Data.Inside;
 
         public enum NumbersBothPosition_Data
         {
             Default,
             Invert,
         }
-        public NumbersBothPosition_Data NumbersBothPosition_Input { get; set; } = NumbersBothPosition_Data.Default;
+        public NumbersBothPosition_Data NumbersBothPosition_Input = NumbersBothPosition_Data.Default;
 
         public enum NumbersColor_Data
         {
@@ -300,41 +307,66 @@ namespace cAlgo
             Time,
             CustomColor
         }
-        public NumbersColor_Data NumbersColor_Input { get; set; } = NumbersColor_Data.Volume;
+        public NumbersColor_Data NumbersColor_Input = NumbersColor_Data.Volume;
 
         public enum BarsColor_Data
         {
             Volume,
             Time,
         }
-        public BarsColor_Data BarsColor_Input { get; set; } = BarsColor_Data.Volume;
+        public BarsColor_Data BarsColor_Input = BarsColor_Data.Volume;
 
-        public bool FillBars { get; set; } = true;
-        public bool KeepOutline { get; set; } = false;
-        public bool ShowOnlyLargeNumbers { get; set; } = false;
+        public bool FillBars = true;
+        public bool KeepOutline = false;
+        public bool ShowOnlyLargeNumbers = false;
 
         public enum StrengthFilter_Data
         {
             MA,
             Standard_Deviation,
             Both,
-            Normalized_Emphasized
+            Normalized_Emphasized,
+            L1Norm
         }
-        public StrengthFilter_Data StrengthFilter_Input { get; set; } = StrengthFilter_Data.MA;
-        public MovingAverageType MAtype { get; set; } = MovingAverageType.Exponential;
-        public int MAperiod { get; set; } = 5;
-        public int NormalizePeriod { get; set; } = 5;
-        public int NormalizeMultiplier { get; set; } = 10;
+        public StrengthFilter_Data StrengthFilter_Input = StrengthFilter_Data.MA;
+        
+        public enum StrengthRatio_Data
+        {
+            Fixed,
+            Percentile,
+        }        
+        public StrengthRatio_Data StrengthRatio_Input = StrengthRatio_Data.Percentile;
+        public MovingAverageType MAtype = MovingAverageType.Exponential;
+        public int MAperiod = 5;
+        public int Pctile_Period = 20;
+        public int NormalizePeriod = 5;
+        public int NormalizeMultiplier = 10;
+        public bool ShowStrengthValue = false;
 
-        public double HeatmapLowest_Value { get; set; } = 0.5;
-        public double HeatmapLow_Value { get; set; } = 1;
-        public double HeatmapAverage_Value { get; set; } = 1.5;
-        public double HeatmapHigh_Value { get; set; } = 2;
-        public double HeatmapUltra_Value { get; set; } = 2.01;
+        // Fixed Ratio
+        public double Lowest_FixedValue = 0.5;
+        public double Low_FixedValue = 1;
+        public double Average_FixedValue = 1.5;
+        public double High_FixedValue = 2;
+        public double Ultra_FixedValue = 2.01;
+
+        // Percentile Ratio
+        public int Lowest_PctileValue = 40;
+        public int Low_PctileValue = 70;
+        public int Average_PctileValue = 90;
+        public int High_PctileValue = 97;
+        public int Ultra_PctileValue = 99;
+
+        // Normalized_Emphasized ratio
+        public double Lowest_PctValue = 23.6;
+        public double Low_PctValue = 38.2;
+        public double Average_PctValue = 61.8;
+        public double High_PctValue = 100;
+        public double Ultra_PctValue = 101;
 
 
         // Weis Waves
-        public bool ShowCurrentWave { get; set; } = true;
+        public bool ShowCurrentWave = true;
 
         public enum ShowWaves_Data
         {
@@ -343,7 +375,7 @@ namespace cAlgo
             Volume,
             EffortvsResult
         }
-        public ShowWaves_Data ShowWaves_Input { get; set; } = ShowWaves_Data.EffortvsResult;
+        public ShowWaves_Data ShowWaves_Input = ShowWaves_Data.EffortvsResult;
 
         public enum ShowOtherWaves_Data
         {
@@ -352,7 +384,7 @@ namespace cAlgo
             Price,
             Time
         }
-        public ShowOtherWaves_Data ShowOtherWaves_Input { get; set; } = ShowOtherWaves_Data.Both;
+        public ShowOtherWaves_Data ShowOtherWaves_Input = ShowOtherWaves_Data.Both;
 
         public enum ShowMarks_Data
         {
@@ -361,10 +393,10 @@ namespace cAlgo
             Left,
             Right
         }
-        public ShowMarks_Data ShowMarks_Input { get; set; } = ShowMarks_Data.No;
+        public ShowMarks_Data ShowMarks_Input = ShowMarks_Data.No;
 
-        public double EvsR_Ratio { get; set; } = 1.5;
-        public double WW_Ratio { get; set; } = 1.7;
+        public double EvsR_Ratio = 1.5;
+        public double WW_Ratio = 1.7;
 
         // ZigZag
         public enum WavesMode_Data
@@ -372,7 +404,7 @@ namespace cAlgo
             Reversal,
             ZigZag,
         }
-        public WavesMode_Data WavesMode_Input { get; set; } = WavesMode_Data.ZigZag;
+        public WavesMode_Data WavesMode_Input = WavesMode_Data.ZigZag;
 
         public enum YellowZigZag_Data
         {
@@ -380,8 +412,8 @@ namespace cAlgo
             UsePrev_InvertWave,
             UseCurrent
         }
-        public YellowZigZag_Data YellowZigZag_Input { get; set; } = YellowZigZag_Data.UseCurrent;
-        public bool YellowRenko_IgnoreRanging { get; set; } = false;
+        public YellowZigZag_Data YellowZigZag_Input = YellowZigZag_Data.UseCurrent;
+        public bool YellowRenko_IgnoreRanging = false;
 
         public enum ZigZagMode_Data
         {
@@ -390,30 +422,32 @@ namespace cAlgo
             Pips,
             NoLag_HighLow
         }
-        public ZigZagMode_Data ZigZagMode_Input { get; set; } = ZigZagMode_Data.NoLag_HighLow;
+        public ZigZagMode_Data ZigZagMode_Input = ZigZagMode_Data.NoLag_HighLow;
 
-        public double PercentageZZ { get; set; } = 0.01;
-        public double PipsZZ { get; set; } = 0.1;
+        public double PercentageZZ = 0.01;
+        public double PipsZZ = 0.1;
 
         public enum Priority_Data {
             None,
             Auto,
             Skip
         }
-        public Priority_Data Priority_Input { get; set; } = Priority_Data.None;
+        public Priority_Data Priority_Input = Priority_Data.None;
 
         public enum ZigZagSource_Data {
             Current,
             MultiTF
         }
-        public ZigZagSource_Data ZigZagSource_Input { get; set; } = ZigZagSource_Data.Current;
-        public TimeFrame MTFSource_TimeFrame { get; set; } = TimeFrame.Minute30;
+        public ZigZagSource_Data ZigZagSource_Input = ZigZagSource_Data.Current;
+        public TimeFrame MTFSource_TimeFrame = TimeFrame.Minute30;
         public MTF_Sources MTFSource_Panel = MTF_Sources.Standard;
 
 
         // ==== Weis Wave & Wyckoff System ====
         public readonly string NOTIFY_CAPTION = "Weis & Wyckoff System";
         private IndicatorDataSeries TimeSeries;
+        private IndicatorDataSeries StrengthSeries_Vol;
+        private IndicatorDataSeries StrengthSeries_Time;
         private MovingAverage MATime, MAVol;
         private StandardDeviation stdDev_Time, stdDev_Vol;
 
@@ -568,15 +602,32 @@ namespace cAlgo
             public StrengthFilter_Data StrengthFilter { get; set; }
             public MovingAverageType MAtype { get; set; }
             public int MAperiod { get; set; }
-
-            public double HeatmapLowest { get; set; }
-            public double HeatmapLow { get; set; }
-            public double HeatmapAverage { get; set; }
-            public double HeatmapHigh { get; set; }
-            public double HeatmapUltra { get; set; }
-
             public int NormalizePeriod { get; set; }
             public int NormalizeMultiplier { get; set; }
+
+            public int PctilePeriod { get; set; }
+            public StrengthRatio_Data StrengthRatio { get; set; }
+            public bool ShowStrength { get; set; }
+            
+            public double Lowest_Pctile { get; set; }
+            public double Low_Pctile { get; set; }
+            public double Average_Pctile { get; set; }
+            public double High_Pctile { get; set; }
+            public double Ultra_Pctile { get; set; }
+
+            
+            public double Lowest_Pct { get; set; }
+            public double Low_Pct { get; set; }
+            public double Average_Pct { get; set; }
+            public double High_Pct { get; set; }
+            public double Ultra_Pct { get; set; }
+
+            
+            public double Lowest_Fixed { get; set; }
+            public double Low_Fixed { get; set; }
+            public double Average_Fixed { get; set; }
+            public double High_Fixed { get; set; }
+            public double Ultra_Fixed { get; set; }
 
             // Weis Waves
             public bool ShowCurrentWave { get; set; }
@@ -676,6 +727,8 @@ namespace cAlgo
 
             // WyckoffAnalysis()
             TimeSeries = CreateDataSeries();
+            StrengthSeries_Vol = CreateDataSeries();
+            StrengthSeries_Time = CreateDataSeries();
 
             if (!UseCustomMAs) {
                 MATime = Indicators.MovingAverage(TimeSeries, MAperiod, MAtype);
@@ -742,16 +795,30 @@ namespace cAlgo
                 StrengthFilter = StrengthFilter_Input,
                 MAtype = MAtype,
                 MAperiod = MAperiod,
-
-                HeatmapLowest = HeatmapLowest_Value,
-                HeatmapLow = HeatmapLow_Value,
-                HeatmapAverage = HeatmapAverage_Value,
-                HeatmapHigh = HeatmapHigh_Value,
-                HeatmapUltra = HeatmapUltra_Value,
-
                 NormalizePeriod = NormalizePeriod,
                 NormalizeMultiplier = NormalizeMultiplier,
+                PctilePeriod = Pctile_Period,
+                StrengthRatio = StrengthRatio_Input,
+                ShowStrength = ShowStrengthValue,
+                
+                Lowest_Pctile = Lowest_PctileValue,
+                Low_Pctile = Low_PctileValue,
+                Average_Pctile = Average_PctileValue,
+                High_Pctile = High_PctileValue,
+                Ultra_Pctile = Ultra_PctileValue,
+                
+                Lowest_Pct = Lowest_PctValue,
+                Low_Pct = Low_PctValue,
+                Average_Pct = Average_PctValue,
+                High_Pct = High_PctValue,
+                Ultra_Pct = Ultra_PctValue,
 
+                Lowest_Fixed = Lowest_FixedValue,
+                Low_Fixed = Low_FixedValue,
+                Average_Fixed = Average_FixedValue,
+                High_Fixed = High_FixedValue,
+                Ultra_Fixed = Ultra_FixedValue,
+                
                 // Weis Waves
                 ShowCurrentWave = ShowCurrentWave,
                 ShowWaves = ShowWaves_Input,
@@ -932,13 +999,6 @@ namespace cAlgo
                     MTFSource_TimeFrame = TimeFrame.Minute30;
                     MTFSource_Panel = MTF_Sources.Standard;
                 }
-                StrengthFilter_Input = StrengthFilter_Data.Normalized_Emphasized;
-                HeatmapLowest_Value = 23.6;
-                HeatmapLow_Value = 38.2;
-                HeatmapAverage_Value = 61.8;
-                HeatmapHigh_Value = 100;
-                HeatmapUltra_Value = 101;
-
             }
             // Range
             if (isPriceBased_Chart && !isRenkoChart && !isTickChart) {
@@ -946,11 +1006,11 @@ namespace cAlgo
                 StrengthFilter_Input = StrengthFilter_Data.MA;
                 MAperiod = 20;
                 MAtype = MovingAverageType.Triangular;
-                HeatmapLowest_Value = 0.5;
-                HeatmapLow_Value = 1.2;
-                HeatmapAverage_Value = 2.5;
-                HeatmapHigh_Value = 3.5;
-                HeatmapUltra_Value = 3.51;
+                Lowest_FixedValue = 0.5;
+                Low_FixedValue = 1.2;
+                Average_FixedValue = 2.5;
+                High_FixedValue = 3.5;
+                Ultra_FixedValue = 3.51;
 
                 MTFSource_TimeFrame = TimeFrame.Range10;
                 MTFSource_Panel = MTF_Sources.Range;
@@ -993,7 +1053,6 @@ namespace cAlgo
                 return;
 
             // ==== Time Filter ====
-            // Previous Interval
             DateTime openTime = Bars.OpenTimes[index];
             DateTime closeTime = Bars.OpenTimes[index + 1];
             if (IsLastBar)
@@ -1007,89 +1066,115 @@ namespace cAlgo
             string timelapse_Suffix = interval_timelapse[1];
 
             TimeSeries[index] = timelapse_Value;
+            
+            // ==== Strength Filter ====
+            double volume = VolumeSeries[index];
+            double time = TimeSeries[index];
+            double volumeStrength = 0;
+            double timeStrength = 0;
+            switch (StrengthFilter_Input) 
+            {
+                case StrengthFilter_Data.MA: {
+                    double maValue = UseCustomMAs ? CustomMAs(volume, index, MAperiod, customMAtype) : MAVol.Result[index];
+                    volumeStrength = volume / maValue;
+                    // ========
+                    maValue = UseCustomMAs ? CustomMAs(time, index, MAperiod, customMAtype) : MATime.Result[index];
+                    timeStrength = time / maValue;
+                    break;
+                }
+                case StrengthFilter_Data.Standard_Deviation: {
+                    double  stddevValue = UseCustomMAs ? CustomMAs(volume, index, MAperiod, customMAtype, true, VolumeSeries) : stdDev_Vol.Result[index];
+                    volumeStrength = volume / stddevValue; 
+                    // ========
+                    stddevValue = UseCustomMAs ? CustomMAs(time, index, MAperiod, customMAtype, true, TimeSeries) : stdDev_Time.Result[index];
+                    timeStrength = time / stddevValue;
+                    break;
+                }
+                case StrengthFilter_Data.Both: {
+                    double maValue = UseCustomMAs ? CustomMAs(volume, index, MAperiod, customMAtype) : MAVol.Result[index];
+                    double stddevValue = UseCustomMAs ? CustomMAs(volume, index, MAperiod, customMAtype, true, VolumeSeries) : stdDev_Vol.Result[index];
+                    volumeStrength = (volume - maValue) / stddevValue; 
+                    // ========
+                    maValue = UseCustomMAs ? CustomMAs(time, index, MAperiod, customMAtype) : MATime.Result[index];
+                    stddevValue = UseCustomMAs ? CustomMAs(time, index, MAperiod, customMAtype, true, TimeSeries) : stdDev_Time.Result[index];
+                    timeStrength = (time - maValue) / stddevValue; 
+                    break;
+                }
+                case StrengthFilter_Data.Normalized_Emphasized:
+                    double Normalization(bool isTime = false) {
+                        /*
+                        ==== References for Normalized_Emphasized ====
+                        (Normalized Volume Oscillator 2008/2014) (https://www.mql5.com/en/code/8208)
+                        // (The key idea for normalized volume by average volume period)
+                        (Volumes Emphasized.mq4) (???)
+                        // (improvement of above indicator)
 
-            // Time
-            double filterValue_Time;
-            if (UseCustomMAs) {
-                filterValue_Time = StrengthFilter_Input == StrengthFilter_Data.MA ?
-                        CustomMAs(TimeSeries[index], index, MAperiod, customMAtype) :
-                        CustomMAs(TimeSeries[index], index, MAperiod, customMAtype, true);
-            } else
-                filterValue_Time = StrengthFilter_Input == StrengthFilter_Data.MA ? MATime.Result[index] : stdDev_Time.Result[index];
+                        It seems to be... the most suitable filter approach for Time-Based Charts, without Candle Spread Analysis.
+                        Since CFD's Volume can be very flat at higher Tick activity,
+                        - the slightest value change will be highlighted... as in ODF_Ticks/AGG.
+                        */
+                        if (index < NormalizePeriod)
+                            return 0;
 
-            double timeStrength = timelapse_Value / filterValue_Time;
+                        double avg = 0;
+                        for (int j = index; j > index - NormalizePeriod; j--) {
+                            if (isTime)
+                                avg += TimeSeries[j];
+                            else
+                                avg += VolumeSeries[j];
+                        }
 
-            if (StrengthFilter_Input == StrengthFilter_Data.Both) {
-                if (UseCustomMAs) {
-                    double ma = CustomMAs(TimeSeries[index], index, MAperiod, customMAtype);
-                    double stddev = CustomMAs(TimeSeries[index], index, MAperiod, customMAtype, true);
-                    timeStrength = (TimeSeries[index] - ma) / stddev;
-                } else
-                    timeStrength = (TimeSeries[index] - MATime.Result[index]) / stdDev_Time.Result[index];
+                        avg /= NormalizePeriod;
+
+                        double normalizedValue = isTime ? (time / avg) : (volume / avg);
+                        double normalizedPercentage = (normalizedValue * 100) - 100;
+                        normalizedPercentage *= NormalizeMultiplier; // I've added this to get "less but meaningful" coloring
+
+                        return normalizedPercentage;
+                    }
+                    volumeStrength = Normalization();
+                    timeStrength = Normalization(true);
+                    break;
+                case StrengthFilter_Data.L1Norm:
+                    double[] window = new double[MAperiod];
+
+                    for (int i = 0; i < MAperiod; i++)
+                        window[i] = VolumeSeries[index - MAperiod + 1 + i];
+
+                    volumeStrength = L1NormStrength(window);
+                    timeStrength = L1NormStrength(window);
+                    break;
             }
-
-            timeStrength = Math.Round(Math.Abs(timeStrength), 2);
-
-            // Volume
-            double filterValue_Vol;
-            if (UseCustomMAs) {
-                filterValue_Vol = StrengthFilter_Input == StrengthFilter_Data.MA ?
-                        CustomMAs(VolumeSeries[index], index, MAperiod, customMAtype) :
-                        CustomMAs(VolumeSeries[index], index, MAperiod, customMAtype, true);
-            } else
-                filterValue_Vol = StrengthFilter_Input == StrengthFilter_Data.MA ? MAVol.Result[index] : stdDev_Vol.Result[index];
-
-            double volumeStrength = VolumeSeries[index] / filterValue_Vol;
-
-            if (StrengthFilter_Input == StrengthFilter_Data.Both) {
-                if (UseCustomMAs) {
-                    double ma = CustomMAs(VolumeSeries[index], index, MAperiod, customMAtype);
-                    double stddev = CustomMAs(VolumeSeries[index], index, MAperiod, customMAtype, true);
-                    timeStrength = (VolumeSeries[index] - ma) / stddev;
-                } else
-                    timeStrength = (VolumeSeries[index] - MAVol.Result[index]) / stdDev_Vol.Result[index];
+            
+            // Keep negative values of Normalized_Emphasized
+            if (StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized) {
+                volumeStrength = Math.Abs(volumeStrength);
+                timeStrength = Math.Abs(timeStrength);
             }
+            
+            volumeStrength = Math.Round(volumeStrength, 2);
+            timeStrength = Math.Round(timeStrength, 2);
 
-            volumeStrength = Math.Round(Math.Abs(volumeStrength), 2);
-
-            double Normalization(bool isTime = false) {
-                /*
-                ==== References for Normalized_Emphasized ====
-                (Normalized Volume Oscillator 2008/2014) (https://www.mql5.com/en/code/8208)
-                // (The key idea for normalized volume by average volume period)
-                (Volumes Emphasized.mq4) (???)
-                // (improvement of above indicator)
-
-                It seems to be... the most suitable filter approach for Time-Based Charts, without Candle Spread Analysis.
-                Since CFD's Volume can be very flat at higher Tick activity,
-                 - the slightest value change will be highlighted... as in ODF_Ticks/AGG.
-                */
-                if (index < NormalizePeriod)
-                    return 0;
-
-                double avg = 0;
-                for (int j = index; j > index - NormalizePeriod; j--) {
-                    if (isTime)
-                        avg += TimeSeries[j];
-                    else
-                        avg += VolumeSeries[j];
+            if (StrengthRatio_Input == StrengthRatio_Data.Percentile && StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized) 
+            {        
+                StrengthSeries_Vol[index] = volumeStrength;
+                StrengthSeries_Time[index] = timeStrength;
+                
+                double[] windowVol = new double[Pctile_Period];
+                double[] windowTime = new double[Pctile_Period];
+                
+                for (int i = 0; i < Pctile_Period; i++) {
+                    windowVol[i] = StrengthSeries_Vol[index - Pctile_Period + 1 + i];
+                    windowTime[i] = StrengthSeries_Time[index - Pctile_Period + 1 + i];
                 }
 
-                avg /= NormalizePeriod;
-
-                double normalizedValue = isTime ? (TimeSeries[index] / avg) : (VolumeSeries[index] / avg);
-                double normalizedPercentage = (normalizedValue * 100) - 100;
-                normalizedPercentage *= NormalizeMultiplier; // I've added this to get "less but meaningful" coloring
-
-                return normalizedPercentage;
+                volumeStrength = RollingPercentile(windowVol);
+                volumeStrength = Math.Round(volumeStrength, 1);
+                // ========
+                timeStrength = RollingPercentile(windowTime);
+                timeStrength = Math.Round(timeStrength, 1);
             }
-            if (StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized) {
-                volumeStrength = Normalization();
-                timeStrength = Normalization(true);
 
-                volumeStrength = Math.Round(volumeStrength, 2);
-                timeStrength = Math.Round(timeStrength, 2);
-            }
             // ==== Drawing ====
             // Y-Axis
             bool isBullish = Bars.ClosePrices[index] > Bars.OpenPrices[index];
@@ -1120,29 +1205,46 @@ namespace cAlgo
                 colorTypeNumbers = colorTypeNumbers < 0 ? 0 : colorTypeNumbers;
             }
 
-            Color barColor = colorTypeBars < HeatmapLowest_Value ? lowestColor :
-                             colorTypeBars < HeatmapLow_Value ? lowColor :
-                             colorTypeBars < HeatmapAverage_Value ? averageColor :
-                             colorTypeBars < HeatmapHigh_Value ? highColor :
-                             colorTypeBars >= HeatmapUltra_Value ? ultraColor : lowestColor;
+            // Ratio
+            bool isFixed = StrengthRatio_Input == StrengthRatio_Data.Fixed;
+
+            double lowest = isFixed ? Lowest_FixedValue : Lowest_PctileValue;
+            double low = isFixed ? Low_FixedValue : Low_PctileValue;
+            double average = isFixed ? Average_FixedValue : Average_PctileValue;
+            double high = isFixed ? High_FixedValue : High_PctileValue;
+            double ultra = isFixed ? Ultra_FixedValue : Ultra_PctileValue;
+
+            if (StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized) {
+                lowest = Lowest_PctValue;
+                low = Low_PctValue;
+                average = Average_PctValue;
+                high = High_PctValue;
+                ultra = Ultra_PctValue;
+            }
+
+            Color barColor = colorTypeBars < lowest ? lowestColor :
+                             colorTypeBars < low ? lowColor :
+                             colorTypeBars < average ? averageColor :
+                             colorTypeBars < high ? highColor :
+                             colorTypeBars >= ultra ? ultraColor : lowestColor;
 
             highColor = isBullish ? HeatmapHighUp_Color : HeatmapHighDown_Color;
             ultraColor = isBullish ? HeatmapUltraUp_Color : HeatmapUltraDown_Color;
-            Color numberColor = colorTypeNumbers < HeatmapLowest_Value ? HeatmapLowest_Color :
-                                colorTypeNumbers < HeatmapLow_Value ? HeatmapLow_Color :
-                                colorTypeNumbers < HeatmapAverage_Value ? HeatmapAverage_Color :
-                                colorTypeNumbers < HeatmapHigh_Value ? highColor :
-                                colorTypeNumbers >= HeatmapUltra_Value ? ultraColor : HeatmapLowest_Color;
+            Color numberColor = colorTypeNumbers < lowest ? HeatmapLowest_Color :
+                                colorTypeNumbers < low ? HeatmapLow_Color :
+                                colorTypeNumbers < average ? HeatmapAverage_Color :
+                                colorTypeNumbers < high ? highColor :
+                                colorTypeNumbers >= ultra ? ultraColor : HeatmapLowest_Color;
 
             // Numbers
             timelapse_Value = Math.Round(timelapse_Value);
             string onlyTime = ShowOnlyLargeNumbers ?
-                              (timeStrength > HeatmapLow_Value ? timelapse_Value + timelapse_Suffix : "") :
+                              (timeStrength > low ? timelapse_Value + timelapse_Suffix : "") :
                               timelapse_Value + timelapse_Suffix;
 
             string onlyVol = ShowOnlyLargeNumbers ?
-                             (volumeStrength > HeatmapLow_Value ? FormatBigNumber(VolumeSeries[index]) : "") :
-                             FormatBigNumber(VolumeSeries[index]);
+                             (volumeStrength > low ? FormatBigNumber(volume) : "") :
+                             FormatBigNumber(volume);
 
             string bothVolTime = NumbersBothPosition_Input == NumbersBothPosition_Data.Default ? $"{onlyTime}\n{onlyVol}" : $"{onlyVol}\n{onlyTime}";
 
@@ -1222,7 +1324,7 @@ namespace cAlgo
                         BarIndex = index,
                         Type = DrawType.Text,
                         Id = $"{index}_strengthVol",
-                        Text = $"{volumeStrength} vol",
+                        Text = $"{volumeStrength}v",
                         X1 = Bars[index].OpenTime,
                         Y1 = isBullish ? Bars[index].High : Bars[index].Low,
                         horizontalAlignment = HorizontalAlignment.Center,
@@ -1237,7 +1339,7 @@ namespace cAlgo
                         BarIndex = index,
                         Type = DrawType.Text,
                         Id = $"{index}_strengthTime",
-                        Text = $"{timeStrength} time",
+                        Text = $"{timeStrength}ts",
                         X1 = Bars[index].OpenTime,
                         Y1 = isBullish ? Bars[index].Low : Bars[index].High,
                         horizontalAlignment = HorizontalAlignment.Center,
@@ -1246,11 +1348,49 @@ namespace cAlgo
                         Color = CustomNumbersColor
                     });
                 }
+                
+                DrawOnScreen("v => volume \n ts => time");
             }
 
         }
 
-        private double CustomMAs(double seriesValue, int index, int maPeriod, MAType_Data maType, bool isStdDev = false) {
+        private static double RollingPercentile(double[] window)
+        {
+            // generated/converted by LLM
+            if (window == null || window.Length == 0)
+                return 0.0;
+
+            double last = window[window.Length - 1];
+            int count = 0;
+
+            for (int i = 0; i < window.Length; i++)
+            {
+                if (window[i] <= last)
+                    count++;
+            }
+
+            return 100.0 * count / window.Length;
+        }
+        
+        private static double L1NormStrength(double[] window)
+        {
+            // generated/converted by LLM
+            if (window == null || window.Length == 0)
+                return 0.0;
+
+            double denom = 0.0;
+
+            for (int i = 0; i < window.Length; i++)
+                denom += Math.Abs(window[i]);
+
+            return denom != 0.0
+                ? window[window.Length - 1] / denom
+                : 1.0;
+        }
+
+        private double CustomMAs(double seriesValue, int index,
+                                 int maPeriod, MAType_Data maType, bool isStdDev = false,
+                                 IndicatorDataSeries stddev_buffer = null) {
             if (!_dynamicBuffer.ContainsKey(index))
                 _dynamicBuffer.Add(index, seriesValue);
             else
@@ -1272,13 +1412,13 @@ namespace cAlgo
                 _ => double.NaN
             };
 
-            return isStdDev ? StdDev(index, maPeriod, maValue, buffer) : maValue;
+            return isStdDev ? StdDev(index, maPeriod, maValue, stddev_buffer) : maValue;
         }
         //  ===== CUSTOM MAS ====
         // MAs logic generated by LLM
         // Modified to handle multiples sources
         // as well as specific OrderFlow() needs.
-        private static double StdDev(int index, int Period, double maValue, Dictionary<int, double> buffer)
+        private static double StdDev(int index, int Period, double maValue, IndicatorDataSeries buffer)
         {
             double mean = maValue;
             double sumSq = 0.0;
@@ -1289,6 +1429,7 @@ namespace cAlgo
                     sumSq += diff * diff;
                 } catch {}
             }
+            
             // Sample => (Period - 1) / Population => Period
             return (Period > 1) ? Math.Sqrt(sumSq / (Period - 1)) : 0.0;
         }
@@ -3085,7 +3226,7 @@ namespace cAlgo
                 new()
                 {
                     Region = "Wyckoff Bars",
-                    RegionOrder = 1,
+                    RegionOrder = 0,
                     Key = "EnableWyckoffKey",
                     Label = "Enable?",
                     InputType = ParamInputType.Checkbox,
@@ -3095,7 +3236,7 @@ namespace cAlgo
                 new()
                 {
                     Region = "Wyckoff Bars",
-                    RegionOrder = 1,
+                    RegionOrder = 0,
                     Key = "ShowNumbersKey",
                     Label = "Numbers",
                     InputType = ParamInputType.ComboBox,
@@ -3106,7 +3247,7 @@ namespace cAlgo
                 new()
                 {
                     Region = "Wyckoff Bars",
-                    RegionOrder = 1,
+                    RegionOrder = 0,
                     Key = "NumbersPositionKey",
                     Label = "Position",
                     InputType = ParamInputType.ComboBox,
@@ -3117,7 +3258,7 @@ namespace cAlgo
                 new()
                 {
                     Region = "Wyckoff Bars",
-                    RegionOrder = 1,
+                    RegionOrder = 0,
                     Key = "BothPositionKey",
                     Label = "Position[Both]",
                     InputType = ParamInputType.ComboBox,
@@ -3129,7 +3270,7 @@ namespace cAlgo
                 new()
                 {
                     Region = "Wyckoff Bars",
-                    RegionOrder = 1,
+                    RegionOrder = 0,
                     Key = "NumbersColorKey",
                     Label = "Coloring[nº]",
                     InputType = ParamInputType.ComboBox,
@@ -3140,7 +3281,7 @@ namespace cAlgo
                 new()
                 {
                     Region = "Wyckoff Bars",
-                    RegionOrder = 1,
+                    RegionOrder = 0,
                     Key = "BarsColorKey",
                     Label = "Coloring[bars]",
                     InputType = ParamInputType.ComboBox,
@@ -3151,7 +3292,7 @@ namespace cAlgo
                 new()
                 {
                     Region = "Wyckoff Bars",
-                    RegionOrder = 1,
+                    RegionOrder = 0,
                     Key = "FillBarsKey",
                     Label = "Fill?",
                     InputType = ParamInputType.Checkbox,
@@ -3161,7 +3302,7 @@ namespace cAlgo
                 new()
                 {
                     Region = "Wyckoff Bars",
-                    RegionOrder = 1,
+                    RegionOrder = 0,
                     Key = "OutlineKey",
                     Label = "Outline?",
                     InputType = ParamInputType.Checkbox,
@@ -3171,7 +3312,7 @@ namespace cAlgo
                 new()
                 {
                     Region = "Wyckoff Bars",
-                    RegionOrder = 1,
+                    RegionOrder = 0,
                     Key = "NumbersLargeKey",
                     Label = "Only Avg[nº]?",
                     InputType = ParamInputType.Checkbox,
@@ -3188,7 +3329,7 @@ namespace cAlgo
                     InputType = ParamInputType.ComboBox,
                     GetDefault = p => p.StrengthFilter.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(StrengthFilter_Data)),
-                    OnChanged = _ => UpdateBarsFilter(),
+                    OnChanged = _ => UpdateStrengthFilter(),
                 },
                 new()
                 {
@@ -3200,68 +3341,18 @@ namespace cAlgo
                     GetDefault = p => Outside.UseCustomMAs ? Outside.customMAtype.ToString() : p.MAtype.ToString(),
                     EnumOptions = () => Outside.UseCustomMAs ? Enum.GetNames(typeof(MAType_Data)) : Enum.GetNames(typeof(MovingAverageType)),
                     OnChanged = _ => UpdateMAType(),
-                    IsVisible = () => Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                    IsVisible = () => Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized && Outside.StrengthFilter_Input != StrengthFilter_Data.L1Norm
                 },
                 new()
                 {
                     Region = "Coloring",
                     RegionOrder = 1,
                     Key = "MAPeriodKey",
-                    Label = "MA Period",
+                    Label = "Period",
                     InputType = ParamInputType.Text,
                     GetDefault = p => p.MAperiod.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateMAPeriod(),
                     IsVisible = () => Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
-                },
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "HeatLowestKey",
-                    Label = "Lowest(<)",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.HeatmapLowest.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateHeatmapLowest()
-                },
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "HeatLowKey",
-                    Label = "Low",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.HeatmapLow.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateHeatmapLow()
-                },
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "HeatAverageKey",
-                    Label = "Average",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.HeatmapAverage.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateHeatmapAverage()
-                },
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "HeatHighKey",
-                    Label = "High",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.HeatmapHigh.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateHeatmapHigh()
-                },
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "HeatUltraKey",
-                    Label = "Ultra(>=)",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.HeatmapUltra.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateHeatmapUltra()
                 },
                 new()
                 {
@@ -3285,6 +3376,219 @@ namespace cAlgo
                     OnChanged = _ => UpdateNormalizeMultiplier(),
                     IsVisible = () => Outside.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized
                 },
+                
+                // Ratio
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "StrengthRatioKey",
+                    Label = "Ratio",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.StrengthRatio.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(StrengthRatio_Data)),
+                    OnChanged = _ => UpdateStrengthRatio(),
+                    IsVisible = () => Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                },
+                
+
+                // Percentile 
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "LowestPctileKey",
+                    Label = "Lowest(<)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.Lowest_Pctile.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateLowest_Pctile(),
+                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Percentile && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "LowPctileKey",
+                    Label = "Low",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.Low_Pctile.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateLow_Pctile(),
+                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Percentile && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "AveragePctileKey",
+                    Label = "Average",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.Average_Pctile.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateAverage_Pctile(),
+                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Percentile && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "HighPctileKey",
+                    Label = "High",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.High_Pctile.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateHigh_Pctile(),
+                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Percentile && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "UltraPctileKey",
+                    Label = "Ultra(>=)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.Ultra_Pctile.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateUltra_Pctile(),
+                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Percentile && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                },
+                
+                // Percentile => Period
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "PctilePeriodKey",
+                    Label = "Pctile Period",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.PctilePeriod.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdatePercentilePeriod(),
+                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Percentile && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                },
+                
+                
+                // Percentage => Normalized_Emphasized 
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "LowestPctKey",
+                    Label = "Lowest(<)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.Lowest_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateLowest_Pct(),
+                    IsVisible = () => Outside.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "LowPctKey",
+                    Label = "Low",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.Low_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateLow_Pct(),
+                    IsVisible = () => Outside.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "AveragePctKey",
+                    Label = "Average",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.Average_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateAverage_Pct(),
+                    IsVisible = () => Outside.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "HighPctKey",
+                    Label = "High",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.High_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateHigh_Pct(),
+                    IsVisible = () => Outside.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "UltraPctKey",
+                    Label = "Ultra(>=)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.Ultra_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateUltra_Pct(),
+                    IsVisible = () => Outside.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized
+                },
+
+                // [Debug] Show Strength
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "DebugStrengthKey",
+                    Label = "Debug?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.ShowStrength,
+                    OnChanged = _ => UpdateCheckbox("DebugStrengthKey", val => Outside.ShowStrengthValue = val),
+                },
+
+                // Fixed
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "LowestFixedKey",
+                    Label = "Lowest(<)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.Lowest_Fixed.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateLowest_Fixed(),
+                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Fixed && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "LowFixedKey",
+                    Label = "Low",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.Low_Fixed.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateLow_Fixed(),
+                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Fixed && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "AverageFixedKey",
+                    Label = "Average",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.Average_Fixed.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateAverage_Fixed(),
+                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Fixed && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "HighFixedKey",
+                    Label = "High",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.High_Fixed.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateHigh_Fixed(),
+                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Fixed && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "UltraFixedKey",
+                    Label = "Ultra(>=)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.Ultra_Fixed.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateUltra_Fixed(),
+                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Fixed && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                },
+
 
                 new()
                 {
@@ -3332,7 +3636,7 @@ namespace cAlgo
                 new()
                 {
                     Region = "Weis Waves",
-                    RegionOrder = 1,
+                    RegionOrder = 2,
                     Key = "RatioVolumeKey",
                     Label = "Ratio(volume)",
                     InputType = ParamInputType.Text,
@@ -3399,7 +3703,7 @@ namespace cAlgo
                 new()
                 {
                     Region = "ZigZag",
-                    RegionOrder = 1,
+                    RegionOrder = 3,
                     Key = "PercentageZZKey",
                     Label = "Value(%)",
                     InputType = ParamInputType.Text,
@@ -3410,7 +3714,7 @@ namespace cAlgo
                 new()
                 {
                     Region = "ZigZag",
-                    RegionOrder = 1,
+                    RegionOrder = 3,
                     Key = "PipsZZKey",
                     Label = "Value(pips)",
                     InputType = ParamInputType.Text,
@@ -3611,7 +3915,7 @@ namespace cAlgo
                 _regionSections[group.Key] = section;
 
                 // param grid inside section
-                var groupGrid = new Grid(6, 5);
+                var groupGrid = new Grid(9, 5); // Increase total rows for independent ratio: from 6 => 9
                 groupGrid.Columns[1].SetWidthInPixels(5);
                 groupGrid.Columns[3].SetWidthInPixels(5);
 
@@ -3879,7 +4183,7 @@ namespace cAlgo
         }
 
         // ==== Coloring ====
-        private void UpdateBarsFilter()
+        private void UpdateStrengthFilter()
         {
             var selected = comboBoxMap["StrengthFilterKey"].SelectedItem;
             if (Enum.TryParse(selected, out StrengthFilter_Data filterType) && filterType != Outside.StrengthFilter_Input)
@@ -3916,83 +4220,223 @@ namespace cAlgo
                 }
             }
         }
-        private void UpdateHeatmapLowest()
-        {
-            if (double.TryParse(textInputMap["HeatLowestKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-            {
-                if (value != Outside.HeatmapLowest_Value)
-                {
-                    Outside.HeatmapLowest_Value = value;
-                    ApplyBtn.IsVisible = true;
-                }
-            }
-        }
-        private void UpdateHeatmapLow()
-        {
-            if (double.TryParse(textInputMap["HeatLowKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-            {
-                if (value != Outside.HeatmapLow_Value)
-                {
-                    Outside.HeatmapLow_Value = value;
-                    ApplyBtn.IsVisible = true;
-                }
-            }
-        }
-        private void UpdateHeatmapAverage()
-        {
-            if (double.TryParse(textInputMap["HeatAverageKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-            {
-                if (value != Outside.HeatmapAverage_Value)
-                {
-                    Outside.HeatmapAverage_Value = value;
-                    ApplyBtn.IsVisible = true;
-                }
-            }
-        }
-        private void UpdateHeatmapHigh()
-        {
-            if (double.TryParse(textInputMap["HeatHighKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-            {
-                if (value != Outside.HeatmapHigh_Value)
-                {
-                    Outside.HeatmapHigh_Value = value;
-                    ApplyBtn.IsVisible = true;
-                }
-            }
-        }
-        private void UpdateHeatmapUltra()
-        {
-            if (double.TryParse(textInputMap["HeatUltraKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-            {
-                if (value != Outside.HeatmapUltra_Value)
-                {
-                    Outside.HeatmapUltra_Value = value;
-                    ApplyBtn.IsVisible = true;
-                }
-            }
-        }
         private void UpdateNormalizePeriod()
         {
-            if (double.TryParse(textInputMap["NmlzPeriodKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            if (int.TryParse(textInputMap["NmlzPeriodKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
                 if (value != Outside.NormalizePeriod)
                 {
-                    Outside.HeatmapHigh_Value = value;
+                    Outside.NormalizePeriod = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
         }
         private void UpdateNormalizeMultiplier()
         {
-            if (double.TryParse(textInputMap["NmlzMultipKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            if (int.TryParse(textInputMap["NmlzMultipKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
                 if (value != Outside.NormalizeMultiplier)
                 {
-                    Outside.HeatmapHigh_Value = value;
+                    Outside.NormalizeMultiplier = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
         }
+
+        private void UpdatePercentilePeriod()
+        {
+            if (int.TryParse(textInputMap["PctilePeriodKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.Pctile_Period)
+                {
+                    Outside.Pctile_Period = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+        private void UpdateStrengthRatio()
+        {
+            var selected = comboBoxMap["StrengthRatioKey"].SelectedItem;
+            if (Enum.TryParse(selected, out StrengthRatio_Data ratioType) && ratioType != Outside.StrengthRatio_Input)
+            {
+                Outside.StrengthRatio_Input = ratioType;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
+
+
+        // Percentile
+        private void UpdateLowest_Pctile()
+        {
+            if (int.TryParse(textInputMap["LowestPctileKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.Lowest_PctileValue)
+                {
+                    Outside.Lowest_PctileValue = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+        private void UpdateLow_Pctile()
+        {
+            if (int.TryParse(textInputMap["LowPctileKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.Low_PctileValue)
+                {
+                    Outside.Low_PctileValue = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+        private void UpdateAverage_Pctile()
+        {
+            if (int.TryParse(textInputMap["AveragePctileKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.Average_PctileValue)
+                {
+                    Outside.Average_PctileValue = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+        private void UpdateHigh_Pctile()
+        {
+            if (int.TryParse(textInputMap["HighPctileKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.High_PctileValue)
+                {
+                    Outside.High_PctileValue = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+        private void UpdateUltra_Pctile()
+        {
+            if (int.TryParse(textInputMap["UltraPctileKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.Ultra_PctileValue)
+                {
+                    Outside.Ultra_PctileValue = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+
+        // Percentage => Normalized_Emphasized
+        private void UpdateLowest_Pct()
+        {
+            if (double.TryParse(textInputMap["LowestPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.Lowest_PctValue)
+                {
+                    Outside.Lowest_PctValue = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+        private void UpdateLow_Pct()
+        {
+            if (double.TryParse(textInputMap["LowPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.Low_PctValue)
+                {
+                    Outside.Low_PctValue = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+        private void UpdateAverage_Pct()
+        {
+            if (double.TryParse(textInputMap["AveragePctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.Average_PctValue)
+                {
+                    Outside.Average_PctValue = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+        private void UpdateHigh_Pct()
+        {
+            if (double.TryParse(textInputMap["HighPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.High_PctValue)
+                {
+                    Outside.High_PctValue = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+        private void UpdateUltra_Pct()
+        {
+            if (double.TryParse(textInputMap["UltraPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.Ultra_PctValue)
+                {
+                    Outside.Ultra_PctValue = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+        
+        // Fixed
+        private void UpdateLowest_Fixed()
+        {
+            if (double.TryParse(textInputMap["LowestFixedKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.Lowest_FixedValue)
+                {
+                    Outside.Lowest_FixedValue = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+        private void UpdateLow_Fixed()
+        {
+            if (double.TryParse(textInputMap["LowFixedKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.Low_FixedValue)
+                {
+                    Outside.Low_FixedValue = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+        private void UpdateAverage_Fixed()
+        {
+            if (double.TryParse(textInputMap["AverageFixedKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.Average_FixedValue)
+                {
+                    Outside.Average_FixedValue = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+        private void UpdateHigh_Fixed()
+        {
+            if (double.TryParse(textInputMap["HighFixedKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.High_FixedValue)
+                {
+                    Outside.High_FixedValue = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+        private void UpdateUltra_Fixed()
+        {
+            if (double.TryParse(textInputMap["UltraFixedKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            {
+                if (value != Outside.Ultra_FixedValue)
+                {
+                    Outside.Ultra_FixedValue = value;
+                    ApplyBtn.IsVisible = true;
+                }
+            }
+        }
+
+
         // ==== Weis Waves ====
         private void UpdateWaves()
         {
@@ -4497,20 +4941,11 @@ namespace cAlgo
                     textInputMap["MAPeriodKey"].Text = "20";
                     comboBoxMap["MATypeKey"].SelectedItem = $"{MovingAverageType.Triangular}";
 
-                    textInputMap["HeatLowestKey"].Text = "0.5";
-                    textInputMap["HeatLowKey"].Text = "1.2";
-                    textInputMap["HeatAverageKey"].Text = "2.5";
-                    textInputMap["HeatHighKey"].Text = "3.5";
-                    textInputMap["HeatUltraKey"].Text = "3.51";
-                }
-                else {
-                    comboBoxMap["StrengthFilterKey"].SelectedItem = $"{StrengthFilter_Data.Normalized_Emphasized}";
-
-                    textInputMap["HeatLowestKey"].Text = "23.6";
-                    textInputMap["HeatLowKey"].Text = "38.2";
-                    textInputMap["HeatAverageKey"].Text = "61.8";
-                    textInputMap["HeatHighKey"].Text = "100";
-                    textInputMap["HeatUltraKey"].Text = "101";
+                    textInputMap["LowestFixedKey"].Text = "0.5";
+                    textInputMap["LowFixedKey"].Text = "1.2";
+                    textInputMap["AverageFixedKey"].Text = "2.5";
+                    textInputMap["HighFixedKey"].Text = "3.5";
+                    textInputMap["UltraFixedKey"].Text = "3.51";
                 }
             }
             // Range
@@ -4521,11 +4956,11 @@ namespace cAlgo
                 textInputMap["MAPeriodKey"].Text = "20";
                 comboBoxMap["MATypeKey"].SelectedItem = $"{MovingAverageType.Triangular}";
 
-                textInputMap["HeatLowestKey"].Text = "0.5";
-                textInputMap["HeatLowKey"].Text = "1.2";
-                textInputMap["HeatAverageKey"].Text = "2.5";
-                textInputMap["HeatHighKey"].Text = "3.5";
-                textInputMap["HeatUltraKey"].Text = "3.51";
+                textInputMap["LowestFixedKey"].Text = "0.5";
+                textInputMap["LowFixedKey"].Text = "1.2";
+                textInputMap["AverageFixedKey"].Text = "2.5";
+                textInputMap["HighFixedKey"].Text = "3.5";
+                textInputMap["UltraFixedKey"].Text = "3.51";
             }
         }
 

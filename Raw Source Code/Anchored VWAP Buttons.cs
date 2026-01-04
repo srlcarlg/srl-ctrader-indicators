@@ -1,14 +1,9 @@
 /*
 --------------------------------------------------------------------------------------------------------------------------------
                       Anchored VWAP Buttons
-                          revision 1
+                          revision 2
 
 Just a Anchored VWAP with 5 Buttons in just 1 indicator
-
-What's new in rev.1?
--Added Daily, Weekly, Monthly VWAPs
--Added StdDev to any VWAP (one StdDev per instance)
--Great refactor
 
 Usage:
 Create VWAP: Click on the button and select the bar for the VWAP
@@ -16,14 +11,21 @@ Remove VWAP: Click the button again when it is activated.
 
 VWAP will be updated with each new bar
 
-Last update => 10/11/2025
+Last update => 02/01/2026
 ===========================
 
-Final revision (2025)
+What's new in rev.2?
 
+- StdDev => Volume weighted bands
+- Percentile Bands:
+  - Symmetric/Asymmetric bands.
+  - Volume weighted (bands) for both.
+
+  
+Final revision (2025)
 - Fix: UI Panel on MacOs
     - WrapPanel isn't fully supported (The buttons are hidden)
-    
+
 - Tested on MacOS (12 Monterey / 13 Ventura) without 3D accelerated graphics
 
 ===========================
@@ -34,15 +36,13 @@ AUTHOR: srlcarlg
 using cAlgo.API;
 using cAlgo.API.Internals;
 using System;
+using System.Linq;
 using System.Collections.Generic;
 
 namespace cAlgo
 {
-    [Cloud("Top VWAP", "Middle VWAP")]
-    [Cloud("Bottom VWAP", "Middle VWAP")]
-
-    [Cloud("Upper Deviation 1", "Upper Deviation 3")]
-    [Cloud("Lower Deviation 1", "Lower Deviation 3")]
+    [Cloud("Upper Band 1", "Upper Band 3")]
+    [Cloud("Lower Band 1", "Lower Band 3")]
 
     [Indicator(IsOverlay = true, AutoRescale = false, AccessRights = AccessRights.None)]
     public class AnchoredVWAPButtons : Indicator
@@ -66,55 +66,93 @@ namespace cAlgo
         [Parameter("Buttons Orientation:", DefaultValue = Orientation.Horizontal, Group = "==== Anchored VWAP Buttons ====")]
         public Orientation BtnOrientation { get; set; }
 
-        [Parameter("Show Daily", DefaultValue = false, Group = "==== DWM VWAPs ====")]
+        [Parameter("Show Daily?", DefaultValue = false, Group = "==== DWM VWAPs ====")]
         public bool ShowDaily { get; set; }
-        [Parameter("Show Weekly", DefaultValue = false, Group = "==== DWM VWAPs ====")]
+        [Parameter("Show Weekly?", DefaultValue = false, Group = "==== DWM VWAPs ====")]
         public bool ShowWeekly { get; set; }
-        [Parameter("Show Monthly", DefaultValue = false, Group = "==== DWM VWAPs ====")]
+        [Parameter("Show Monthly?", DefaultValue = false, Group = "==== DWM VWAPs ====")]
         public bool ShowMonthly { get; set; }
-        [Parameter("Remove Interval Line (first bar)", DefaultValue = true, Group = "==== DWM VWAPs ====")]
+        [Parameter("Remove Interval Line? (first bar)", DefaultValue = true, Group = "==== DWM VWAPs ====")]
         public bool RemoveIntervalLine { get; set; }
 
-        public enum StdDevSource_Data
+
+        public enum BandsType_Data
+        {
+            Std_Dev,
+            Percentile,
+            Percentile_Asymmetric 
+        }
+        [Parameter("Type:", DefaultValue = BandsType_Data.Std_Dev, Group = "==== Bands VWAP ====")]
+        public BandsType_Data BandsType_Input { get; set; }
+
+        public enum BandsSource_Data
         {
             Anchored,
             Daily,
             Weekly,
             Monthly
         }
-        [Parameter("StdDev Source", DefaultValue = StdDevSource_Data.Anchored, Group = "==== StdDev VWAP ====")]
-        public StdDevSource_Data StdDevSource_Input { get; set; }
-        [Parameter("First Multiplier", DefaultValue = 1.0, Group = "==== StdDev VWAP ====")]
+        [Parameter("Source:", DefaultValue = BandsSource_Data.Anchored, Group = "==== Bands VWAP ====")]
+        public BandsSource_Data BandsSource_Input { get; set; }
+
+        [Parameter("Volume Weighted Bands?", DefaultValue = true, Group = "==== Bands VWAP ====")]
+        public bool IsVolumeBands { get; set; }
+
+
+        [Parameter("First Multiplier", DefaultValue = 0.236, Group = "==== StdDev Bands ====")]
         public double StdDev1_Input { get; set; }
-        [Parameter("Second Multiplier", DefaultValue = 2.0, Group = "==== StdDev VWAP ====")]
+        [Parameter("Second Multiplier", DefaultValue = 1.382, Group = "==== StdDev Bands ====")]
         public double StdDev2_Input { get; set; }
-        [Parameter("Third Multiplier", DefaultValue = 3.0, Group = "==== StdDev VWAP ====")]
+        [Parameter("Third Multiplier", DefaultValue = 2.618, Group = "==== StdDev Bands ====")]
         public double StdDev3_Input { get; set; }
+        
+
+        [Parameter("First(%)", DefaultValue = 35, Group = "==== Percentile Bands ====")]
+        public double Pctile1_Input { get; set; }
+        [Parameter("Second(%)", DefaultValue = 85, Group = "==== Percentile Bands ====")]
+        public double Pctile2_Input { get; set; }
+        [Parameter("Third(%)", DefaultValue = 100, Group = "==== Percentile Bands ====")]
+        public double Pctile3_Input { get; set; }
+
+        
+        [Parameter("First(%) Up", DefaultValue = 50, Group = "==== Pctile-Asymmetric Bands ====")]
+        public double Pctile1_Up_Input { get; set; }
+        [Parameter("Second(%) Up", DefaultValue = 80, Group = "==== Pctile-Asymmetric Bands ====")]
+        public double Pctile2_Up_Input { get; set; }
+        [Parameter("Third(%) UP", DefaultValue = 100, Group = "==== Pctile-Asymmetric Bands ====")]
+        public double Pctile3_Up_Input { get; set; }
+
+        [Parameter("First(%) Down", DefaultValue = 45, Group = "==== Pctile-Asymmetric Bands ====")]
+        public double Pctile1_Down_Input { get; set; }
+        [Parameter("Second(%) Down", DefaultValue = 80, Group = "==== Pctile-Asymmetric Bands ====")]
+        public double Pctile2_Down_Input { get; set; }
+        [Parameter("Third(%) Down", DefaultValue = 100, Group = "==== Pctile-Asymmetric Bands ====")]
+        public double Pctile3_Down_Input { get; set; }
 
 
-        [Output("Daily VWAP", LineColor = "FFFFFF33", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
+        [Output("Daily VWAP", LineColor = "FFFFFF33", Thickness = 1, LineStyle = LineStyle.Solid, PlotType = PlotType.DiscontinuousLine)]
         public IndicatorDataSeries DailyVWAP { get; set; }
-        [Output("Weekly VWAP", LineColor = "FF02AFF1", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
+        [Output("Weekly VWAP", LineColor = "FF02AFF1", Thickness = 1, LineStyle = LineStyle.Solid, PlotType = PlotType.DiscontinuousLine)]
         public IndicatorDataSeries WeeklyVWAP { get; set; }
-        [Output("Monthly VWAP", LineColor = "FF00BF00", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
+        [Output("Monthly VWAP", LineColor = "FF00BF00", Thickness = 1, LineStyle = LineStyle.Solid, PlotType = PlotType.DiscontinuousLine)]
         public IndicatorDataSeries MonthlyVWAP { get; set; }
 
-        [Output("Upper Deviation 1", LineColor = "7400BFFF", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
-        public IndicatorDataSeries TopStdDev_1 { get; set; }
-        [Output("Upper Deviation 2", LineColor = "7400BFFF", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
-        public IndicatorDataSeries TopStdDev_2 { get; set; }
-        [Output("Upper Deviation 3", LineColor = "7400BFFF", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
-        public IndicatorDataSeries TopStdDev_3 { get; set; }
+        [Output("Upper Band 1", LineColor = "FF68D0F7", Thickness = 1, LineStyle = LineStyle.DotsRare, PlotType = PlotType.DiscontinuousLine)]
+        public IndicatorDataSeries Top_1 { get; set; }
+        [Output("Upper Band 2", LineColor = "FF68D0F7", Thickness = 1, LineStyle = LineStyle.DotsRare, PlotType = PlotType.DiscontinuousLine)]
+        public IndicatorDataSeries Top_2 { get; set; }
+        [Output("Upper Band 3", LineColor = "8168D0F7", Thickness = 1, LineStyle = LineStyle.DotsRare, PlotType = PlotType.DiscontinuousLine)]
+        public IndicatorDataSeries Top_3 { get; set; }
 
-        [Output("Lower Deviation 1", LineColor = "74DC143C", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
-        public IndicatorDataSeries BottomStdDev_1 { get; set; }
-        [Output("Lower Deviation 2", LineColor = "74DC143C", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
-        public IndicatorDataSeries BottomStdDev_2 { get; set; }
-        [Output("Lower Deviation 3", LineColor = "74DC143C", Thickness = 1, PlotType = PlotType.DiscontinuousLine)]
-        public IndicatorDataSeries BottomStdDev_3 { get; set; }
+        [Output("Lower Band 1", LineColor = "81FED966", Thickness = 1, LineStyle = LineStyle.DotsRare, PlotType = PlotType.DiscontinuousLine)]
+        public IndicatorDataSeries Bottom_1 { get; set; }
+        [Output("Lower Band 2", LineColor = "FFFED966", Thickness = 1, LineStyle = LineStyle.DotsRare, PlotType = PlotType.DiscontinuousLine)]
+        public IndicatorDataSeries Bottom_2 { get; set; }
+        [Output("Lower Band 3", LineColor = "FFFED966", Thickness = 1, LineStyle = LineStyle.DotsRare, PlotType = PlotType.DiscontinuousLine)]
+        public IndicatorDataSeries Bottom_3 { get; set; }
 
 
-        [Output("Top VWAP", LineColor = "A000BFFF", LineStyle = LineStyle.Solid, PlotType = PlotType.Line)]
+        [Output("Top VWAP", LineColor = "DeepSkyBlue", LineStyle = LineStyle.Solid, PlotType = PlotType.Line)]
         public IndicatorDataSeries TopVWAP { get; set; }
         [Output("Top VWAP 2", LineColor = "DeepSkyBlue", LineStyle = LineStyle.Solid, PlotType = PlotType.Line)]
         public IndicatorDataSeries TopVWAP_1 { get; set; }
@@ -125,7 +163,7 @@ namespace cAlgo
         [Output("Top VWAP 5", LineColor = "DeepSkyBlue", LineStyle = LineStyle.Solid, PlotType = PlotType.Line)]
         public IndicatorDataSeries TopVWAP_4 { get; set; }
 
-        [Output("Middle VWAP", LineColor = "A0FFFFE0", LineStyle = LineStyle.Lines, PlotType = PlotType.Line)]
+        [Output("Middle VWAP", LineColor = "LightYellow", LineStyle = LineStyle.Lines, PlotType = PlotType.Line)]
         public IndicatorDataSeries MiddleVWAP { get; set; }
         [Output("Middle VWAP 2", LineColor = "LightYellow", LineStyle = LineStyle.Lines, PlotType = PlotType.Line)]
         public IndicatorDataSeries MiddleVWAP_1 { get; set; }
@@ -136,7 +174,7 @@ namespace cAlgo
         [Output("Middle VWAP 5", LineColor = "LightYellow", LineStyle = LineStyle.Lines, PlotType = PlotType.Line)]
         public IndicatorDataSeries MiddleVWAP_4 { get; set; }
 
-        [Output("Bottom VWAP", LineColor = "A0FFA500", LineStyle = LineStyle.Solid, PlotType = PlotType.Line)]
+        [Output("Bottom VWAP", LineColor = "Orange", LineStyle = LineStyle.Solid, PlotType = PlotType.Line)]
         public IndicatorDataSeries BottomVWAP { get; set; }
         [Output("Bottom VWAP 2", LineColor = "Orange", LineStyle = LineStyle.Solid, PlotType = PlotType.Line)]
         public IndicatorDataSeries BottomVWAP_1 { get; set; }
@@ -270,8 +308,8 @@ namespace cAlgo
             currentBtn = obj.Button;
             obj.Button.IsEnabled = false;
             Chart.DrawStaticText("txt", "Select a bar for VWAP.", VerticalAlignment.Top, HorizontalAlignment.Center, Color.LightBlue);
-            if (StdDevSource_Input == StdDevSource_Data.Anchored)
-                Chart.DrawStaticText("txt1", "\nOnly the first button[0] will have the Standard Deviation.", VerticalAlignment.Top, HorizontalAlignment.Center, Color.LightBlue);
+            if (BandsSource_Input == BandsSource_Data.Anchored)
+                Chart.DrawStaticText("txt1", "\nOnly the first button[0] will have the VWAP Bands.", VerticalAlignment.Top, HorizontalAlignment.Center, Color.LightBlue);
         }
         public void DrawVerticalLine(ChartMouseEventArgs obj)
         {
@@ -325,8 +363,13 @@ namespace cAlgo
                     MiddleVWAP_Series[j] = sumHL2 / sumVol;
                     BottomVWAP_Series[j] = sumLow / sumVol;
                     // Only ONE Anchored StdDev VWAP
-                    if (StdDevSource_Input == StdDevSource_Data.Anchored && btnIndex == 0)
-                        StdDev_VWAP(indexStart, j, MiddleVWAP_Series);
+                    if (BandsSource_Input == BandsSource_Data.Anchored && btnIndex == 0)
+                        _ = BandsType_Input switch
+                        {
+                            BandsType_Data.Percentile => QuantileBands(indexStart, j, MiddleVWAP_Series),
+                            BandsType_Data.Percentile_Asymmetric => QuantileAsymmetricBands(indexStart, j, MiddleVWAP_Series),
+                            _ => StdDevBands(indexStart, j, MiddleVWAP_Series),
+                        };                    
                 }
 
                 switch (btnIndex)
@@ -347,7 +390,7 @@ namespace cAlgo
                 Chart.DrawStaticText("txt", "", VerticalAlignment.Top, HorizontalAlignment.Center, Color.LightBlue);
                 Chart.RemoveObject("VerticalLine");
                 Chart.RemoveObject("txt");
-                if (StdDevSource_Input == StdDevSource_Data.Anchored)
+                if (BandsSource_Input == BandsSource_Data.Anchored)
                     Chart.RemoveObject("txt1");
                 verticalLine = null;
                 btnIsActive = false;
@@ -382,8 +425,13 @@ namespace cAlgo
                     BottomVWAP_Series[j] = sumLow / sumVol;
 
                     // Only ONE Anchored StdDev VWAP
-                    if (StdDevSource_Input == StdDevSource_Data.Anchored && btnIndex == 0)
-                        StdDev_VWAP(buttonsStartIndexes[btnIndex], j, MiddleVWAP_Series);
+                    if (BandsSource_Input == BandsSource_Data.Anchored && btnIndex == 0)
+                        _ = BandsType_Input switch
+                        {
+                            BandsType_Data.Percentile => QuantileBands(buttonsStartIndexes[btnIndex], j, MiddleVWAP_Series),
+                            BandsType_Data.Percentile_Asymmetric => QuantileAsymmetricBands(buttonsStartIndexes[btnIndex], j, MiddleVWAP_Series),
+                            _ => StdDevBands(buttonsStartIndexes[btnIndex], j, MiddleVWAP_Series),
+                        };                    
                 }
             }
 
@@ -409,15 +457,15 @@ namespace cAlgo
                 BottomVWAP_Series[i] = double.NaN;
 
                 // Only ONE Anchored StdDev VWAP
-                if (StdDevSource_Input == StdDevSource_Data.Anchored && btnIndex == 0)
+                if (BandsSource_Input == BandsSource_Data.Anchored && btnIndex == 0)
                 {
-                    TopStdDev_1[i] = double.NaN;
-                    TopStdDev_2[i] = double.NaN;
-                    TopStdDev_3[i] = double.NaN;
+                    Top_1[i] = double.NaN;
+                    Top_2[i] = double.NaN;
+                    Top_3[i] = double.NaN;
 
-                    BottomStdDev_1[i] = double.NaN;
-                    BottomStdDev_2[i] = double.NaN;
-                    BottomStdDev_3[i] = double.NaN;
+                    Bottom_1[i] = double.NaN;
+                    Bottom_2[i] = double.NaN;
+                    Bottom_3[i] = double.NaN;
                 }
             }
 
@@ -442,8 +490,13 @@ namespace cAlgo
 
                 DWM_VWAP(index, indexStart, CumulPriceVol_D, CumulVol_D, DailyVWAP);
 
-                if (StdDevSource_Input == StdDevSource_Data.Daily)
-                    StdDev_VWAP(indexStart, index, DailyVWAP);
+                if (BandsSource_Input == BandsSource_Data.Daily)
+                    _ = BandsType_Input switch
+                    {
+                        BandsType_Data.Percentile => QuantileBands(indexStart, index, DailyVWAP),
+                        BandsType_Data.Percentile_Asymmetric => QuantileAsymmetricBands(indexStart, index, DailyVWAP),
+                        _ => StdDevBands(indexStart, index, DailyVWAP),
+                    };                    
             }
 
             if (ShowWeekly) {
@@ -453,8 +506,13 @@ namespace cAlgo
 
                 DWM_VWAP(index, indexStart, CumulPriceVol_W, CumulVol_W, WeeklyVWAP);
 
-                if (StdDevSource_Input == StdDevSource_Data.Weekly)
-                    StdDev_VWAP(indexStart, index, WeeklyVWAP);
+                if (BandsSource_Input == BandsSource_Data.Weekly)
+                    _ = BandsType_Input switch
+                    {
+                        BandsType_Data.Percentile => QuantileBands(indexStart, index, WeeklyVWAP),
+                        BandsType_Data.Percentile_Asymmetric => QuantileAsymmetricBands(indexStart, index, WeeklyVWAP),
+                        _ => StdDevBands(indexStart, index, WeeklyVWAP),
+                    };                    
             }
 
             if (ShowMonthly) {
@@ -464,8 +522,13 @@ namespace cAlgo
 
                 DWM_VWAP(index, indexStart, CumulPriceVol_M, CumulVol_M, MonthlyVWAP);
 
-                if (StdDevSource_Input == StdDevSource_Data.Monthly)
-                    StdDev_VWAP(indexStart, index, MonthlyVWAP);
+                if (BandsSource_Input == BandsSource_Data.Monthly)
+                    _ = BandsType_Input switch
+                    {
+                        BandsType_Data.Percentile => QuantileBands(indexStart, index, MonthlyVWAP),
+                        BandsType_Data.Percentile_Asymmetric => QuantileAsymmetricBands(indexStart, index, MonthlyVWAP),
+                        _ => StdDevBands(indexStart, index, MonthlyVWAP),
+                    };                    
             }
         }
         private void DWM_VWAP(int index, int indexStart, IndicatorDataSeries CumulPriceVol_Series, IndicatorDataSeries CumulVol_Series, IndicatorDataSeries VWAP_Series) {
@@ -482,30 +545,206 @@ namespace cAlgo
                         VWAP_Series[index] = double.NaN;
                 }
         }
-        private void StdDev_VWAP(int indexStart, int index, IndicatorDataSeries series) {
+        
+        // StdDev Bands + Volume Weighted Bands
+        private bool StdDevBands(int indexStart, int index, IndicatorDataSeries seriesVWAP) 
+        {
             double squaredErrors = 0;
-            int count = 0;
+            double volumeSum = 0.0;
+            double periodSum = 0;
+
             for (int i = indexStart; i <= index; i++)
             {
-                double diff = Bars.MedianPrices[i] - series[index];
-                squaredErrors += diff * diff;
-                count++;
+                double diff = Bars.MedianPrices[i] - seriesVWAP[index];
+                double vol = Bars.TickVolumes[i];
+
+                double extra = IsVolumeBands ? vol : 1.0;
+                squaredErrors += diff * diff * extra;
+                
+                periodSum += 1;
+                volumeSum += vol;
             }
 
-            if (count == 0)
-                return;
+            if (periodSum == 0)
+                return false;
 
-            // Sample => (Period - 1) / Population => Period
-            double variance = squaredErrors / (count - 1);
+            // Sample => (Period - 1) / Population => Period 
+            double cumulValue = IsVolumeBands ? volumeSum : (periodSum - 1);
+            double variance = squaredErrors / cumulValue;
             double stdDev = Math.Sqrt(variance);
 
-            TopStdDev_1[index] = stdDev * StdDev1_Input + series[index];
-            TopStdDev_2[index] = stdDev * StdDev2_Input + series[index];
-            TopStdDev_3[index] = stdDev * StdDev3_Input + series[index];
+            Top_1[index] = seriesVWAP[index] + stdDev * StdDev1_Input;
+            Top_2[index] = seriesVWAP[index] + stdDev * StdDev2_Input;
+            Top_3[index] = seriesVWAP[index] + stdDev * StdDev3_Input;
 
-            BottomStdDev_1[index] = series[index] - stdDev * StdDev1_Input;
-            BottomStdDev_2[index] = series[index] - stdDev * StdDev2_Input;
-            BottomStdDev_3[index] = series[index] - stdDev * StdDev3_Input;
+            Bottom_1[index] = seriesVWAP[index] - stdDev * StdDev1_Input;
+            Bottom_2[index] = seriesVWAP[index] - stdDev * StdDev2_Input;
+            Bottom_3[index] = seriesVWAP[index] - stdDev * StdDev3_Input;
+
+            return true;
+        }
+
+        // Quantile Bands + Volume Weighted Bands
+        private bool QuantileBands(int indexStart, int index, IndicatorDataSeries seriesVWAP)
+        {
+            var distances = new List<double>();
+            var volumes   = new List<double>();
+
+            for (int i = indexStart; i <= index; i++)
+            {
+                double dist = Math.Abs(Bars.MedianPrices[i] - seriesVWAP[index]);
+                double vol  = Bars.TickVolumes[i];
+                distances.Add(dist);
+                volumes.Add(vol);
+            }
+
+            if (distances.Count == 0)
+                return false;
+
+            double pct1 = GetPercentageDecimal(Pctile1_Input);
+            double pct2 = GetPercentageDecimal(Pctile2_Input);
+            double pct3 = GetPercentageDecimal(Pctile3_Input);
+
+            double q1 = IsVolumeBands ? WeightedQuantile(distances, volumes, pct1) : Quantile(distances, pct1);
+            double q2 = IsVolumeBands ? WeightedQuantile(distances, volumes, pct2) : Quantile(distances, pct2);
+            double q3 = IsVolumeBands ? WeightedQuantile(distances, volumes, pct3) : Quantile(distances, pct3);
+
+            Top_1[index] = seriesVWAP[index] + q1;
+            Top_2[index] = seriesVWAP[index] + q2;
+            Top_3[index] = seriesVWAP[index] + q3;
+
+            Bottom_1[index] = seriesVWAP[index] - q1;
+            Bottom_2[index] = seriesVWAP[index] - q2;
+            Bottom_3[index] = seriesVWAP[index] - q3;
+
+            return true;
+        }
+        
+        
+        // Quantile Asymmetric Bands + Volume Weighted Bands
+        private bool QuantileAsymmetricBands(int indexStart, int index, IndicatorDataSeries seriesVWAP)
+        {
+            var posDistances = new List<double>();
+            var posVolumes   = new List<double>();
+
+            var negDistances = new List<double>();
+            var negVolumes   = new List<double>();
+
+            for (int i = indexStart; i <= index; i++)
+            {
+                double diff = Bars.MedianPrices[i] - seriesVWAP[index];
+                double vol  = Bars.TickVolumes[i];
+
+                if (diff > 0)
+                {
+                    posDistances.Add(diff);
+                    posVolumes.Add(vol);
+                }
+                else if (diff < 0)
+                {
+                    negDistances.Add(-diff); // flip to positive
+                    negVolumes.Add(vol);
+                }
+            }
+
+            // ----- Upper side -----
+            if (posDistances.Count > 0)
+            {                
+                double pct1 = GetPercentageDecimal(Pctile1_Up_Input);
+                double pct2 = GetPercentageDecimal(Pctile2_Up_Input);
+                double pct3 = GetPercentageDecimal(Pctile3_Up_Input);
+
+                double q1 = IsVolumeBands ? WeightedQuantile(posDistances, posVolumes, pct1) : Quantile(posDistances, pct1);
+                double q2 = IsVolumeBands ? WeightedQuantile(posDistances, posVolumes, pct2) : Quantile(posDistances, pct2);
+                double q3 = IsVolumeBands ? WeightedQuantile(posDistances, posVolumes, pct3) : Quantile(posDistances, pct3);
+
+                Top_1[index] = seriesVWAP[index] + q1;
+                Top_2[index] = seriesVWAP[index] + q2;
+                Top_3[index] = seriesVWAP[index] + q3;
+            }
+            else
+            {
+                Top_1[index] = seriesVWAP[index];
+                Top_2[index] = seriesVWAP[index];
+                Top_3[index] = seriesVWAP[index];
+            }
+
+            // ----- Lower side -----
+            if (negDistances.Count > 0)
+            {
+                double pct1 = GetPercentageDecimal(Pctile1_Down_Input);
+                double pct2 = GetPercentageDecimal(Pctile2_Down_Input);
+                double pct3 = GetPercentageDecimal(Pctile3_Down_Input);
+
+                double q1 = IsVolumeBands ? WeightedQuantile(negDistances, negVolumes, pct1) : Quantile(negDistances, pct1);
+                double q2 = IsVolumeBands ? WeightedQuantile(negDistances, negVolumes, pct2) : Quantile(negDistances, pct2);
+                double q3 = IsVolumeBands ? WeightedQuantile(negDistances, negVolumes, pct3) : Quantile(negDistances, pct3);
+
+                Bottom_1[index] = seriesVWAP[index] - q1;
+                Bottom_2[index] = seriesVWAP[index] - q2;
+                Bottom_3[index] = seriesVWAP[index] - q3;
+            }
+            else
+            {
+                Bottom_1[index] = seriesVWAP[index];
+                Bottom_2[index] = seriesVWAP[index];
+                Bottom_3[index] = seriesVWAP[index];
+            }
+            
+            return true;
+        }
+
+        private static double GetPercentageDecimal(double value) {
+            return Math.Round(value / 100, 3);
+        }
+
+        private static double Quantile(List<double> data, double q)
+        {
+            // generated/converted by LLM
+            var sorted = data.OrderBy(x => x).ToList();
+
+            double pos = (sorted.Count - 1) * q;
+            int idx = (int)pos;
+            double frac = pos - idx;
+
+            if (idx + 1 < sorted.Count)
+                return sorted[idx] + frac * (sorted[idx + 1] - sorted[idx]);
+
+            return sorted[idx];
+        }
+        private static double WeightedQuantile(List<double> values, List<double> weights, double q)
+        {
+            // generated/converted by LLM
+            var pairs = values
+                .Select((v, i) => new { Value = v, Weight = weights[i] })
+                .OrderBy(p => p.Value)
+                .ToList();
+
+            double totalWeight = pairs.Sum(p => p.Weight);
+            double cumulative = 0.0;
+            
+            foreach (var p in pairs)
+            {
+                cumulative += p.Weight;
+                if (cumulative / totalWeight >= q)
+                    return p.Value;
+            }
+            
+            /*
+            // 1-to-1 with Python version
+            // same result as above
+            double cutoff = q * pairs.Sum(p => p.Weight);
+            double cumWeight = 0.0;
+
+            foreach (var p in pairs)
+            {
+                cumWeight += p.Weight;
+                if (cumWeight >= cutoff)
+                    return p.Value;
+            }
+            */
+
+            return pairs.Last().Value;
         }
     }
 }
