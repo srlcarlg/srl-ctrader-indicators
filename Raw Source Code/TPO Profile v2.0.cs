@@ -1,7 +1,7 @@
 /*
 --------------------------------------------------------------------------------------------------------------------------------
                         TPO Profile v2.0
-                           revision 1
+                           revision 2
   It is VISUALLY BASED on the best TPO/Market Profile for MT4
 (riv-ay-TPOChart.v102-06 and riv-ay-MarketProfileDWM.v131-2)
 
@@ -19,17 +19,33 @@ What's new in rev. 1? (after ODF_AGG)
 - Show Any or All (Mini-VPs/Daily/Weekly/Monthly) Profiles at once!
 - Fixed Range Profiles
 
-Last update => 10/11/2025
+Last update => 08/01/2026
 ===========================
 
-Final revision (2025)
+What's new in rev. 2? (2026)
+- HVN + LVN:
+    - Detection:
+      - Smoothing => [Gaussian, Savitzky_Golay]
+      - Nodes => [LocalMinMax, Topology, Percentile]
+    - Levels(bands)
+      - VA-like (set by percentage)
+      - (Tip) Use 'LineStyles = Solid" if any stuttering/lagging occurs when scrolling at profiles on chart (Reduce GPU workload). 
+      
+- Improved Performance of:
+    - 'VA + POC'
+    - 'Results'
+    
+- Add "Segments" to "TPO Profile" => "Fixed Range?" (params-panel):
+    - Monthly_Aligned (limited to the current Month)
+    - From_Profile (available to any period without the 'bug' between months)
 
+
+Final revision (2025)
 - Fix: Params Panel on MacOs
     - Supposedly cut short/half the size (Can't reproduce it through VM)
     - WrapPanel isn't fully supported (The button is hidden)
     - MissingMethodException on cAlgo.API.Panel.get_Children() (...)
         - At ToggleExpandCollapse event.
-
 - Tested on MacOS (12 Monterey / 13 Ventura) without 3D accelerated graphics
 
 ===========================
@@ -168,14 +184,46 @@ namespace cAlgo
         [Parameter("Color VAL:", DefaultValue = "PowderBlue", Group = "==== Value Area ====")]
         public Color ColorVAL { get; set; }
 
-        [Parameter("Opacity VA" , DefaultValue = 10, MinValue = 5, MaxValue = 100, Group = "==== Value Area ====")]
-        public int OpacityVA { get; set; }
-
         [Parameter("LineStyle VA:", DefaultValue = LineStyle.LinesDots, Group = "==== Value Area ====")]
         public LineStyle LineStyleVA { get; set; }
 
         [Parameter("Thickness VA:", DefaultValue = 1, MinValue = 1, MaxValue = 5, Group = "==== Value Area ====")]
         public int ThicknessVA { get; set; }
+
+
+        [Parameter("Color HVN:", DefaultValue = "Gold" , Group = "==== HVN/LVN ====")]
+        public Color ColorHVN { get; set; }
+        
+        [Parameter("LineStyle HVN:", DefaultValue = LineStyle.LinesDots, Group = "==== HVN/LVN ====")]
+        public LineStyle LineStyleHVN { get; set; }
+
+        [Parameter("Thickness HVN:", DefaultValue = 1, MinValue = 1, MaxValue = 5, Group = "==== HVN/LVN ====")]
+        public int ThicknessHVN { get; set; }
+
+        [Parameter("Color LVN:", DefaultValue = "Crimson", Group = "==== HVN/LVN ====")]
+        public Color ColorLVN { get; set; }
+
+        [Parameter("LineStyle LVN:", DefaultValue = LineStyle.LinesDots, Group = "==== HVN/LVN ====")]
+        public LineStyle LineStyleLVN { get; set; }
+
+        [Parameter("Thickness LVN:", DefaultValue = 1, MinValue = 1, MaxValue = 5, Group = "==== HVN/LVN ====")]
+        public int ThicknessLVN { get; set; }
+
+
+        [Parameter("Color Band:", DefaultValue = "#19F0F8FF",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
+        public Color ColorBand { get; set; }
+        
+        [Parameter("Color Lower:", DefaultValue = "PowderBlue",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
+        public Color ColorBand_Lower { get; set; }
+
+        [Parameter("Color Upper:", DefaultValue = "PowderBlue",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
+        public Color ColorBand_Upper { get; set; }
+
+        [Parameter("LineStyle Bands:", DefaultValue = LineStyle.Dots, Group = "==== Symmetric Bands (HVN/LVN) ====")]
+        public LineStyle LineStyleBands { get; set; }
+
+        [Parameter("Thickness Bands:", DefaultValue = 1, MinValue = 1, MaxValue = 5, Group = "==== Symmetric Bands (HVN/LVN) ====")]
+        public int ThicknessBands { get; set; }
 
 
         [Parameter("Color Letters:", DefaultValue = "#8BE7E7E7" , Group = "==== Divided Mode ====")]
@@ -268,9 +316,63 @@ namespace cAlgo
         public bool ExtendVA = false;
         public int ExtendCount = 1;
 
+        
+        // ==== HVN + LVN ====        
+        public bool EnableNodeDetection = false;
+
+        public enum ProfileSmooth_Data
+        {
+            Gaussian,
+            Savitzky_Golay
+        }
+        public ProfileSmooth_Data ProfileSmooth_Input = ProfileSmooth_Data.Gaussian;
+
+        public enum ProfileNode_Data
+        {
+            LocalMinMax,
+            Topology,
+            Percentile
+        }
+        public ProfileNode_Data ProfileNode_Input = ProfileNode_Data.LocalMinMax;
+
+        public int pctileHVN_Value = 90;
+        public int pctileLVN_Value = 25;
+
+        public bool onlyStrongNodes = false;
+        public double strongHVN_Pct = 23.6;
+        public double strongLVN_Pct = 55.3;
+
+        public double bandHVN_Pct = 61.8;
+        public double bandLVN_Pct = 23.6;
+
+        public bool extendNodes = false;
+        public int extendNodes_Count = 1;
+        public bool extendNodes_WithBands = false;
+        public bool extendNodes_FromStart = true;
+
+
+        public enum ShowNode_Data
+        {
+            HVN_With_Bands,
+            HVN_Raw,
+            LVN_With_Bands,
+            LVN_Raw
+        }
+        public ShowNode_Data ShowNode_Input = ShowNode_Data.HVN_With_Bands;
+
+
         // ==== Results ====
         public bool ShowResults = true;
 
+        // Allow "old" segmentation "From_Profile", 
+        // so the "Fixed Range" doesn't "bug" => remains on chart between months (end/start of each month)
+        public enum SegmentsFixedRange_Data
+        {
+            Monthly_Aligned,
+            From_Profile
+        }       
+        public SegmentsFixedRange_Data SegmentsFixedRange_Input = SegmentsFixedRange_Data.From_Profile;
+        
         // Always Monthly
         public enum SegmentsInterval_Data
         {
@@ -297,6 +399,7 @@ namespace cAlgo
         // value is the last updated Highest/Lowest
         private readonly IDictionary<int, SegmentsExtremumInfo> segmentInfo = new Dictionary<int, SegmentsExtremumInfo>();
         private readonly IDictionary<int, List<double>> segmentsDict = new Dictionary<int, List<double>>();
+        private readonly IDictionary<string, List<double>> segmentsFromProfile = new Dictionary<string, List<double>>();
         private List<double> Segments = new();
 
         private IDictionary<double, double> TPO_Rank_Histogram = new Dictionary<double, double>();
@@ -374,6 +477,9 @@ namespace cAlgo
         private bool isUpdateTPO = false;
         private double prevUpdatePrice;
 
+        // HVN + LVN => Performance
+        private double[] nodesKernel = null;
+
         // Params Panel
         private Border ParamBorder;
         public class IndicatorParams
@@ -416,9 +522,35 @@ namespace cAlgo
             public bool ExtendVA { get; set; }
             public int ExtendCount { get; set; }
 
+            
+            // ==== HVN + LVN ====        
+            public bool EnableNodes { get; set; }
+
+            public ProfileSmooth_Data ProfileSmooth { get; set; }
+
+            public ProfileNode_Data ProfileNode { get; set; }
+
+            public ShowNode_Data ShowNode { get; set; }
+            public double BandHVN { get; set; }
+            public double BandLVN { get; set; }
+
+            public bool OnlyStrong { get; set; }
+            public double StrongHVN { get; set; }
+            public double StrongLVN { get; set; }
+            
+            public int PctileHVN { get; set; }
+            public int PctileLVN { get; set; }
+
+            public bool ExtendNodes { get; set; }
+            public int ExtendNodes_Count { get; set; }
+            public bool ExtendNodes_WithBands { get; set; }
+            public bool ExtendNodes_FromStart { get; set; }
+
+
             // ==== Misc ====
             public UpdateProfile_Data UpdateProfileStrategy { get; set; }
             public bool ShowResults { get; set; }
+            public SegmentsFixedRange_Data SegmentsFixedRange { get; set; }
         }
 
         private void AddHiddenButton(Panel panel, Color btnColor)
@@ -604,9 +736,31 @@ namespace cAlgo
                 ExtendVA = ExtendVA,
                 ExtendCount = ExtendCount,
 
+                // HVN + LVN
+                EnableNodes = EnableNodeDetection,
+                ProfileSmooth = ProfileSmooth_Input,
+                ProfileNode = ProfileNode_Input,
+                
+                ShowNode = ShowNode_Input,
+                BandHVN = bandHVN_Pct,
+                BandLVN = bandLVN_Pct,
+
+                OnlyStrong = onlyStrongNodes,
+                StrongHVN = strongHVN_Pct,
+                StrongLVN = strongLVN_Pct,
+
+                PctileHVN = pctileHVN_Value,
+                PctileLVN = pctileLVN_Value,
+                
+                ExtendNodes = extendNodes,
+                ExtendNodes_Count = extendNodes_Count,
+                ExtendNodes_WithBands = extendNodes_WithBands,
+                ExtendNodes_FromStart = extendNodes_FromStart,
+
                 // Misc
                 UpdateProfileStrategy = UpdateProfile_Input,
                 ShowResults = ShowResults,
+                SegmentsFixedRange = SegmentsFixedRange_Input
             };
 
             ParamsPanel ParamPanel = new(this, DefaultParams);
@@ -791,6 +945,37 @@ namespace cAlgo
                 Segments = currentSegments.OrderBy(x => x).ToList();
             }
         }
+        private void CreateSegments_FromFixedRange(double open, double lowest, double highest, string fixedKey) {
+            List<double> currentSegments = new();
+
+            // ==== Chart Segmentation ====
+            double prev_segment = open;
+            while (prev_segment >= (lowest - rowHeight))
+            {
+                currentSegments.Add(prev_segment);
+                prev_segment = Math.Abs(prev_segment - rowHeight);
+            }
+            prev_segment = open;
+            while (prev_segment <= (highest + rowHeight))
+            {
+                currentSegments.Add(prev_segment);
+                prev_segment = Math.Abs(prev_segment + rowHeight);
+            }
+
+            currentSegments = currentSegments.OrderBy(x => x).ToList();
+        
+            if (!segmentsFromProfile.ContainsKey(fixedKey))
+                segmentsFromProfile.Add(fixedKey, currentSegments);
+            else
+                segmentsFromProfile[fixedKey] = currentSegments;
+        }
+        private List<double> GetRangeSegments(int TF_idx, string fixedKey) 
+        {
+            if (SegmentsFixedRange_Input == SegmentsFixedRange_Data.From_Profile)
+                return segmentsFromProfile[fixedKey];
+            else
+                return segmentsDict[TF_idx];
+        }
 
         // *********** MWM PROFILES ***********
         private void CreateMiniTPOs(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
@@ -879,8 +1064,11 @@ namespace cAlgo
         }
 
         // *********** TPO PROFILE ***********
-        private void TPO_Profile(int iStart, int index,  ExtraProfiles extraProfiles = ExtraProfiles.No, bool isLoop = false, bool drawOnly = false, string fixedKey = "", double fixedLowest = 0)
+        private void TPO_Profile(int iStart, int index,  ExtraProfiles extraProfiles = ExtraProfiles.No, bool isLoop = false, bool drawOnly = false, string fixedKey = "", double fixedLowest = 0, double fixedHighest = 0)
         {
+            if (extraProfiles == ExtraProfiles.Fixed && SegmentsFixedRange_Input == SegmentsFixedRange_Data.From_Profile)
+                CreateSegments_FromFixedRange(Bars.OpenPrices[iStart], fixedLowest, fixedHighest, fixedKey);
+                
             // ==== TPO Column ====
             if (!drawOnly)
                 TPO_Bars(index, extraProfiles, fixedKey);
@@ -911,6 +1099,7 @@ namespace cAlgo
             DateTime xBar = Bars.OpenTimes[index];
 
             bool isIntraday = ShowIntradayProfile && index == Chart.LastVisibleBarIndex && !isLoop;
+            DateTime intraDate = xBar;
 
             // Any Volume Mode
             double maxLength = xBar.Subtract(x1_Start).TotalMilliseconds;
@@ -926,9 +1115,9 @@ namespace cAlgo
 
             string prefix = extraProfiles == ExtraProfiles.Fixed ? fixedKey : $"{iStart}";
             double y1 = extraProfiles == ExtraProfiles.Fixed ? fixedLowest : lowest;
-
-            List<double> whichSegment = extraProfiles == ExtraProfiles.Fixed ? segmentsDict[TF_idx] : Segments;
-
+            
+            List<double> whichSegment = extraProfiles == ExtraProfiles.Fixed ? GetRangeSegments(TF_idx, fixedKey) : Segments;
+                        
             for (int i = 0; i < whichSegment.Count; i++)
             {
                 double priceKey = whichSegment[i];
@@ -1028,7 +1217,7 @@ namespace cAlgo
                             }
                         }
 
-                        CalculateVA(true, volHist.Time1);
+                        intraDate = volHist.Time1;
                     }
                 }
 
@@ -1053,48 +1242,48 @@ namespace cAlgo
                 double value = tpoDict[priceKey];
                 double maxValue = tpoDict.Values.Max();
 
-                // Draw VA/POC
-                CalculateVA();
-
-                // Draw histograms and update intraday VA/POC, if applicable
+                // Draw histograms and update 'intraDate' for VA/POC, if applicable
                 DrawRectangle_Normal(value, maxValue, intraBool);
+            }
+            
+            // Drawings that don't require each segment-price as y-axis
+            // It can/should be outside SegmentsLoop for better performance.
+            IDictionary<double, double> TPOdict = extraProfiles switch
+            {
+                ExtraProfiles.Monthly => MonthlyRank.TPO_Histogram,
+                ExtraProfiles.Weekly => WeeklyRank.TPO_Histogram,
+                ExtraProfiles.MiniTPO => MiniRank.TPO_Histogram,
+                ExtraProfiles.Fixed => FixedRank[fixedKey].TPO_Histogram,
+                _ => TPO_Rank_Histogram
+            };
+            
+            // Results
+            if (extraProfiles == ExtraProfiles.MiniTPO && ShowMiniResults || 
+                extraProfiles != ExtraProfiles.MiniTPO && ShowResults)
+            {
+                double sum = Math.Round(TPOdict.Values.Sum());
+                string strValue = FormatResults ? FormatBigNumber(sum) : $"{sum}";
 
-                if (ShowResults || ShowMiniResults)
-                {
-                    if (extraProfiles == ExtraProfiles.MiniTPO && !ShowMiniResults)
-                        continue;
-                    if (extraProfiles != ExtraProfiles.MiniTPO && !ShowResults)
-                        continue;
+                ChartText Center = Chart.DrawText($"{prefix}_TPO_{extraProfiles}_Result", $"\n{strValue}", x1_Start, y1, HistColor);
+                Center.HorizontalAlignment = HorizontalAlignment.Center;
+                Center.FontSize = FontSizeResults - 1;
 
-                    double sum = Math.Round(tpoDict.Values.Sum());
-                    string strValue = FormatResults ? FormatBigNumber(sum) : $"{sum}";
+                if (HistogramSide_Input == HistSide_Data.Right)
+                    Center.Time = xBar;
 
-                    ChartText Center = Chart.DrawText($"{prefix}_TPO_{extraProfiles}_Result", $"\n{strValue}", x1_Start, y1, HistColor);
-                    Center.HorizontalAlignment = HorizontalAlignment.Center;
-                    Center.FontSize = FontSizeResults - 1;
-
-                    if (HistogramSide_Input == HistSide_Data.Right)
-                        Center.Time = xBar;
-
-                    // Intraday Right Profile
-                    if (isIntraday && extraProfiles == ExtraProfiles.No) {
-                        DateTime dateOffset = TimeBasedOffset(xBar);
-                        Center.Time = dateOffset;
-                    }
+                // Intraday Right Profile
+                if (isIntraday && extraProfiles == ExtraProfiles.No) {
+                    DateTime dateOffset = TimeBasedOffset(xBar);
+                    Center.Time = dateOffset;
                 }
             }
-            void CalculateVA(bool isIntraday = false, DateTime intraX1 = default) {
-                IDictionary<double, double> TPOdict = extraProfiles switch
-                {
-                    ExtraProfiles.Monthly => MonthlyRank.TPO_Histogram,
-                    ExtraProfiles.Weekly => WeeklyRank.TPO_Histogram,
-                    ExtraProfiles.MiniTPO => MiniRank.TPO_Histogram,
-                    ExtraProfiles.Fixed => FixedRank[fixedKey].TPO_Histogram,
-                    _ => TPO_Rank_Histogram
-                };
-                Draw_VA_POC(TPOdict, iStart, x1_Start, xBar, extraProfiles, isIntraday, intraX1, fixedKey);
-            }
-
+            
+            // VA + POC
+            Draw_VA_POC(TPOdict, iStart, x1_Start, xBar, extraProfiles, isIntraday, intraDate, fixedKey);
+            
+            // HVN/LVN
+            DrawVolumeNodes(TPOdict, iStart, x1_Start, xBar, extraProfiles, isIntraday, intraDate, fixedKey);
+                
             if (!ShowOHLC || extraProfiles == ExtraProfiles.Fixed)
                 return;
 
@@ -1120,7 +1309,8 @@ namespace cAlgo
             double low = Bars.LowPrices[index];
 
             int TF_idx = extraTPO == ExtraProfiles.Fixed ? MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]) : index;
-            List<double> whichSegment = extraTPO == ExtraProfiles.Fixed ? segmentsDict[TF_idx] : Segments;
+            
+            List<double> whichSegment = extraTPO == ExtraProfiles.Fixed ? GetRangeSegments(TF_idx, fixedKey) : Segments;
 
             int totalLetters = 0;
             for (int i = 0; i < whichSegment.Count; i++)
@@ -1651,11 +1841,12 @@ namespace cAlgo
 
             // Update/Draw
             double bottomY = Math.Min(rect.Y1, rect.Y2);
+            double topY = Math.Max(rect.Y1, rect.Y2);
 
             ResetFixedRange(rect.Name, end);
 
             for (int i = startIdx; i <= endIdx; i++)
-                TPO_Profile(startIdx, i, ExtraProfiles.Fixed, fixedKey: rect.Name, fixedLowest: bottomY);
+                TPO_Profile(startIdx, i, ExtraProfiles.Fixed, fixedKey: rect.Name, fixedLowest: bottomY, fixedHighest: topY);
         }
 
         private void UpdateInfoBox(ChartRectangle rect)
@@ -1737,12 +1928,33 @@ namespace cAlgo
         private void ResetFixedRange(string fixedKey, DateTime end)
         {
             FixedRank[fixedKey].TPO_Histogram.Clear();
-
-            int endIdx = Bars.OpenTimes.GetIndexByTime(end);
-            int TF_idx = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[endIdx]); //Segments are always monthly
-
-            for (int i = 0; i < segmentsDict[TF_idx].Count; i++)
+            
+            List<double> whichSegment;
+            if (SegmentsFixedRange_Input == SegmentsFixedRange_Data.Monthly_Aligned) {
+                int endIdx = Bars.OpenTimes.GetIndexByTime(end);
+                int TF_idx = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[endIdx]); //Segments are always monthly
+                whichSegment = segmentsDict[TF_idx];
+            }
+            else {
+                if (!segmentsFromProfile.ContainsKey(fixedKey))
+                    segmentsFromProfile.Add(fixedKey, new List<double>());
+                whichSegment = segmentsFromProfile[fixedKey];   
+            }
+            
+            for (int i = 0; i < whichSegment.Count; i++) 
+            {
                 Chart.RemoveObject($"{fixedKey}_{i}_TPO_Fixed");
+                
+                Chart.RemoveObject($"{fixedKey}_LVN_Low_{i}_Fixed");
+                Chart.RemoveObject($"{fixedKey}_LVN_{i}_Fixed");
+                Chart.RemoveObject($"{fixedKey}_LVN_High_{i}_Fixed");
+                Chart.RemoveObject($"{fixedKey}_LVN_Band_{i}_Fixed");
+
+                Chart.RemoveObject($"{fixedKey}_HVN_Low_{i}_Fixed");
+                Chart.RemoveObject($"{fixedKey}_HVN_{i}_Fixed");
+                Chart.RemoveObject($"{fixedKey}_HVN_High_{i}_Fixed");
+                Chart.RemoveObject($"{fixedKey}_HVN_Band_{i}_Fixed");
+            }
 
             string[] objsNames = new string[5] {
                 $"{fixedKey}_TPO_Fixed_Result",
@@ -2336,6 +2548,312 @@ namespace cAlgo
             return VA;
         }
 
+        
+        // *********** HVN + LVN ***********
+        private void DrawVolumeNodes(IDictionary<double, double> profileDict, int iStart, DateTime x1_Start, DateTime xBar, ExtraProfiles extraTPO = ExtraProfiles.No, bool isIntraday = false, DateTime intraX1 = default, string fixedKey = "") 
+        { 
+            if (!EnableNodeDetection)
+                return;
+                
+            string prefix = extraTPO == ExtraProfiles.Fixed ? fixedKey : $"{iStart}";
+            /*
+                Alternatives for ordering:
+                - "SortedDictionary<>()" 
+                    - for [TPO_Rank_Histogram, TPORankType.TPO_Histogram] dicts
+                - tpoDict.OrderBy(x => x.key).ToDictionary(kv => kv.Key, kv => kv.Value);
+                    - Then .ToArray()
+                - https://dotnettips.wordpress.com/2018/01/30/performance-sorteddictionary-vs-dictionary/
+            */
+            
+            // This approach seems more efficient.
+            double[] profilePrices = profileDict.Keys.ToArray();
+            Array.Sort(profilePrices);
+            double[] profileValues = profilePrices.Select(key => profileDict[key]).ToArray();
+            /*
+            // Alternative, no LINQ
+            double[] profileValues = new double[profilePrices.Length];
+            for (int i = 0; i < profilePrices.Length; i++)
+                profileValues[i] = tpoDict[profilePrices[i]];
+            */
+            
+            // Calculate Kernels/Coefficientes only once.
+            nodesKernel ??= ProfileSmooth_Input == ProfileSmooth_Data.Gaussian ?
+                            NodesAnalizer.FixedKernel() : NodesAnalizer.FixedCoefficients();
+            
+            // Smooth values
+            double[] profileSmoothed = ProfileSmooth_Input == ProfileSmooth_Data.Gaussian ?
+                                       NodesAnalizer.GaussianSmooth(profileValues, nodesKernel) : NodesAnalizer.SavitzkyGolay(profileValues, nodesKernel);
+            
+            // Get indexes of LVNs/HVNs
+            var (hvnsRaw, lvnsRaw) = ProfileNode_Input switch {
+                ProfileNode_Data.LocalMinMax => NodesAnalizer.FindLocalMinMax(profileSmoothed),
+                ProfileNode_Data.Topology => NodesAnalizer.ProfileTopology(profileSmoothed),
+                _ => NodesAnalizer.PercentileNodes(profileSmoothed, pctileHVN_Value, pctileLVN_Value)
+            };
+            
+            // Filter it
+            if (onlyStrongNodes)
+            {
+                double globalPoc = profileSmoothed.Max();
+
+                double hvnPct = Math.Round(strongHVN_Pct / 100.0, 3);
+                double lvnPct = Math.Round(strongLVN_Pct / 100.0, 3);
+
+                var strongHvns = new List<int>();
+                var strongLvns = new List<int>();
+
+                foreach (int idx in hvnsRaw)
+                {
+                    if (profileSmoothed[idx] >= hvnPct * globalPoc)
+                        strongHvns.Add(idx);
+                }
+
+                foreach (int idx in lvnsRaw)
+                {
+                    if (profileSmoothed[idx] <= lvnPct * globalPoc)
+                        strongLvns.Add(idx);
+                }
+
+                hvnsRaw = strongHvns;
+                lvnsRaw = strongLvns;
+            }
+                
+            bool isRaw = ShowNode_Input == ShowNode_Data.HVN_Raw || ShowNode_Input == ShowNode_Data.LVN_Raw;
+            bool isBands = ShowNode_Input == ShowNode_Data.HVN_With_Bands || ShowNode_Input == ShowNode_Data.LVN_With_Bands;
+            
+            if (ProfileNode_Input == ProfileNode_Data.Percentile) 
+            {
+                ClearOldNodes();                                               
+                
+                if (isBands)
+                {
+                    Color _nodeColor = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColorHVN : ColorLVN;
+
+                    var hvnsGroups = NodesAnalizer.GroupConsecutiveIndexes(hvnsRaw);
+                    var lvnsGroups = NodesAnalizer.GroupConsecutiveIndexes(lvnsRaw);
+                    List<List<int>> nodeGroups = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnsGroups : lvnsGroups;
+                    
+                    string nodeName = ShowNode_Input == ShowNode_Data.HVN_Raw ? "HVN" : "LVN";   
+                    foreach (var group in nodeGroups) 
+                    {
+                        int idxLow = group[0];
+                        int idxCenter = group[group.Count / 2];
+                        int idxHigh = group[group.Count - 1];
+                        
+                        double lowPrice = profilePrices[idxLow];
+                        double centerPrice = profilePrices[idxCenter];
+                        double highPrice = profilePrices[idxHigh];
+                        
+                        ChartTrendLine low = Chart.DrawTrendLine($"{prefix}_{nodeName}_Low_{idxLow}_{extraTPO}", x1_Start, lowPrice, xBar, lowPrice, ColorBand_Lower);
+                        ChartTrendLine center = Chart.DrawTrendLine($"{prefix}_{nodeName}_{idxCenter}_{extraTPO}", x1_Start, centerPrice, xBar, centerPrice, _nodeColor);
+                        ChartTrendLine high = Chart.DrawTrendLine($"{prefix}_{nodeName}_High_{idxHigh}_{extraTPO}", x1_Start, highPrice, xBar, highPrice, ColorBand_Upper);   
+                        ChartRectangle rectBand = Chart.DrawRectangle($"{prefix}_{nodeName}_Band_{idxCenter}_{extraTPO}", x1_Start,  lowPrice, xBar, highPrice, ColorBand);
+                        
+                        FinalizeBands(low, center, high, rectBand);
+                    }
+                } 
+                else 
+                    DrawRawNodes();
+                
+                return;
+            }
+
+            // Draw raw-nodes, if applicable
+            if (isRaw)  {
+                ClearOldNodes();
+                DrawRawNodes();
+                return;
+            }
+                        
+            // Split profile by LVNs
+            var areasBetween = new List<(int Start, int End)>();
+            int start = 0;
+            foreach (int lvn in lvnsRaw)
+            {
+                areasBetween.Add((start, lvn));
+                start = lvn;
+            }
+            areasBetween.Add((start, profileSmoothed.Length - 1));
+
+            // Extract mini-bells
+            var bells = new List<(int Start, int End, int Poc)>();
+            foreach (var (Start, End) in areasBetween)
+            {
+                int startIndex = Start;
+                int endIndex = End;
+
+                if (endIndex <= startIndex)
+                    continue;
+
+                int pocIdx = startIndex;
+                double maxVol = profileSmoothed[startIndex];
+
+                for (int i = startIndex + 1; i < endIndex; i++)
+                {
+                    if (profileSmoothed[i] > maxVol)
+                    {
+                        maxVol = profileSmoothed[i];
+                        pocIdx = i;
+                    }
+                }
+
+                bells.Add((startIndex, endIndex, pocIdx));
+            }
+            
+            // Extract HVN/LVN/POC + Levels
+            // [(low, center, high), ...]
+            var hvnLevels = new List<(double Low, double Center, double High)>();
+            var hvnIndexes = new List<(int Low, int Center, int High)>();
+
+            var lvnLevels = new List<(double Low, double Center, double High)>();
+            var lvnIndexes = new List<(int Low, int Center, int High)>();
+
+            double hvnBandPct = Math.Round(bandHVN_Pct / 100.0, 3);
+            double lvnBandPct = Math.Round(bandLVN_Pct / 100.0, 3);
+
+            foreach (var (startIdx, endIdx, pocIdx) in bells)
+            {
+                // HVNs/POCs + levels
+                var (hvnLow, hvnHigh) = NodesAnalizer.HVN_SymmetricVA(startIdx, endIdx, pocIdx, hvnBandPct);
+
+                hvnLevels.Add( (profilePrices[hvnLow], profilePrices[pocIdx], profilePrices[hvnHigh]) );
+                hvnIndexes.Add( (hvnLow, pocIdx, hvnHigh) );
+
+                // LVNs + Levels
+                var (lvnLow, lvnHigh) = NodesAnalizer.LVN_SymmetricBand( startIdx, endIdx, lvnBandPct);
+
+                lvnIndexes.Add( (lvnLow, startIdx, lvnHigh) );
+                lvnLevels.Add( (profilePrices[lvnLow], profilePrices[startIdx], profilePrices[lvnHigh]) );
+            }
+            
+            // Let's draw
+            ClearOldNodes();
+
+            string node = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? "HVN" : "LVN";
+            Color nodeColor = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColorHVN : ColorLVN;
+            
+            var nodeLvls = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnLevels : lvnLevels;
+            var nodeIdxes = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnIndexes : lvnIndexes;
+            
+            for (int i = 0; i < nodeLvls.Count; i++)
+            {
+                var level = nodeLvls[i];
+                var index = nodeIdxes[i];
+                
+                ChartTrendLine low = Chart.DrawTrendLine($"{prefix}_{node}_Low_{index.Low}_{extraTPO}", x1_Start, level.Low, xBar, level.Low, ColorBand_Lower);   
+                ChartTrendLine center = Chart.DrawTrendLine($"{prefix}_{node}_{index.Center}_{extraTPO}", x1_Start, level.Center, xBar, level.Center, nodeColor);   
+                ChartTrendLine high = Chart.DrawTrendLine($"{prefix}_{node}_High_{index.High}_{extraTPO}", x1_Start, level.High, xBar, level.High, ColorBand_Upper);   
+                ChartRectangle rectBand = Chart.DrawRectangle($"{prefix}_{node}_Band_{index.Center}_{extraTPO}", x1_Start, level.Low, xBar, level.High, ColorBand);
+                
+                FinalizeBands(low, center, high, rectBand);
+            }
+            
+            // Local
+            void FinalizeBands(ChartTrendLine low, ChartTrendLine center, ChartTrendLine high, ChartRectangle rectBand) 
+            {
+                LineStyle nodeStyle = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? LineStyleHVN : LineStyleLVN;
+                int  nodeThick = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ThicknessHVN : ThicknessLVN;
+            
+                rectBand.IsFilled = true; 
+                
+                low.LineStyle = LineStyleBands; high.Thickness = ThicknessBands;
+                center.LineStyle = nodeStyle; center.Thickness = nodeThick;
+                high.LineStyle = LineStyleBands; high.Thickness = ThicknessBands;
+
+                DateTime extDate = extraTPO == ExtraProfiles.Fixed ? Bars[Bars.OpenTimes.GetIndexByTime(Server.Time)].OpenTime : extendDate();
+                if (extendNodes) 
+                {
+                    if (!extendNodes_FromStart) {
+                        low.Time1 = xBar;
+                        center.Time1 = xBar;
+                        high.Time1 = xBar;
+                        rectBand.Time1 = xBar;
+                    }
+                    
+                    center.Time2 = extDate;
+                    if (extendNodes_WithBands) {
+                        low.Time2 = extDate;
+                        high.Time2 = extDate;
+                        rectBand.Time2 = extDate;
+                    }
+                }
+                
+                if (isIntraday && extraTPO != ExtraProfiles.MiniTPO) {
+                    low.Time1 = intraX1;
+                    center.Time1 = intraX1;
+                    high.Time1 = intraX1;
+                    rectBand.Time1 = intraX1;
+                }
+            }
+            void DrawRawNodes() 
+            {
+                string nodeRaw = ShowNode_Input == ShowNode_Data.HVN_Raw ? "HVN" : "LVN";
+                List<int> nodeIndexes = ShowNode_Input == ShowNode_Data.HVN_Raw ? hvnsRaw : lvnsRaw;
+                
+                LineStyle nodeStyle_Raw = ShowNode_Input == ShowNode_Data.HVN_Raw ? LineStyleHVN : LineStyleLVN;
+                int  nodeThick_Raw = ShowNode_Input == ShowNode_Data.HVN_Raw ? ThicknessHVN : ThicknessLVN;
+                Color nodeColor_Raw = ShowNode_Input == ShowNode_Data.HVN_Raw ? ColorHVN : ColorLVN;
+
+                foreach (int idx in nodeIndexes) 
+                {
+                    double nodePrice = profilePrices[idx];
+                    ChartTrendLine center = Chart.DrawTrendLine($"{prefix}_{nodeRaw}_{idx}_{extraTPO}", x1_Start, nodePrice, xBar, nodePrice, nodeColor_Raw);
+                    center.LineStyle = nodeStyle_Raw; center.Thickness = nodeThick_Raw;
+                                        
+                    DateTime extDate = extraTPO == ExtraProfiles.Fixed ? Bars[Bars.OpenTimes.GetIndexByTime(Server.Time)].OpenTime : extendDate();
+                    if (extendNodes) {
+                        if (!extendNodes_FromStart)
+                            center.Time1 = xBar;
+                        center.Time2 = extDate;
+                    }
+                    
+                    if (isIntraday && extraTPO != ExtraProfiles.MiniTPO)
+                        center.Time1 = intraX1;
+                }
+            }
+            void ClearOldNodes() {
+                // 1º remove old price levels
+                // 2º allow static-update of Params-Panel
+                for (int i = 0; i < profilePrices.Length; i++)
+                {
+                    Chart.RemoveObject($"{prefix}_LVN_Low_{i}_{extraTPO}");
+                    Chart.RemoveObject($"{prefix}_LVN_{i}_{extraTPO}");
+                    Chart.RemoveObject($"{prefix}_LVN_High_{i}_{extraTPO}");
+                    Chart.RemoveObject($"{prefix}_LVN_Band_{i}_{extraTPO}");
+
+                    Chart.RemoveObject($"{prefix}_HVN_Low_{i}_{extraTPO}");
+                    Chart.RemoveObject($"{prefix}_HVN_{i}_{extraTPO}");
+                    Chart.RemoveObject($"{prefix}_HVN_High_{i}_{extraTPO}");
+                    Chart.RemoveObject($"{prefix}_HVN_Band_{i}_{extraTPO}");
+                }
+            }
+            DateTime extendDate() {
+                string tfName = extraTPO == ExtraProfiles.No ?
+                (TPOInterval_Input == TPOInterval_Data.Daily ? "D1" :
+                    TPOInterval_Input == TPOInterval_Data.Weekly ? "W1" : "Month1" ) :
+                extraTPO == ExtraProfiles.MiniTPO ? MiniTPOs_Timeframe.ShortName.ToString() :
+                extraTPO == ExtraProfiles.Weekly ?  "W1" :  "Month1";
+
+                // Get the time-based interval value
+                string tfString = string.Join("", tfName.Where(char.IsDigit));
+                int tfValue = int.TryParse(tfString, out int value) ? value : 1;
+
+                DateTime dateToReturn = xBar;
+                if (tfName.Contains('m'))
+                    dateToReturn = xBar.AddMinutes(tfValue * extendNodes_Count);
+                else if (tfName.Contains('h'))
+                    dateToReturn = xBar.AddHours(tfValue * extendNodes_Count);
+                else if (tfName.Contains('D'))
+                    dateToReturn = xBar.AddDays(tfValue * extendNodes_Count);
+                else if (tfName.Contains('W'))
+                    dateToReturn = xBar.AddDays(7 * extendNodes_Count);
+                else if (tfName.Contains("Month1"))
+                    dateToReturn = xBar.AddMonths(tfValue * extendNodes_Count);
+
+                return dateToReturn;
+            }            
+        }
+
         // ========= ========== ==========
 
         public void ClearAndRecalculate()
@@ -2645,6 +3163,18 @@ namespace cAlgo
                 {
                     Region = "TPO Profile",
                     RegionOrder = 2,
+                    Key = "FixedSegmentsKey",
+                    Label = "Segments",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.SegmentsFixedRange.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(SegmentsFixedRange_Data)),
+                    OnChanged = _ => UpdateRangeSegments(),
+                    IsVisible = () => Outside.EnableFixedRange
+                },
+                new()
+                {
+                    Region = "TPO Profile",
+                    RegionOrder = 2,
                     Key = "ShowOHLCKey",
                     Label = "OHLC Body?",
                     InputType = ParamInputType.Checkbox,
@@ -2741,7 +3271,7 @@ namespace cAlgo
                     Region = "VA + POC",
                     RegionOrder = 3,
                     Key = "ExtendCountKey",
-                    Label = "Extend(count))",
+                    Label = "Extend(count)",
                     InputType = ParamInputType.Text,
                     GetDefault = p => p.ExtendCount.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateExtendCount(),
@@ -2758,10 +3288,183 @@ namespace cAlgo
                     OnChanged = _ => UpdateCheckbox("ExtendPOCKey", val => Outside.ExtendPOC = val)
                 },
 
+                
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 4,
+                    Key = "EnableNodeKey",
+                    Label = "Enable?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.EnableNodes,
+                    OnChanged = _ => UpdateCheckbox("EnableNodeKey", val => Outside.EnableNodeDetection = val)
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 4,
+                    Key = "NodeSmoothKey",
+                    Label = "Smooth",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.ProfileSmooth.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(ProfileSmooth_Data)),
+                    OnChanged = _ => UpdateNodeSmooth()
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 4,
+                    Key = "NodeTypeKey",
+                    Label = "Nodes",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.ProfileNode.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(ProfileNode_Data)),
+                    OnChanged = _ => UpdateNodeType()
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 4,
+                    Key = "ShowNodeKey",
+                    Label = "Show",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.ShowNode.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(ShowNode_Data)),
+                    OnChanged = _ => UpdateShowNode(),
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 4,
+                    Key = "HvnBandPctKey",
+                    Label = "HVN Band(%)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.BandHVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateHVN_Band(),
+                    IsVisible = () => (Outside.ShowNode_Input == ShowNode_Data.HVN_With_Bands || Outside.ShowNode_Input == ShowNode_Data.LVN_With_Bands) &&
+                                       Outside.ProfileNode_Input != ProfileNode_Data.Percentile
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 4,
+                    Key = "LvnBandPctKey",
+                    Label = "LVN Band(%)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.BandLVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateLVN_Band(),
+                    IsVisible = () => (Outside.ShowNode_Input == ShowNode_Data.HVN_With_Bands || Outside.ShowNode_Input == ShowNode_Data.LVN_With_Bands) &&
+                                       Outside.ProfileNode_Input != ProfileNode_Data.Percentile
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 4,
+                    Key = "NodeStrongKey",
+                    Label = "Only Strong?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.OnlyStrong, 
+                    OnChanged = _ => UpdateCheckbox("NodeStrongKey", val => Outside.onlyStrongNodes = val)
+                },
+                // 'Strong HVN' for HVN_Raw(only) on [LocalMinMax, Topology]
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 4,
+                    Key = "StrongHvnPctKey",
+                    Label = "(%) >= POC",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.StrongHVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateHVN_Strong(),
+                    IsVisible = () => Outside.onlyStrongNodes && (Outside.ShowNode_Input == ShowNode_Data.HVN_Raw ||
+                                      Outside.ProfileNode_Input == ProfileNode_Data.Percentile && Outside.ShowNode_Input == ShowNode_Data.HVN_With_Bands)
+                },
+                // 'Strong LVN' should be used by HVN_With_Bands, since the POCs are derived from LVN Split.
+                // on [LocalMinMax, Topology] 
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 4,
+                    Key = "StrongLvnPctKey",
+                    Label = "(%) <= POC",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.StrongLVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateLVN_Strong(),
+                    IsVisible = () => Outside.onlyStrongNodes &&
+                            (Outside.ShowNode_Input != ShowNode_Data.HVN_Raw && Outside.ProfileNode_Input != ProfileNode_Data.Percentile ||
+                            Outside.ProfileNode_Input == ProfileNode_Data.Percentile && 
+                            (Outside.ShowNode_Input == ShowNode_Data.LVN_With_Bands || Outside.ShowNode_Input == ShowNode_Data.LVN_Raw))
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 4,
+                    Key = "ExtendNodeKey",
+                    Label = "Extend?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.ExtendNodes,
+                    OnChanged = _ => UpdateCheckbox("ExtendNodeKey", val => Outside.extendNodes = val)
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 4,
+                    Key = "ExtNodesCountKey",
+                    Label = "Extend(count)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ExtendNodes_Count.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateExtendNodesCount(),
+                    IsVisible = () => Outside.extendNodes
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 4,
+                    Key = "ExtBandsKey",
+                    Label = "Ext.(bands)?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.ExtendNodes_WithBands,
+                    OnChanged = _ => UpdateCheckbox("ExtBandsKey", val => Outside.extendNodes_WithBands = val),
+                    IsVisible = () => Outside.extendNodes
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 4,
+                    Key = "HvnPctileKey",
+                    Label = "HVN(%)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.PctileHVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateHVN_Pctile(),
+                    IsVisible = () => Outside.ProfileNode_Input == ProfileNode_Data.Percentile
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 4,
+                    Key = "LvnPctileKey",
+                    Label = "LVN(%)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.PctileLVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateLVN_Pctile(),
+                    IsVisible = () => Outside.ProfileNode_Input == ProfileNode_Data.Percentile
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 4,
+                    Key = "ExtNodeStartKey",
+                    Label = "From start?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.ExtendNodes_FromStart,
+                    OnChanged = _ => UpdateCheckbox("ExtNodeStartKey", val => Outside.extendNodes_FromStart = val),
+                    IsVisible = () => Outside.extendNodes
+                },
+
                 new()
                 {
                     Region = "Misc",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "UpdateTPOKey",
                     Label = "Update At",
                     InputType = ParamInputType.ComboBox,
@@ -2772,7 +3475,7 @@ namespace cAlgo
                 new()
                 {
                     Region = "Misc",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "ShowResultsKey",
                     Label = "Results?",
                     InputType = ParamInputType.Checkbox,
@@ -2823,7 +3526,7 @@ namespace cAlgo
             return border;
         }
 
-                private ControlBase CreateFooter()
+        private ControlBase CreateFooter()
         {
             var footerGrid = new Grid(2, 3)
             {
@@ -3135,6 +3838,7 @@ namespace cAlgo
                     return;
                 case "FixedRangeKey":
                     RangeBtn.IsVisible = value;
+                    RefreshVisibility();
                     return;
             }
 
@@ -3211,6 +3915,14 @@ namespace cAlgo
                 RecalculateOutsideWithMsg(false);
             }
         }
+        private void UpdateRangeSegments() {
+            var selected = comboBoxMap["FixedSegmentsKey"].SelectedItem;
+            if (Enum.TryParse(selected, out SegmentsFixedRange_Data segmentsType) && segmentsType != Outside.SegmentsFixedRange_Input)
+            {
+                Outside.SegmentsFixedRange_Input = segmentsType;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
         private void UpdateMiniTPOTimeframe()
         {
             var selected = comboBoxMap["MiniTFKey"].SelectedItem;
@@ -3278,6 +3990,107 @@ namespace cAlgo
                 RecalculateOutsideWithMsg(false);
             }
         }
+
+        // ==== HVN + LVN ====
+        private void UpdateNodeSmooth()
+        {
+            var selected = comboBoxMap["NodeSmoothKey"].SelectedItem;
+            if (Enum.TryParse(selected, out ProfileSmooth_Data smoothType) && smoothType != Outside.ProfileSmooth_Input)
+            {
+                Outside.ProfileSmooth_Input = smoothType;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
+        private void UpdateNodeType()
+        {
+            var selected = comboBoxMap["NodeTypeKey"].SelectedItem;
+            if (Enum.TryParse(selected, out ProfileNode_Data nodeType) && nodeType != Outside.ProfileNode_Input)
+            {
+                Outside.ProfileNode_Input = nodeType;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
+        private void UpdateShowNode()
+        {
+            var selected = comboBoxMap["ShowNodeKey"].SelectedItem;
+            if (Enum.TryParse(selected, out ShowNode_Data showNodeType) && showNodeType != Outside.ShowNode_Input)
+            {
+                Outside.ShowNode_Input = showNodeType;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
+        private void UpdateHVN_Band()
+        {
+            if (double.TryParse(textInputMap["HvnBandPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
+            {
+                if (value != Outside.bandHVN_Pct)
+                {
+                    Outside.bandHVN_Pct = value;
+                    SetApplyVisibility();
+                }
+            }
+        }
+        private void UpdateLVN_Band()
+        {
+            if (double.TryParse(textInputMap["LvnBandPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
+            {
+                if (value != Outside.bandLVN_Pct)
+                {
+                    Outside.bandLVN_Pct = value;
+                    SetApplyVisibility();
+                }
+            }
+        }
+        private void UpdateHVN_Strong()
+        {
+            if (double.TryParse(textInputMap["StrongHvnPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
+            {
+                if (value != Outside.strongHVN_Pct)
+                {
+                    Outside.strongHVN_Pct = value;
+                    SetApplyVisibility();
+                }
+            }
+        }
+        private void UpdateLVN_Strong()
+        {
+            if (double.TryParse(textInputMap["StrongLvnPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
+            {
+                if (value != Outside.strongLVN_Pct)
+                {
+                    Outside.strongLVN_Pct = value;
+                    SetApplyVisibility();
+                }
+            }
+        }
+        private void UpdateExtendNodesCount() 
+        {
+            int value = int.TryParse(textInputMap["ExtNodesCountKey"].Text, out var n) ? n : -1;
+            if (value > 0 && value != Outside.extendNodes_Count)
+            {
+                Outside.extendNodes_Count = value;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
+        private void UpdateHVN_Pctile()
+        {
+            int value = int.TryParse(textInputMap["HvnPctileKey"].Text, out var n) ? n : -1;
+            if (value > 0 && value != Outside.pctileHVN_Value)
+            {
+                Outside.pctileHVN_Value = value;
+                SetApplyVisibility();
+            }
+        }
+        private void UpdateLVN_Pctile()
+        {
+            int value = int.TryParse(textInputMap["LvnPctileKey"].Text, out var n) ? n : -1;
+            if (value > 0 && value != Outside.pctileLVN_Value)
+            {
+                Outside.pctileLVN_Value = value;
+                SetApplyVisibility();
+            }
+        }
+
 
         // ==== Misc ====
         private void UpdateTPO()
@@ -3659,6 +4472,7 @@ namespace cAlgo
             }
         }
     }
+    
     // ========= THEME =========
     public static class Styles
     {
@@ -3771,4 +4585,380 @@ namespace cAlgo
         }
     }
 
+
+    // ================ HVN + LVN ================
+    public static class NodesAnalizer {
+        
+        public static double[] FixedKernel(double sigma = 2.0) {
+            int radius = (int)(3 * sigma);
+            int size = radius * 2 + 1;
+
+            double[] kernel = new double[size];
+            
+            double sigma2 = sigma * sigma;
+            double twoSigma2 = 2.0 * sigma2;
+            double invSigma2 = 1.0 / twoSigma2;
+
+            double sum = 0.0;
+            for (int i = -radius; i <= radius; i++)
+            {
+                double v = Math.Exp(-(i * i) * invSigma2);
+                kernel[i + radius] = v;
+                sum += v;
+            }
+
+            // Normalize
+            double invSum = 1.0 / sum;
+            for (int i = 0; i < size; i++)
+                kernel[i] *= invSum;
+
+            return kernel;
+        }
+
+        public static double[] FixedCoefficients(int windowSize = 9) {
+            if (windowSize % 2 == 0)
+                throw new ArgumentException("windowSize must be odd");
+            
+            int polyOrder = 3;
+            if (polyOrder >= windowSize)
+                throw new ArgumentException("polyOrder must be < windowSize");
+
+            int half = windowSize / 2;
+            int size = windowSize;
+            int cols = polyOrder + 1;
+
+            // --- Design matrix A ---
+            double[,] A = new double[size, cols];
+            double power = 1.0;
+            for (int i = -half; i <= half; i++)
+            {
+                for (int j = 0; j < cols; j++)
+                {
+                    A[i + half, j] = power;
+                    power *= i;
+                }
+            }
+
+            // --- Pseudoinverse (AᵀA)⁻¹Aᵀ ---
+            double[,] AT = Transpose(A);
+            double[,] ATA = Multiply(AT, A);
+            double[,] ATAInv = Invert(ATA);
+            double[,] pinv = Multiply(ATAInv, AT);
+
+            // First row = smoothing coefficients
+            double[] coeffs = new double[size];
+            for (int i = 0; i < size; i++)
+                coeffs[i] = pinv[0, i];
+
+            return coeffs;
+        }
+        
+        // === Smoothing ==
+        // logic generated/converted by LLM
+        // Added fixed kernel/coefficients
+        public static double[] GaussianSmooth(double[] arr, double[] fixedKernel = null, double sigma = 2.0)
+        {
+            int radius = (int)(3 * sigma);
+
+            fixedKernel ??= Array.Empty<double>();
+            
+            double[] kernel;
+            if (fixedKernel.Length == 0)
+            {
+                int size = radius * 2 + 1;
+                kernel = new double[size];
+
+                // Build kernel
+                double sum = 0.0;
+                for (int i = -radius; i <= radius; i++)
+                {
+                    double value = Math.Exp(-(i * i) / (2.0 * sigma * sigma));
+                    kernel[i + radius] = value;
+                    sum += value;
+                }
+
+                // Normalize kernel
+                for (int i = 0; i < size; i++)
+                    kernel[i] /= sum;
+            }
+            else
+                kernel = fixedKernel;
+
+            int n = arr.Length;
+            double[] result = new double[n];
+
+            // Convolution (mode="same")
+            for (int i = 0; i < n; i++)
+            {
+                double acc = 0.0;
+
+                for (int k = -radius; k <= radius; k++)
+                {
+                    int idx = i + k;
+                    if (idx >= 0 && idx < n)
+                        acc += arr[idx] * kernel[k + radius];
+                }
+
+                result[i] = acc;
+            }
+
+            return result;
+        }
+
+        public static double[] SavitzkyGolay(double[] y, double [] fixedCoeff = null, int windowSize = 9)
+        {
+            if (windowSize % 2 == 0)
+                throw new ArgumentException("windowSize must be odd");
+            
+            int polyOrder = 3;
+            if (polyOrder >= windowSize)
+                throw new ArgumentException("polyOrder must be < windowSize");
+
+            fixedCoeff ??= Array.Empty<double>();
+            
+            double[] coeffs;
+            if (fixedCoeff.Length == 0)
+                coeffs = FixedCoefficients(windowSize);
+            else
+                coeffs = fixedCoeff;
+                
+            int half = windowSize / 2;
+            int size = windowSize;
+            
+            // --- Pad signal (edge mode) ---
+            int n = y.Length;
+            double[] padded = new double[n + 2 * half];
+
+            for (int i = 0; i < half; i++)
+                padded[i] = y[0];
+
+            for (int i = 0; i < n; i++)
+                padded[i + half] = y[i];
+            
+            for (int i = 0; i < half; i++)
+                padded[n + half + i] = y[n - 1];
+
+            // --- Convolution (valid) ---
+            double[] result = new double[n];
+
+            for (int i = 0; i < n; i++)
+            {
+                double acc = 0.0;
+                for (int j = 0; j < size; j++)
+                    acc += padded[i + j] * coeffs[size - 1 - j];
+
+                result[i] = acc;
+            }
+
+            return result;
+        }
+        private static double[,] Transpose(double[,] m)
+        {
+            int r = m.GetLength(0);
+            int c = m.GetLength(1);
+            double[,] t = new double[c, r];
+
+            for (int i = 0; i < r; i++)
+                for (int j = 0; j < c; j++)
+                    t[j, i] = m[i, j];
+
+            return t;
+        }
+        private static double[,] Multiply(double[,] a, double[,] b)
+        {
+            int r = a.GetLength(0);
+            int c = b.GetLength(1);
+            int n = a.GetLength(1);
+
+            double[,] m = new double[r, c];
+
+            for (int i = 0; i < r; i++)
+                for (int j = 0; j < c; j++)
+                    for (int k = 0; k < n; k++)
+                        m[i, j] += a[i, k] * b[k, j];
+
+            return m;
+        }
+        private static double[,] Invert(double[,] m)
+        {
+            int n = m.GetLength(0);
+            double[,] a = new double[n, n * 2];
+
+            for (int i = 0; i < n; i++)
+                for (int j = 0; j < n; j++)
+                {
+                    a[i, j] = m[i, j];
+                    a[i, j + n] = (i == j) ? 1.0 : 0.0;
+                }
+
+            for (int i = 0; i < n; i++)
+            {
+                double diag = a[i, i];
+                for (int j = 0; j < n * 2; j++)
+                    a[i, j] /= diag;
+
+                for (int k = 0; k < n; k++)
+                {
+                    if (k == i) continue;
+                    double factor = a[k, i];
+                    for (int j = 0; j < n * 2; j++)
+                        a[k, j] -= factor * a[i, j];
+                }
+            }
+
+            double[,] inv = new double[n, n];
+            for (int i = 0; i < n; i++)
+                for (int j = 0; j < n; j++)
+                    inv[i, j] = a[i, j + n];
+
+            return inv;
+        }
+
+        // === Volume Node => Detection
+        public static (List<int> maximum, List<int> minimum) FindLocalMinMax(double[] arr)
+        {
+            List<int> minimum = new();
+            List<int> maximum = new();
+
+            int n = arr.Length;
+            if (n < 3)
+                return (maximum, minimum);
+
+            for (int i = 1; i < n - 1; i++)
+            {
+                if (arr[i] < arr[i - 1] && arr[i] < arr[i + 1])
+                    minimum.Add(i);
+
+                if (arr[i] > arr[i - 1] && arr[i] > arr[i + 1])
+                    maximum.Add(i);
+            }
+            
+            return (maximum, minimum);
+        }
+        public static (List<int> peaks, List<int> valleys) ProfileTopology(double[] profile)
+        {
+            int n = profile.Length;
+
+            List<int> peaks = new();
+            List<int> valleys = new();
+
+            if (n < 3)
+                return (peaks, valleys);
+
+            // --- First derivative ---
+            double[] d1 = new double[n];
+            for (int i = 1; i < n - 1; i++)
+                d1[i] = (profile[i + 1] - profile[i - 1]) * 0.5;
+
+            d1[0] = profile[1] - profile[0];
+            d1[n - 1] = profile[n - 1] - profile[n - 2];
+
+            // --- Second derivative ---
+            double[] d2 = new double[n];
+            for (int i = 1; i < n - 1; i++)
+                d2[i] = (d1[i + 1] - d1[i - 1]) * 0.5;
+
+            // --- Peak & Valley detection ---
+            for (int i = 1; i < n - 1; i++)
+            {
+                double s1 = Math.Sign(d1[i - 1]);
+                double s2 = Math.Sign(d1[i]);
+
+                // Peak (HVN / POC)
+                if (s1 > 0 && s2 < 0 && d2[i] < 0)
+                    peaks.Add(i);
+
+                // Valley (LVN)
+                if (s1 < 0 && s2 > 0 && d2[i] > 0)
+                    valleys.Add(i);
+            }
+            
+            return (peaks, valleys);
+        }
+        public static (List<int> hvnIdx, List<int> lvnIdx) PercentileNodes(double[] profile, int hvnPct, int lvnPct)
+        {
+            List<int> hvnIdx = new();
+            List<int> lvnIdx = new();
+
+            if (profile.Length == 0)
+                return (hvnIdx, lvnIdx);
+
+            double hvnThreshold = Percentile(profile, hvnPct);
+            double lvnThreshold = Percentile(profile, lvnPct);
+
+            for (int i = 0; i < profile.Length; i++)
+            {
+                if (profile[i] >= hvnThreshold)
+                    hvnIdx.Add(i);
+
+                if (profile[i] <= lvnThreshold)
+                    lvnIdx.Add(i);
+            }
+            
+            return (hvnIdx, lvnIdx);
+        }
+
+        private static double Percentile(double[] data, double percentile)
+        {
+            if (data.Length == 0)
+                return 0.0;
+
+            double[] copy = (double[])data.Clone();
+            Array.Sort(copy);
+
+            double pos = (percentile / 100.0) * (copy.Length - 1);
+            int lo = (int)Math.Floor(pos);
+            int hi = (int)Math.Ceiling(pos);
+
+            if (lo == hi)
+                return copy[lo];
+
+            double frac = pos - lo;
+            return copy[lo] * (1.0 - frac) + copy[hi] * frac;
+        }
+        
+        // === Volume Node => Levels
+        public static (int Low, int High) HVN_SymmetricVA(int startIdx, int endIdx, int pocIdx, double vaPct = 0.70)
+        {
+            int width = endIdx - startIdx;
+            int half = (int)(width * vaPct / 2.0);
+
+            int low = Math.Max(startIdx, pocIdx - half);
+            int high = Math.Min(endIdx, pocIdx + half);
+
+            return (low, high);
+        }
+        public static (int Low, int High) LVN_SymmetricBand(int lvn, int nextLvn, double bandPct = 0.25)
+        {
+            int width = nextLvn - lvn;
+            int radius = (int)(width * bandPct / 2.0);
+
+            int low = Math.Max(0, lvn - radius);
+            int high = Math.Min(nextLvn, lvn + radius);
+
+            return (low, high);
+        }
+        public static List<List<int>> GroupConsecutiveIndexes(IList<int> indices)
+        {
+            var groups = new List<List<int>>();
+
+            if (indices == null || indices.Count == 0)
+                return groups;
+
+            var current = new List<int> { indices[0] };
+            groups.Add(current);
+
+            for (int i = 1; i < indices.Count; i++)
+            {
+                if (indices[i] == indices[i - 1] + 1) 
+                    current.Add(indices[i]);
+                else {
+                    current = new List<int> { indices[i] };
+                    groups.Add(current);
+                }
+            }
+
+            return groups;
+        }
+    }
 }
