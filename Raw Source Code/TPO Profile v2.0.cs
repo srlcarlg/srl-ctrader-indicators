@@ -19,35 +19,30 @@ What's new in rev. 1? (after ODF_AGG)
 - Show Any or All (Mini-VPs/Daily/Weekly/Monthly) Profiles at once!
 - Fixed Range Profiles
 
-Last update => 08/01/2026
+Last update => 19/01/2026
 ===========================
 
-What's new in rev. 2? (2026)
-- HVN + LVN:
-    - Detection:
-      - Smoothing => [Gaussian, Savitzky_Golay]
-      - Nodes => [LocalMinMax, Topology, Percentile]
-    - Levels(bands)
-      - VA-like (set by percentage)
-      - (Tip) Use 'LineStyles = Solid" if any stuttering/lagging occurs when scrolling at profiles on chart (Reduce GPU workload). 
+- What's new in rev. 2? (2026)
+
+HVN + LVN:
+  - Detection:
+    - Smoothing => [Gaussian, Savitzky_Golay]
+    - Nodes => [LocalMinMax, Topology, Percentile]
+  - Levels(bands)
+    - VA-like, set by percentage.
+    - (Important!) The "mini-pocs" shown in 'HVN_With_Bands' are derived from LVN splits!
+        - Decrease the "(%) <= POC" input of "Only Strong?" when filtering the LVNs or HVN_With_Bands.
+        - This 'rule' apply only to [LocalMinMax, Topology].
+    - (Tip) Use 'LineStyles = [Solid, Lines, LinesDots]' if any stuttering/lagging occurs when scrolling at profiles on chart (Reduce GPU workload).
       
-- Improved Performance of:
-    - 'VA + POC'
-    - 'Results'
+Improved Performance of:
+  - 'VA + POC'
+  - 'Results'
+
+Add "Segments" to "TPO Profile" => "Fixed Range?" (params-panel):
+  - Monthly_Aligned (limited to the current Month)
+  - From_Profile (available to any period without the 'bug' between months)
     
-- Add "Segments" to "TPO Profile" => "Fixed Range?" (params-panel):
-    - Monthly_Aligned (limited to the current Month)
-    - From_Profile (available to any period without the 'bug' between months)
-
-
-Final revision (2025)
-- Fix: Params Panel on MacOs
-    - Supposedly cut short/half the size (Can't reproduce it through VM)
-    - WrapPanel isn't fully supported (The button is hidden)
-    - MissingMethodException on cAlgo.API.Panel.get_Children() (...)
-        - At ToggleExpandCollapse event.
-- Tested on MacOS (12 Monterey / 13 Ventura) without 3D accelerated graphics
-
 ===========================
 
 AUTHOR: srlcarlg
@@ -191,7 +186,7 @@ namespace cAlgo
         public int ThicknessVA { get; set; }
 
 
-        [Parameter("Color HVN:", DefaultValue = "Gold" , Group = "==== HVN/LVN ====")]
+        [Parameter("Color HVN:", DefaultValue = "#DFFFD700" , Group = "==== HVN/LVN ====")]
         public Color ColorHVN { get; set; }
         
         [Parameter("LineStyle HVN:", DefaultValue = LineStyle.LinesDots, Group = "==== HVN/LVN ====")]
@@ -200,7 +195,7 @@ namespace cAlgo
         [Parameter("Thickness HVN:", DefaultValue = 1, MinValue = 1, MaxValue = 5, Group = "==== HVN/LVN ====")]
         public int ThicknessHVN { get; set; }
 
-        [Parameter("Color LVN:", DefaultValue = "Crimson", Group = "==== HVN/LVN ====")]
+        [Parameter("Color LVN:", DefaultValue = "#DFDC143C", Group = "==== HVN/LVN ====")]
         public Color ColorLVN { get; set; }
 
         [Parameter("LineStyle LVN:", DefaultValue = LineStyle.LinesDots, Group = "==== HVN/LVN ====")]
@@ -213,27 +208,17 @@ namespace cAlgo
         [Parameter("Color Band:", DefaultValue = "#19F0F8FF",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
         public Color ColorBand { get; set; }
         
-        [Parameter("Color Lower:", DefaultValue = "PowderBlue",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
+        [Parameter("Color Lower:", DefaultValue = "#6CB0E0E6",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
         public Color ColorBand_Lower { get; set; }
 
-        [Parameter("Color Upper:", DefaultValue = "PowderBlue",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
+        [Parameter("Color Upper:", DefaultValue = "#6CB0E0E6",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
         public Color ColorBand_Upper { get; set; }
 
-        [Parameter("LineStyle Bands:", DefaultValue = LineStyle.Dots, Group = "==== Symmetric Bands (HVN/LVN) ====")]
+        [Parameter("LineStyle Bands:", DefaultValue = LineStyle.DotsVeryRare, Group = "==== Symmetric Bands (HVN/LVN) ====")]
         public LineStyle LineStyleBands { get; set; }
 
         [Parameter("Thickness Bands:", DefaultValue = 1, MinValue = 1, MaxValue = 5, Group = "==== Symmetric Bands (HVN/LVN) ====")]
         public int ThicknessBands { get; set; }
-
-
-        [Parameter("Color Letters:", DefaultValue = "#8BE7E7E7" , Group = "==== Divided Mode ====")]
-        public Color ColorLetters { get; set; }
-
-        [Parameter("Close BarUP:", DefaultValue = "Green" , Group = "==== Divided Mode ====")]
-        public Color ColorCandleUP { get; set; }
-
-        [Parameter("Close BarDown:", DefaultValue = "Red", Group = "==== Divided Mode ====")]
-        public Color ColorCandleDown { get; set; }
 
 
         [Parameter("Developed for cTrader/C#", DefaultValue = "by srlcarlg", Group = "==== Credits ====")]
@@ -244,40 +229,36 @@ namespace cAlgo
         // Moved from cTrader Input to Params Panel
 
         // ==== General ====
-        public int Lookback = 1;
         public enum TPOMode_Data {
             Aggregated
         }
-        public TPOMode_Data TPOMode_Input = TPOMode_Data.Aggregated;
-
         public enum TPOInterval_Data
         {
             Daily,
             Weekly,
             Monthly
         }
-        public TPOInterval_Data TPOInterval_Input = TPOInterval_Data.Daily;
+
+        public class GeneralParams_Info {
+            public int Lookback = 1;
+            public TPOMode_Data TPOMode_Input = TPOMode_Data.Aggregated;
+            public TPOInterval_Data TPOInterval_Input = TPOInterval_Data.Daily;
+        }
+        public GeneralParams_Info GeneralParams = new();
 
 
         // ==== TPO Profile ====
-        public bool EnableTPO = false;
-
         public enum UpdateProfile_Data
         {
             EveryTick_CPU_Workout,
             ThroughSegments_Balanced,
             Through_2_Segments_Best,
         }
-        public UpdateProfile_Data UpdateProfile_Input = UpdateProfile_Data.Through_2_Segments_Best;
-        public bool FillHist_TPO = true;
-
         public enum HistSide_Data
         {
             Left,
             Right,
         }
-        public HistSide_Data HistogramSide_Input = HistSide_Data.Left;
-
         public enum HistWidth_Data
         {
             _15,
@@ -286,71 +267,69 @@ namespace cAlgo
             _70,
             _100
         }
-        public HistWidth_Data HistogramWidth_Input = HistWidth_Data._70;
+        // Allow "old" segmentation "From_Profile", 
+        // so the "Fixed Range" doesn't "bug" => remains on chart between months (end/start of each month) / limited to the current month.
+        public enum SegmentsFixedRange_Data
+        {
+            Monthly_Aligned,
+            From_Profile
+        }       
+        
+        public class ProfileParams_Info {
+            public bool EnableMainTPO = false;
+            public bool EnableWeeklyProfile = false;
+            public bool EnableMonthlyProfile = false;
+            public UpdateProfile_Data UpdateProfile_Input = UpdateProfile_Data.Through_2_Segments_Best;
+            public bool FillHist_TPO = true;
 
-        public bool EnableWeeklyProfile = false;
-        public bool EnableMonthlyProfile = false;
+            public HistSide_Data HistogramSide_Input = HistSide_Data.Left;
+            public HistWidth_Data HistogramWidth_Input = HistWidth_Data._70;
 
-        public bool ShowOHLC = false;
-        public bool EnableFixedRange = false;
+            public bool EnableFixedRange = false;
+            public SegmentsFixedRange_Data SegmentsFixedRange_Input = SegmentsFixedRange_Data.From_Profile;
+                    
+            public bool ShowOHLC = false;
+            public bool ShowResults = true;
 
+            // ==== Mini TPOs ====
+            public bool EnableMiniProfiles = true;
+            public TimeFrame MiniTPOs_Timeframe = TimeFrame.Hour4;
+            public bool ShowMiniResults = true;
 
-        // ==== Intraday Profiles ====
-        public bool ShowIntradayProfile = false;
-        public int OffsetBarsInput = 2;
-        public TimeFrame OffsetTimeframeInput = TimeFrame.Hour;
-        public bool FillIntradaySpace { get; set; }
+            // ==== Intraday View ====
+            public bool ShowIntradayProfile = false;
+            public int OffsetBarsInput = 2;
+            public TimeFrame OffsetTimeframeInput = TimeFrame.Hour;
+            public bool FillIntradaySpace { get; set; }
 
-
-        // ==== Mini TPOs ====
-        public bool EnableMiniProfiles = true;
-        public TimeFrame MiniTPOs_Timeframe = TimeFrame.Hour4;
-        public bool ShowMiniResults = true;
-
+        }
+        public ProfileParams_Info ProfileParams = new();
+        
 
         // ==== VA + POC ====
-        public bool ShowVA = false;
-        public int PercentVA = 65;
-        public bool KeepPOC = true;
-        public bool ExtendPOC = false;
-        public bool ExtendVA = false;
-        public int ExtendCount = 1;
+        public class VAParams_Info {
+            public bool ShowVA = false;
+            public int PercentVA = 65;
+            public bool KeepPOC = false;
+            public bool ExtendPOC = false;
+            public bool ExtendVA = false;
+            public int ExtendCount = 1;
+        }
+        public VAParams_Info VAParams = new();
 
         
-        // ==== HVN + LVN ====        
-        public bool EnableNodeDetection = false;
-
+        // ==== HVN + LVN ====
         public enum ProfileSmooth_Data
         {
             Gaussian,
             Savitzky_Golay
         }
-        public ProfileSmooth_Data ProfileSmooth_Input = ProfileSmooth_Data.Gaussian;
-
         public enum ProfileNode_Data
         {
             LocalMinMax,
             Topology,
             Percentile
         }
-        public ProfileNode_Data ProfileNode_Input = ProfileNode_Data.LocalMinMax;
-
-        public int pctileHVN_Value = 90;
-        public int pctileLVN_Value = 25;
-
-        public bool onlyStrongNodes = false;
-        public double strongHVN_Pct = 23.6;
-        public double strongLVN_Pct = 55.3;
-
-        public double bandHVN_Pct = 61.8;
-        public double bandLVN_Pct = 23.6;
-
-        public bool extendNodes = false;
-        public int extendNodes_Count = 1;
-        public bool extendNodes_WithBands = false;
-        public bool extendNodes_FromStart = true;
-
-
         public enum ShowNode_Data
         {
             HVN_With_Bands,
@@ -358,21 +337,31 @@ namespace cAlgo
             LVN_With_Bands,
             LVN_Raw
         }
-        public ShowNode_Data ShowNode_Input = ShowNode_Data.HVN_With_Bands;
+        public class NodesParams_Info {
 
+            public bool EnableNodeDetection = true;
 
-        // ==== Results ====
-        public bool ShowResults = true;
+            public ProfileSmooth_Data ProfileSmooth_Input = ProfileSmooth_Data.Gaussian;
+            public ProfileNode_Data ProfileNode_Input = ProfileNode_Data.LocalMinMax;
 
-        // Allow "old" segmentation "From_Profile", 
-        // so the "Fixed Range" doesn't "bug" => remains on chart between months (end/start of each month)
-        public enum SegmentsFixedRange_Data
-        {
-            Monthly_Aligned,
-            From_Profile
-        }       
-        public SegmentsFixedRange_Data SegmentsFixedRange_Input = SegmentsFixedRange_Data.From_Profile;
-        
+            public ShowNode_Data ShowNode_Input = ShowNode_Data.HVN_With_Bands;
+            public int pctileHVN_Value = 90;
+            public int pctileLVN_Value = 25;
+
+            public bool onlyStrongNodes = false;
+            public double strongHVN_Pct = 23.6;
+            public double strongLVN_Pct = 55.3;
+
+            public double bandHVN_Pct = 61.8;
+            public double bandLVN_Pct = 23.6;
+
+            public bool extendNodes = false;
+            public int extendNodes_Count = 1;
+            public bool extendNodes_WithBands = false;
+            public bool extendNodes_FromStart = true;
+        }
+        public NodesParams_Info NodesParams = new();
+
         // Always Monthly
         public enum SegmentsInterval_Data
         {
@@ -397,22 +386,37 @@ namespace cAlgo
         }
         // intKey is the intervalIndex
         // value is the last updated Highest/Lowest
-        private readonly IDictionary<int, SegmentsExtremumInfo> segmentInfo = new Dictionary<int, SegmentsExtremumInfo>();
-        private readonly IDictionary<int, List<double>> segmentsDict = new Dictionary<int, List<double>>();
-        private readonly IDictionary<string, List<double>> segmentsFromProfile = new Dictionary<string, List<double>>();
+        private readonly Dictionary<int, SegmentsExtremumInfo> segmentInfo = new();
+        private readonly Dictionary<int, List<double>> segmentsDict = new();
+        private readonly Dictionary<string, List<double>> segmentsFromProfile = new();
         private List<double> Segments = new();
 
-        private IDictionary<double, double> TPO_Rank_Histogram = new Dictionary<double, double>();
+        private Dictionary<double, double> TPO_Rank_Histogram = new();
 
         // Weekly, Monthly and Mini TPOs
         public class TPORankType
         {
-            public IDictionary<double, double> TPO_Histogram { get; set; } = new Dictionary<double, double>();
+            public Dictionary<double, double> TPO_Histogram = new();
+
+            public void ClearAll() {
+                TPO_Histogram.Clear();
+            }
         }
         private readonly TPORankType MonthlyRank = new();
         private readonly TPORankType WeeklyRank = new();
         private readonly TPORankType MiniRank = new();
-        private readonly IDictionary<string, TPORankType> FixedRank = new Dictionary<string, TPORankType>();
+        private readonly Dictionary<string, TPORankType> FixedRank = new();
+
+        // Fixed Range Profile
+        public class RangeObjs_Info {
+            public List<ChartRectangle> rectangles = new();
+            public Dictionary<string, List<ChartText>> infoObjects = new();
+            public Dictionary<string, Border> controlGrids = new();
+        }
+        private readonly RangeObjs_Info RangeObjs = new();
+
+        // HVN + LVN => Performance
+        public double[] nodesKernel = null;
 
         private Bars MiniTPOs_Bars;
         private Bars DailyBars;
@@ -427,130 +431,73 @@ namespace cAlgo
             Fixed,
         }
 
-        // Its a annoying behavior that happens even in Candles Chart (Time-Based) on any symbol/broker.
-        // where it's jump/pass +1 index when .GetIndexByTime is used... the exactly behavior of Price-Based Charts
-        // Seems to happen only in Lower Timeframes (<=´Daily)
-        // So, to ensure that it works flawless, an additional verification is needed.
+        /*
+          Its a annoying behavior that happens even in Candles Chart (Time-Based) on any symbol/broker.
+          where it's jump/pass +1 index when .GetIndexByTime is used... the exactly behavior of Price-Based Charts
+          Seems to happen only in Lower Timeframes (<=´Daily)
+          So, to ensure that it works flawless, an additional verification is needed.
+        */
         public class CleanedIndex {
-            public int _TPO_Interval = 0;
-            public int _Mini = 0;
+            public int MainTPO = 0;
+            public int Mini = 0;
+            public void ResetAll() {
+                MainTPO = 0;
+                Mini = 0;
+            }
         }
-        private readonly CleanedIndex lastCleaned = new();
+        private readonly CleanedIndex ClearIdx = new();
 
         // Concurrent Live TPO Update
-        private readonly object _lockSource = new();
-        private readonly object _lock = new();
-        private readonly object _weeklyLock = new();
-        private readonly object _monthlyLock = new();
-        private readonly object _miniLock = new();
+        private class LockObjs_Info {
+            public readonly object Bar = new();
+            public readonly object MainTPO = new();
+            public readonly object WeeklyTPO = new();
+            public readonly object MonthlyTPO = new();
+            public readonly object MiniTPO = new();
+        }
+        private readonly LockObjs_Info _Locks = new();
 
-        private CancellationTokenSource cts;
-        private Task liveTPO_Task;
-        private Task weeklyTPO_Task;
-        private Task monthlyTPO_Task;
-        private Task miniTPO_Task;
-        private bool liveTPO_UpdateIt = false;
+        private class TaskObjs_Info {
+            public CancellationTokenSource cts;
+            public Task MainTPO;
+            public Task WeeklyTPO;
+            public Task MonthlyTPO;
+            public Task MiniTPO;
+        }
+        private readonly TaskObjs_Info _Tasks = new();
+
+        private bool liveTPO_RunWorker = false;
 
         public class LiveTPOIndex {
-            public int TPO_Interval { get; set; }
+            public int MainTPO { get; set; }
             public int Mini { get; set; }
             public int Weekly { get; set; }
             public int Monthly { get; set; }
         }
-        private readonly LiveTPOIndex liveTPO_StartIndexes = new();
+        private readonly LiveTPOIndex LiveTPOIndexes = new();
         private List<Bar> Bars_List = new();
 
-        // Fixed Range Profile
-        private readonly List<ChartRectangle> _rectangles = new();
-        private readonly Dictionary<string, List<ChartText>> _infoObjects = new();
-        private readonly Dictionary<string, Border> _controlGrids = new();
-
         // Shared rowHeight
+        private double rowHeight = 0;
         private double heightPips = 4;
         public double heightATR = 4;
-        private double rowHeight = 0;
 
         // Some required utils
+        private double prevUpdatePrice;
         private bool configHasChanged = false;
+        private bool isUpdateTPO = false;
         public bool isPriceBased_Chart = false;
         public bool isRenkoChart = false;
-        private bool isUpdateTPO = false;
-        private double prevUpdatePrice;
-
-        // HVN + LVN => Performance
-        private double[] nodesKernel = null;
 
         // Params Panel
         private Border ParamBorder;
         public class IndicatorParams
         {
-            // ==== General ====
-            public int LookBack { get; set; }
-            public TPOMode_Data ModeTPO { get; set; }
+            public GeneralParams_Info GeneralParams { get; set; }
             public double RowHeightInPips { get; set; }
-            public TPOInterval_Data TPOInterval { get; set; }
-
-            // ==== TPO Profile ====
-            public bool EnableTPO { get; set; }
-            public bool EnableWeeklyProfile { get; set; }
-            public bool EnableMonthlyProfile { get; set; }
-
-            // View
-            public bool FillHist_TPO { get; set; }
-            public HistSide_Data HistogramSide { get; set; }
-            public HistWidth_Data HistogramWidth { get; set; }
-            public bool Gradient { get; set; }
-            public bool OHLC { get; set; }
-            public bool FixedRange { get; set; }
-
-            // Intraday View
-            public bool ShowIntradayProfile { get; set; }
-            public bool FillIntradaySpace { get; set; }
-            public int OffsetBarsIntraday { get; set; }
-            public TimeFrame OffsetTimeframeIntraday { get; set; }
-
-            // ==== Mini TPOs ====
-            public bool EnableMiniProfiles { get; set; }
-            public TimeFrame MiniTPOsTimeframe { get; set; }
-            public bool ShowMiniResults { get; set; }
-
-            // ==== VA + POC ====
-            public bool ShowVA { get; set; }
-            public int PercentVA { get; set; }
-            public bool KeepPOC { get; set; }
-            public bool ExtendPOC { get; set; }
-            public bool ExtendVA { get; set; }
-            public int ExtendCount { get; set; }
-
-            
-            // ==== HVN + LVN ====        
-            public bool EnableNodes { get; set; }
-
-            public ProfileSmooth_Data ProfileSmooth { get; set; }
-
-            public ProfileNode_Data ProfileNode { get; set; }
-
-            public ShowNode_Data ShowNode { get; set; }
-            public double BandHVN { get; set; }
-            public double BandLVN { get; set; }
-
-            public bool OnlyStrong { get; set; }
-            public double StrongHVN { get; set; }
-            public double StrongLVN { get; set; }
-            
-            public int PctileHVN { get; set; }
-            public int PctileLVN { get; set; }
-
-            public bool ExtendNodes { get; set; }
-            public int ExtendNodes_Count { get; set; }
-            public bool ExtendNodes_WithBands { get; set; }
-            public bool ExtendNodes_FromStart { get; set; }
-
-
-            // ==== Misc ====
-            public UpdateProfile_Data UpdateProfileStrategy { get; set; }
-            public bool ShowResults { get; set; }
-            public SegmentsFixedRange_Data SegmentsFixedRange { get; set; }
+            public ProfileParams_Info ProfileParams { get; set; }
+            public VAParams_Info VAParams { get; set; }
+            public NodesParams_Info NodesParams { get; set; }
         }
 
         private void AddHiddenButton(Panel panel, Color btnColor)
@@ -578,43 +525,43 @@ namespace cAlgo
         protected override void Initialize()
         {
             // ========== Predefined Config ==========
-            if (RowConfig_Input == RowConfig_Data.ATR && (Chart.TimeFrame >= TimeFrame.Minute && Chart.TimeFrame <= TimeFrame.Day3))
+            if (RowConfig_Input == RowConfig_Data.ATR && Chart.TimeFrame >= TimeFrame.Minute && Chart.TimeFrame <= TimeFrame.Day3)
             {
                 if (Chart.TimeFrame >= TimeFrame.Minute && Chart.TimeFrame <= TimeFrame.Minute4)
                 {
                     if (Chart.TimeFrame == TimeFrame.Minute)
-                        MiniTPOs_Timeframe = TimeFrame.Hour;
+                        ProfileParams.MiniTPOs_Timeframe = TimeFrame.Hour;
                     else if (Chart.TimeFrame == TimeFrame.Minute2)
-                        MiniTPOs_Timeframe = TimeFrame.Hour2;
+                        ProfileParams.MiniTPOs_Timeframe = TimeFrame.Hour2;
                     else if (Chart.TimeFrame <= TimeFrame.Minute4)
-                        MiniTPOs_Timeframe = TimeFrame.Hour3;
+                        ProfileParams.MiniTPOs_Timeframe = TimeFrame.Hour3;
                 }
                 else if (Chart.TimeFrame >= TimeFrame.Minute5 && Chart.TimeFrame <= TimeFrame.Minute10)
                 {
                     if (Chart.TimeFrame == TimeFrame.Minute5)
-                        MiniTPOs_Timeframe = TimeFrame.Hour4;
+                        ProfileParams.MiniTPOs_Timeframe = TimeFrame.Hour4;
                     else if (Chart.TimeFrame == TimeFrame.Minute6)
-                        MiniTPOs_Timeframe = TimeFrame.Hour6;
+                        ProfileParams.MiniTPOs_Timeframe = TimeFrame.Hour6;
                     else if (Chart.TimeFrame <= TimeFrame.Minute8)
-                        MiniTPOs_Timeframe = TimeFrame.Hour8;
+                        ProfileParams.MiniTPOs_Timeframe = TimeFrame.Hour8;
                     else if (Chart.TimeFrame <= TimeFrame.Minute10)
-                        MiniTPOs_Timeframe = TimeFrame.Hour12;
+                        ProfileParams.MiniTPOs_Timeframe = TimeFrame.Hour12;
                 }
                 else if (Chart.TimeFrame >= TimeFrame.Minute15 && Chart.TimeFrame <= TimeFrame.Hour8)
                 {
                     if (Chart.TimeFrame >= TimeFrame.Minute15 && Chart.TimeFrame <= TimeFrame.Hour)
-                        MiniTPOs_Timeframe = TimeFrame.Daily;
+                        ProfileParams.MiniTPOs_Timeframe = TimeFrame.Daily;
 
                     else if (Chart.TimeFrame <= TimeFrame.Hour8) {
-                        EnableTPO = true;
-                        EnableMiniProfiles = false;
-                        TPOInterval_Input = TPOInterval_Data.Weekly;
+                        ProfileParams.EnableMainTPO = true;
+                        ProfileParams.EnableMiniProfiles = false;
+                        GeneralParams.TPOInterval_Input = TPOInterval_Data.Weekly;
                     }
                 }
                 else if (Chart.TimeFrame >= TimeFrame.Hour12 && Chart.TimeFrame <= TimeFrame.Weekly) {
-                    EnableTPO = true;
-                    EnableMiniProfiles = false;
-                    TPOInterval_Input = TPOInterval_Data.Monthly;
+                    ProfileParams.EnableMainTPO = true;
+                    ProfileParams.EnableMiniProfiles = false;
+                    GeneralParams.TPOInterval_Input = TPOInterval_Data.Monthly;
                 }
             }
 
@@ -649,7 +596,7 @@ namespace cAlgo
             DailyBars = MarketData.GetBars(TimeFrame.Daily);
             WeeklyBars = MarketData.GetBars(TimeFrame.Weekly);
             MonthlyBars = MarketData.GetBars(TimeFrame.Monthly);
-            MiniTPOs_Bars = MarketData.GetBars(MiniTPOs_Timeframe);
+            MiniTPOs_Bars = MarketData.GetBars(ProfileParams.MiniTPOs_Timeframe);
 
             // Chart
             string currentTimeframe = Chart.TimeFrame.ToString();
@@ -699,84 +646,26 @@ namespace cAlgo
 
             IndicatorParams DefaultParams = new()
             {
-                // General
-                LookBack = Lookback,
-                ModeTPO = TPOMode_Input,
+                GeneralParams = GeneralParams,
                 RowHeightInPips = heightPips,
-                TPOInterval = TPOInterval_Input,
-
-                // TPO Profile
-                EnableTPO = EnableTPO,
-                EnableWeeklyProfile = EnableWeeklyProfile,
-                EnableMonthlyProfile = EnableMonthlyProfile,
-
-                // View
-                FillHist_TPO = FillHist_TPO,
-                HistogramSide = HistogramSide_Input,
-                HistogramWidth = HistogramWidth_Input,
-                OHLC = ShowOHLC,
-                FixedRange = EnableFixedRange,
-
-                // Intraday View
-                ShowIntradayProfile = ShowIntradayProfile,
-                OffsetBarsIntraday = OffsetBarsInput,
-                OffsetTimeframeIntraday = OffsetTimeframeInput,
-                FillIntradaySpace = FillIntradaySpace,
-
-                // Mini TPOs
-                EnableMiniProfiles = EnableMiniProfiles,
-                MiniTPOsTimeframe = MiniTPOs_Timeframe,
-                ShowMiniResults = ShowMiniResults,
-
-                // VA + POC
-                ShowVA = ShowVA,
-                PercentVA = PercentVA,
-                KeepPOC = KeepPOC,
-                ExtendPOC = ExtendPOC,
-                ExtendVA = ExtendVA,
-                ExtendCount = ExtendCount,
-
-                // HVN + LVN
-                EnableNodes = EnableNodeDetection,
-                ProfileSmooth = ProfileSmooth_Input,
-                ProfileNode = ProfileNode_Input,
-                
-                ShowNode = ShowNode_Input,
-                BandHVN = bandHVN_Pct,
-                BandLVN = bandLVN_Pct,
-
-                OnlyStrong = onlyStrongNodes,
-                StrongHVN = strongHVN_Pct,
-                StrongLVN = strongLVN_Pct,
-
-                PctileHVN = pctileHVN_Value,
-                PctileLVN = pctileLVN_Value,
-                
-                ExtendNodes = extendNodes,
-                ExtendNodes_Count = extendNodes_Count,
-                ExtendNodes_WithBands = extendNodes_WithBands,
-                ExtendNodes_FromStart = extendNodes_FromStart,
-
-                // Misc
-                UpdateProfileStrategy = UpdateProfile_Input,
-                ShowResults = ShowResults,
-                SegmentsFixedRange = SegmentsFixedRange_Input
+                ProfileParams = ProfileParams,
+                VAParams = VAParams,
+                NodesParams = NodesParams,
             };
 
             ParamsPanel ParamPanel = new(this, DefaultParams);
 
-            Border borderParam = new()
+            ParamBorder = new()
             {
                 VerticalAlignment = vAlign,
                 HorizontalAlignment = hAlign,
                 Style = Styles.CreatePanelBackgroundStyle(),
                 Margin = "20 40 20 20",
                 // ParamsPanel - Lock Width
-                Width = 262,
+                Width = 290,
                 Child = ParamPanel
             };
-            Chart.AddControl(borderParam);
-            ParamBorder = borderParam;
+            Chart.AddControl(ParamBorder);
 
             StackPanel stackPanel = new()
             {
@@ -799,18 +688,18 @@ namespace cAlgo
             CreateSegments(index);
 
             // WM
-            if (EnableTPO && !IsLastBar) {
+            if (!IsLastBar) {
                 CreateMonthlyTPO(index);
                 CreateWeeklyTPO(index);
             }
 
             // LookBack
-            Bars tpoBars = TPOInterval_Input == TPOInterval_Data.Daily ? DailyBars :
-                           TPOInterval_Input == TPOInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
+            Bars tpoBars = GeneralParams.TPOInterval_Input == TPOInterval_Data.Daily ? DailyBars :
+                           GeneralParams.TPOInterval_Input == TPOInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
 
             // Get Index of TPO Interval to continue only in Lookback
             int iVerify = tpoBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
-            if (tpoBars.ClosePrices.Count - iVerify > Lookback)
+            if (tpoBars.ClosePrices.Count - iVerify > GeneralParams.Lookback)
                 return;
 
             int TF_idx = tpoBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
@@ -819,7 +708,7 @@ namespace cAlgo
             // Clean Dicts
             if (index == startIndex ||
                 (index - 1) == startIndex && isPriceBased_Chart ||
-                (index - 1) == startIndex && (index - 1) != lastCleaned._TPO_Interval
+                (index - 1) == startIndex && (index - 1) != ClearIdx.MainTPO
             )
                 CleanUp_MainTPO(index, startIndex);
 
@@ -829,7 +718,7 @@ namespace cAlgo
                 // Allows MiniTPOs if (!EnableTPO)
                 CreateMiniTPOs(index);
 
-                if (EnableTPO)
+                if (ProfileParams.EnableMainTPO)
                     TPO_Profile(startIndex, index);
 
                 isUpdateTPO = true; // chart end
@@ -838,9 +727,9 @@ namespace cAlgo
             {
                 if (UpdateStrategy_Input == UpdateStrategy_Data.SameThread_MayFreeze)
                 {
-                    if (EnableTPO)
+                    if (ProfileParams.EnableMainTPO)
                         LiveTPO_Update(startIndex, index);
-                    else if (!EnableTPO && EnableMiniProfiles)
+                    else if (!ProfileParams.EnableMainTPO && ProfileParams.EnableMiniProfiles)
                         LiveTPO_Update(startIndex, index, true);
                 }
                 else
@@ -854,7 +743,7 @@ namespace cAlgo
             // Segments are identified by TF_idx(start)
             // No need to clean up even if it's Daily Interval
             TPO_Rank_Histogram.Clear();
-            lastCleaned._TPO_Interval = index == startIndex ? index : (index - 1);
+            ClearIdx.MainTPO = index == startIndex ? index : (index - 1);
         }
 
         // *********** INTERVAL SEGMENTS ***********
@@ -971,7 +860,7 @@ namespace cAlgo
         }
         private List<double> GetRangeSegments(int TF_idx, string fixedKey) 
         {
-            if (SegmentsFixedRange_Input == SegmentsFixedRange_Data.From_Profile)
+            if (ProfileParams.SegmentsFixedRange_Input == SegmentsFixedRange_Data.From_Profile)
                 return segmentsFromProfile[fixedKey];
             else
                 return segmentsDict[TF_idx];
@@ -979,56 +868,56 @@ namespace cAlgo
 
         // *********** MWM PROFILES ***********
         private void CreateMiniTPOs(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
-            if (EnableMiniProfiles)
+            if (ProfileParams.EnableMiniProfiles)
             {
                 int miniIndex = MiniTPOs_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
                 int miniStart = Bars.OpenTimes.GetIndexByTime(MiniTPOs_Bars.OpenTimes[miniIndex]);
 
                 if (index == miniStart ||
                     (index - 1) == miniStart && isPriceBased_Chart ||
-                    (index - 1) == miniStart && (index - 1) != lastCleaned._Mini || loopStart
+                    (index - 1) == miniStart && (index - 1) != ClearIdx.Mini || loopStart
                 ) {
-                    MiniRank.TPO_Histogram.Clear();
-                    lastCleaned._Mini = index == miniStart ? index : (index - 1);
+                    MiniRank.ClearAll();
+                    ClearIdx.Mini = index == miniStart ? index : (index - 1);
                 }
                 if (!isConcurrent)
                     TPO_Profile(miniStart, index, ExtraProfiles.MiniTPO, isLoop);
                 else
                 {
-                    miniTPO_Task ??= Task.Run(() => LiveTPO_Worker(ExtraProfiles.MiniTPO, cts.Token));
+                    _Tasks.MiniTPO ??= Task.Run(() => LiveTPO_Worker(ExtraProfiles.MiniTPO, _Tasks.cts.Token));
 
-                    liveTPO_StartIndexes.Mini = miniStart;
+                    LiveTPOIndexes.Mini = miniStart;
 
                     if (index != miniStart) {
-                        lock (_miniLock)
+                        lock (_Locks.MiniTPO)
                             TPO_Profile(miniStart, index, ExtraProfiles.MiniTPO, false, true);
                     }
                 }
             }
         }
         private void CreateWeeklyTPO(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
-            if (EnableTPO && EnableWeeklyProfile)
+            if (ProfileParams.EnableWeeklyProfile)
             {
                 // Avoid recalculating the same period.
-                if (TPOInterval_Input == TPOInterval_Data.Weekly)
+                if (GeneralParams.TPOInterval_Input == TPOInterval_Data.Weekly)
                     return;
 
                 int weekIndex = WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
                 int weekStart = Bars.OpenTimes.GetIndexByTime(WeeklyBars.OpenTimes[weekIndex]);
 
                 if (index == weekStart || (index - 1) == weekStart && isPriceBased_Chart || loopStart)
-                    WeeklyRank.TPO_Histogram.Clear();
+                    WeeklyRank.ClearAll();
 
                 if (!isConcurrent)
                     TPO_Profile(weekStart, index, ExtraProfiles.Weekly, isLoop);
                 else
                 {
-                    weeklyTPO_Task ??= Task.Run(() => LiveTPO_Worker(ExtraProfiles.Weekly, cts.Token));
+                    _Tasks.WeeklyTPO ??= Task.Run(() => LiveTPO_Worker(ExtraProfiles.Weekly, _Tasks.cts.Token));
 
-                    liveTPO_StartIndexes.Weekly = weekStart;
+                    LiveTPOIndexes.Weekly = weekStart;
 
                     if (index != weekStart) {
-                        lock (_weeklyLock)
+                        lock (_Locks.WeeklyTPO)
                             TPO_Profile(weekStart, index, ExtraProfiles.Weekly, false, true);
                     }
                 }
@@ -1036,27 +925,27 @@ namespace cAlgo
         }
         private void CreateMonthlyTPO(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
             // Avoid recalculating the same period.
-            if (TPOInterval_Input == TPOInterval_Data.Monthly)
+            if (GeneralParams.TPOInterval_Input == TPOInterval_Data.Monthly)
                 return;
 
-            if (EnableTPO && EnableMonthlyProfile)
+            if (ProfileParams.EnableMonthlyProfile)
             {
                 int monthIndex = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
                 int monthStart = Bars.OpenTimes.GetIndexByTime(MonthlyBars.OpenTimes[monthIndex]);
 
                 if (index == monthStart || (index - 1) == monthStart && isPriceBased_Chart || loopStart)
-                    MonthlyRank.TPO_Histogram.Clear();
+                    MonthlyRank.ClearAll();
 
                 if (!isConcurrent)
                     TPO_Profile(monthStart, index, ExtraProfiles.Monthly, isLoop);
                 else
                 {
-                    monthlyTPO_Task ??= Task.Run(() => LiveTPO_Worker(ExtraProfiles.Monthly, cts.Token));
+                    _Tasks.MonthlyTPO ??= Task.Run(() => LiveTPO_Worker(ExtraProfiles.Monthly, _Tasks.cts.Token));
 
-                    liveTPO_StartIndexes.Monthly = monthStart;
+                    LiveTPOIndexes.Monthly = monthStart;
 
                     if (index != monthStart) {
-                        lock (_monthlyLock)
+                        lock (_Locks.MonthlyTPO)
                             TPO_Profile(monthStart, index, ExtraProfiles.Monthly, false, true);
                     }
                 }
@@ -1066,7 +955,7 @@ namespace cAlgo
         // *********** TPO PROFILE ***********
         private void TPO_Profile(int iStart, int index,  ExtraProfiles extraProfiles = ExtraProfiles.No, bool isLoop = false, bool drawOnly = false, string fixedKey = "", double fixedLowest = 0, double fixedHighest = 0)
         {
-            if (extraProfiles == ExtraProfiles.Fixed && SegmentsFixedRange_Input == SegmentsFixedRange_Data.From_Profile)
+            if (extraProfiles == ExtraProfiles.Fixed && ProfileParams.SegmentsFixedRange_Input == SegmentsFixedRange_Data.From_Profile)
                 CreateSegments_FromFixedRange(Bars.OpenPrices[iStart], fixedLowest, fixedHighest, fixedKey);
                 
             // ==== TPO Column ====
@@ -1078,44 +967,67 @@ namespace cAlgo
                 return;
 
             // For Results
-            Bars mainTF = TPOInterval_Input == TPOInterval_Data.Daily ? DailyBars :
-                           TPOInterval_Input == TPOInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
-            Bars TF_Bars = extraProfiles == ExtraProfiles.No ? mainTF:
-                           extraProfiles == ExtraProfiles.MiniTPO ? MiniTPOs_Bars :
-                           extraProfiles == ExtraProfiles.Weekly ? WeeklyBars : MonthlyBars; // Fixed should use Monthly Bars, so TF_idx can be used by "whichSegment" variable
-
+            Bars mainTF = GeneralParams.TPOInterval_Input switch {
+                TPOInterval_Data.Weekly => WeeklyBars,
+                TPOInterval_Data.Monthly => MonthlyBars,
+                _ => DailyBars
+            };                           
+            Bars TF_Bars = extraProfiles switch {
+                ExtraProfiles.MiniTPO => MiniTPOs_Bars,
+                ExtraProfiles.Weekly => WeeklyBars,
+                ExtraProfiles.Monthly => MonthlyBars,
+                // Fixed should use Monthly Bars, so TF_idx can be used by "whichSegment" variable
+                ExtraProfiles.Fixed => MonthlyBars,
+                _ => mainTF
+            };
             int TF_idx = TF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
-            double lowest = TF_Bars.LowPrices[TF_idx];
-            double highest = TF_Bars.HighPrices[TF_idx];
-
-            // Mini TPOs avoid crash after recalculating
-            if (double.IsNaN(lowest)) {
-                lowest = TF_Bars.LowPrices.LastValue;
-                highest = TF_Bars.HighPrices.LastValue;
-            }
 
             bool gapWeekend = Bars.OpenTimes[iStart].DayOfWeek == DayOfWeek.Friday && Bars.OpenTimes[iStart].Hour < 2;
             DateTime x1_Start = Bars.OpenTimes[iStart + (gapWeekend ? 1 : 0)];
             DateTime xBar = Bars.OpenTimes[index];
 
-            bool isIntraday = ShowIntradayProfile && index == Chart.LastVisibleBarIndex && !isLoop;
+            bool isIntraday = ProfileParams.ShowIntradayProfile && index == Chart.LastVisibleBarIndex && !isLoop;
             DateTime intraDate = xBar;
 
             // Any Volume Mode
             double maxLength = xBar.Subtract(x1_Start).TotalMilliseconds;
 
-            HistWidth_Data selectedWidth = HistogramWidth_Input;
-            double maxWidth = selectedWidth == HistWidth_Data._15 ? 1.25 :
-                              selectedWidth == HistWidth_Data._30 ? 1.50 :
-                              selectedWidth == HistWidth_Data._50 ? 2 : 3;
-
+            HistWidth_Data selectedWidth = ProfileParams.HistogramWidth_Input;
+            double maxWidth = ProfileParams.HistogramWidth_Input switch {
+                HistWidth_Data._15 => 1.25,
+                HistWidth_Data._30 => 1.50,
+                HistWidth_Data._50 => 2,
+                _ => 3
+            };
             double proportion_TPO = maxLength - (maxLength / maxWidth);
             if (selectedWidth == HistWidth_Data._100)
                 proportion_TPO = maxLength;
-
-            string prefix = extraProfiles == ExtraProfiles.Fixed ? fixedKey : $"{iStart}";
-            double y1 = extraProfiles == ExtraProfiles.Fixed ? fixedLowest : lowest;
             
+            // Profile Selection
+            Dictionary<double, double> tpoDict = extraProfiles switch
+            {
+                ExtraProfiles.Monthly => MonthlyRank.TPO_Histogram,
+                ExtraProfiles.Weekly => WeeklyRank.TPO_Histogram,
+                ExtraProfiles.MiniTPO => MiniRank.TPO_Histogram,
+                ExtraProfiles.Fixed => FixedRank[fixedKey].TPO_Histogram,
+                _ => TPO_Rank_Histogram
+            };
+
+            // Same for all
+            bool intraBool = extraProfiles switch
+            {
+                ExtraProfiles.Monthly => isIntraday,
+                ExtraProfiles.Weekly => isIntraday,
+                ExtraProfiles.MiniTPO => false,
+                ExtraProfiles.Fixed => false,
+                _ => isIntraday
+            };
+
+            // (micro)Optimization
+            double maxValue = tpoDict.Any() ? tpoDict.Values.Max() : 0;
+
+            // Segments selection
+            string prefix = extraProfiles == ExtraProfiles.Fixed ? fixedKey : $"{iStart}";
             List<double> whichSegment = extraProfiles == ExtraProfiles.Fixed ? GetRangeSegments(TF_idx, fixedKey) : Segments;
                         
             for (int i = 0; i < whichSegment.Count; i++)
@@ -1152,10 +1064,10 @@ namespace cAlgo
 
                     ChartRectangle volHist = Chart.DrawRectangle($"{prefix}_{i}_TPO_{extraProfiles}", x1_Start, lowerSegmentY1, x2, upperSegmentY2, histogramColor);
 
-                    if (FillHist_TPO)
+                    if (ProfileParams.FillHist_TPO)
                         volHist.IsFilled = true;
 
-                    if (HistogramSide_Input == HistSide_Data.Right)
+                    if (ProfileParams.HistogramSide_Input == HistSide_Data.Right)
                     {
                         volHist.Time1 = xBar;
                         volHist.Time2 = xBar.AddMilliseconds(-dynLength);
@@ -1189,7 +1101,7 @@ namespace cAlgo
                         {
                             volHist.Time1 = dateOffset_Duo;
                             volHist.Time2 = dateOffset_Duo.AddMilliseconds(-dynLength_Intraday);
-                            if (!EnableMonthlyProfile && FillIntradaySpace)
+                            if (!ProfileParams.EnableMonthlyProfile && ProfileParams.FillIntradaySpace)
                             {
                                 volHist.Time1 = dateOffset;
                                 volHist.Time2 = dateOffset.AddMilliseconds(dynLength_Intraday);
@@ -1197,12 +1109,12 @@ namespace cAlgo
                         }
                         if (extraProfiles == ExtraProfiles.Monthly)
                         {
-                            if (EnableWeeklyProfile) {
+                            if (ProfileParams.EnableWeeklyProfile) {
                                 // Show after
                                 volHist.Time1 = dateOffset_Triple;
                                 volHist.Time2 = dateOffset_Triple.AddMilliseconds(-dynLength_Intraday);
                                 // Show after together
-                                if (FillIntradaySpace) {
+                                if (ProfileParams.FillIntradaySpace) {
                                     volHist.Time1 = dateOffset_Duo;
                                     volHist.Time2 = dateOffset_Duo.AddMilliseconds(dynLength_Intraday);
                                 }
@@ -1210,7 +1122,7 @@ namespace cAlgo
                                 // Use Weekly position
                                 volHist.Time1 = dateOffset_Duo;
                                 volHist.Time2 = dateOffset_Duo.AddMilliseconds(-dynLength_Intraday);
-                                if (FillIntradaySpace) {
+                                if (ProfileParams.FillIntradaySpace) {
                                     volHist.Time1 = dateOffset;
                                     volHist.Time2 = dateOffset.AddMilliseconds(dynLength_Intraday);
                                 }
@@ -1221,54 +1133,34 @@ namespace cAlgo
                     }
                 }
 
-                IDictionary<double, double> tpoDict = extraProfiles switch
-                {
-                    ExtraProfiles.Monthly => MonthlyRank.TPO_Histogram,
-                    ExtraProfiles.Weekly => WeeklyRank.TPO_Histogram,
-                    ExtraProfiles.MiniTPO => MiniRank.TPO_Histogram,
-                    ExtraProfiles.Fixed => FixedRank[fixedKey].TPO_Histogram,
-                    _ => TPO_Rank_Histogram
-                };
-
-                bool intraBool = extraProfiles switch
-                {
-                    ExtraProfiles.Monthly => isIntraday,
-                    ExtraProfiles.Weekly => isIntraday,
-                    ExtraProfiles.MiniTPO => false,
-                    ExtraProfiles.Fixed => false,
-                    _ => isIntraday
-                };
-
-                double value = tpoDict[priceKey];
-                double maxValue = tpoDict.Values.Max();
-
                 // Draw histograms and update 'intraDate' for VA/POC, if applicable
-                DrawRectangle_Normal(value, maxValue, intraBool);
+                DrawRectangle_Normal(tpoDict[priceKey], maxValue, intraBool);
             }
             
             // Drawings that don't require each segment-price as y-axis
             // It can/should be outside SegmentsLoop for better performance.
-            IDictionary<double, double> TPOdict = extraProfiles switch
-            {
-                ExtraProfiles.Monthly => MonthlyRank.TPO_Histogram,
-                ExtraProfiles.Weekly => WeeklyRank.TPO_Histogram,
-                ExtraProfiles.MiniTPO => MiniRank.TPO_Histogram,
-                ExtraProfiles.Fixed => FixedRank[fixedKey].TPO_Histogram,
-                _ => TPO_Rank_Histogram
-            };
+            
+            double lowest = TF_Bars.LowPrices[TF_idx];
+            double highest = TF_Bars.HighPrices[TF_idx];
+            // Mini TPOs avoid crash after recalculating
+            if (double.IsNaN(lowest)) {
+                lowest = TF_Bars.LowPrices.LastValue;
+                highest = TF_Bars.HighPrices.LastValue;
+            }
+            double y1 = extraProfiles == ExtraProfiles.Fixed ? fixedLowest : lowest;
             
             // Results
-            if (extraProfiles == ExtraProfiles.MiniTPO && ShowMiniResults || 
-                extraProfiles != ExtraProfiles.MiniTPO && ShowResults)
+            if (extraProfiles == ExtraProfiles.MiniTPO && ProfileParams.ShowMiniResults || 
+                extraProfiles != ExtraProfiles.MiniTPO && ProfileParams.ShowResults)
             {
-                double sum = Math.Round(TPOdict.Values.Sum());
+                double sum = Math.Round(tpoDict.Values.Sum());
                 string strValue = FormatResults ? FormatBigNumber(sum) : $"{sum}";
 
                 ChartText Center = Chart.DrawText($"{prefix}_TPO_{extraProfiles}_Result", $"\n{strValue}", x1_Start, y1, HistColor);
                 Center.HorizontalAlignment = HorizontalAlignment.Center;
                 Center.FontSize = FontSizeResults - 1;
 
-                if (HistogramSide_Input == HistSide_Data.Right)
+                if (ProfileParams.HistogramSide_Input == HistSide_Data.Right)
                     Center.Time = xBar;
 
                 // Intraday Right Profile
@@ -1279,12 +1171,12 @@ namespace cAlgo
             }
             
             // VA + POC
-            Draw_VA_POC(TPOdict, iStart, x1_Start, xBar, extraProfiles, isIntraday, intraDate, fixedKey);
+            Draw_VA_POC(tpoDict, iStart, x1_Start, xBar, extraProfiles, isIntraday, intraDate, fixedKey);
             
             // HVN/LVN
-            DrawVolumeNodes(TPOdict, iStart, x1_Start, xBar, extraProfiles, isIntraday, intraDate, fixedKey);
+            DrawVolumeNodes(tpoDict, iStart, x1_Start, xBar, extraProfiles, isIntraday, intraDate, fixedKey);
                 
-            if (!ShowOHLC || extraProfiles == ExtraProfiles.Fixed)
+            if (!ProfileParams.ShowOHLC || extraProfiles == ExtraProfiles.Fixed)
                 return;
 
             DateTime OHLC_Date = TF_Bars.OpenTimes[TF_idx];
@@ -1309,7 +1201,6 @@ namespace cAlgo
             double low = Bars.LowPrices[index];
 
             int TF_idx = extraTPO == ExtraProfiles.Fixed ? MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]) : index;
-            
             List<double> whichSegment = extraTPO == ExtraProfiles.Fixed ? GetRangeSegments(TF_idx, fixedKey) : Segments;
 
             int totalLetters = 0;
@@ -1371,16 +1262,17 @@ namespace cAlgo
         private void LiveTPO_Update(int startIndex, int index, bool onlyMini = false) {
             double price = Bars.ClosePrices[index];
 
-            bool updateStrategy = UpdateProfile_Input == UpdateProfile_Data.ThroughSegments_Balanced ?
-                                Math.Abs(price - prevUpdatePrice) >= rowHeight :
-                                UpdateProfile_Input != UpdateProfile_Data.Through_2_Segments_Best ||
-                                Math.Abs(price - prevUpdatePrice) >= (rowHeight + rowHeight);
+            bool updateStrategy = ProfileParams.UpdateProfile_Input switch {
+                UpdateProfile_Data.ThroughSegments_Balanced => Math.Abs(price - prevUpdatePrice) >= rowHeight,
+                UpdateProfile_Data.Through_2_Segments_Best => Math.Abs(price - prevUpdatePrice) >= (rowHeight + rowHeight),
+                _ => true
+            };
 
             if (updateStrategy || isUpdateTPO || configHasChanged)
             {
                 if (!onlyMini)
                 {
-                    if (EnableMonthlyProfile && TPOInterval_Input != TPOInterval_Data.Monthly)
+                    if (ProfileParams.EnableMonthlyProfile && GeneralParams.TPOInterval_Input != TPOInterval_Data.Monthly)
                     {
                         int monthIndex = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
                         int monthStart = Bars.OpenTimes.GetIndexByTime(MonthlyBars.OpenTimes[monthIndex]);
@@ -1398,7 +1290,7 @@ namespace cAlgo
                         }
                     }
 
-                    if (EnableWeeklyProfile && TPOInterval_Input != TPOInterval_Data.Weekly)
+                    if (ProfileParams.EnableWeeklyProfile && GeneralParams.TPOInterval_Input != TPOInterval_Data.Weekly)
                     {
                         int weekIndex = WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
                         int weekStart = Bars.OpenTimes.GetIndexByTime(WeeklyBars.OpenTimes[weekIndex]);
@@ -1416,7 +1308,7 @@ namespace cAlgo
                         }
                     }
 
-                    if (EnableMiniProfiles)
+                    if (ProfileParams.EnableMiniProfiles)
                     {
                         int miniIndex = MiniTPOs_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
                         int miniStart = Bars.OpenTimes.GetIndexByTime(MiniTPOs_Bars.OpenTimes[miniIndex]);
@@ -1471,39 +1363,41 @@ namespace cAlgo
 
             configHasChanged = false;
             isUpdateTPO = false;
-            if (UpdateProfile_Input != UpdateProfile_Data.EveryTick_CPU_Workout)
+            if (ProfileParams.UpdateProfile_Input != UpdateProfile_Data.EveryTick_CPU_Workout)
                 prevUpdatePrice = price;
         }
 
         private void LiveTPO_Concurrent(int index, int startIndex)
         {
-            if (!EnableTPO && !EnableMiniProfiles)
+            if (!ProfileParams.EnableMainTPO && !ProfileParams.EnableMiniProfiles)
                 return;
 
             double price = Bars.ClosePrices[index];
-            bool updateStrategy = UpdateProfile_Input == UpdateProfile_Data.ThroughSegments_Balanced ?
-                                Math.Abs(price - prevUpdatePrice) >= rowHeight :
-                                UpdateProfile_Input != UpdateProfile_Data.Through_2_Segments_Best ||
-                                Math.Abs(price - prevUpdatePrice) >= (rowHeight + rowHeight);
+            bool updateStrategy = ProfileParams.UpdateProfile_Input switch {
+                UpdateProfile_Data.ThroughSegments_Balanced => Math.Abs(price - prevUpdatePrice) >= rowHeight,
+                UpdateProfile_Data.Through_2_Segments_Best => Math.Abs(price - prevUpdatePrice) >= (rowHeight + rowHeight),
+                _ => true
+            };
+
             if (updateStrategy || isUpdateTPO || configHasChanged)
             {
-                lock (_lockSource)
+                lock (_Locks.Bar)
                     Bars_List = Bars.ToList();
 
-                liveTPO_UpdateIt = true;
+                liveTPO_RunWorker = true;
             }
-            cts ??= new CancellationTokenSource();
+            _Tasks.cts ??= new CancellationTokenSource();
 
             CreateMonthlyTPO(index, isConcurrent: true);
             CreateWeeklyTPO(index, isConcurrent: true);
             CreateMiniTPOs(index, isConcurrent: true);
 
-            if (EnableTPO)
+            if (ProfileParams.EnableMainTPO)
             {
-                liveTPO_Task ??= Task.Run(() => LiveTPO_Worker(ExtraProfiles.No, cts.Token));
-                liveTPO_StartIndexes.TPO_Interval = startIndex;
+                _Tasks.MainTPO ??= Task.Run(() => LiveTPO_Worker(ExtraProfiles.No, _Tasks.cts.Token));
+                LiveTPOIndexes.MainTPO = startIndex;
                 if (index != startIndex) {
-                    lock (_lock)
+                    lock (_Locks.MainTPO)
                         TPO_Profile(startIndex, index, ExtraProfiles.No, false, true);
                 }
             }
@@ -1516,27 +1410,27 @@ namespace cAlgo
              - GetByInvoke() will slowdown loops due to accumulative Bars[index] => "0.xx ms" operations
             The major reason why Copy of Time/Bars are used.
             */
-            IDictionary<double, double> Worker_TPO_Histogram = new Dictionary<double, double>();
+            Dictionary<double, double> Worker_TPO_Histogram = new();
             IEnumerable<Bar> BarsCopy = new List<Bar>();
 
             while (!token.IsCancellationRequested)
             {
-                if (!liveTPO_UpdateIt) {
+                if (!liveTPO_RunWorker) {
                     // Stop itself
-                    if (extraID == ExtraProfiles.No && !EnableTPO) {
-                        liveTPO_Task = null;
+                    if (extraID == ExtraProfiles.No && !ProfileParams.EnableMainTPO) {
+                        _Tasks.MainTPO = null;
                         return;
                     }
-                    if (extraID == ExtraProfiles.MiniTPO && !EnableMiniProfiles) {
-                        miniTPO_Task = null;
+                    if (extraID == ExtraProfiles.MiniTPO && !ProfileParams.EnableMiniProfiles) {
+                        _Tasks.MiniTPO = null;
                         return;
                     }
-                    if (extraID == ExtraProfiles.Weekly && !EnableTPO) {
-                        weeklyTPO_Task = null;
+                    if (extraID == ExtraProfiles.Weekly && !ProfileParams.EnableWeeklyProfile) {
+                        _Tasks.WeeklyTPO = null;
                         return;
                     }
-                    if (extraID == ExtraProfiles.Monthly && !EnableTPO) {
-                        monthlyTPO_Task = null;
+                    if (extraID == ExtraProfiles.Monthly && !ProfileParams.EnableMonthlyProfile) {
+                        _Tasks.MonthlyTPO = null;
                         return;
                     }
 
@@ -1549,25 +1443,31 @@ namespace cAlgo
                     Worker_TPO_Histogram = new Dictionary<double, double>();
 
                     // Chart Bars
-                    int startIndex = extraID == ExtraProfiles.No ? liveTPO_StartIndexes.TPO_Interval :
-                                     extraID == ExtraProfiles.MiniTPO ? liveTPO_StartIndexes.Mini :
-                                     extraID == ExtraProfiles.Weekly ? liveTPO_StartIndexes.Weekly : liveTPO_StartIndexes.Monthly;
+                    int startIndex = extraID switch {
+                        ExtraProfiles.MiniTPO => LiveTPOIndexes.Mini,
+                        ExtraProfiles.Weekly => LiveTPOIndexes.Weekly,
+                        ExtraProfiles.Monthly => LiveTPOIndexes.Monthly,
+                        _ => LiveTPOIndexes.MainTPO
+                    };
                     DateTime lastBarTime = GetByInvoke(() => Bars.LastBar.OpenTime);
 
                     // Always replace
-                    lock (_lockSource)
+                    lock (_Locks.Bar)
                         BarsCopy = Bars_List.Skip(startIndex);
 
                     int endIndex = BarsCopy.Count();
-
                     for (int i = 0; i < endIndex; i++)
                     {
                         Worker_TPO_Bars(i, extraID, i == (endIndex - 1));
                     }
 
-                    object whichLock = extraID == ExtraProfiles.No ? _lock :
-                                       extraID == ExtraProfiles.MiniTPO ? _miniLock :
-                                       extraID == ExtraProfiles.Weekly ? _weeklyLock : _monthlyLock;
+                    object whichLock = extraID switch {
+                        ExtraProfiles.MiniTPO => _Locks.MiniTPO,
+                        ExtraProfiles.Weekly => _Locks.WeeklyTPO,
+                        ExtraProfiles.Monthly => _Locks.MonthlyTPO,
+                        _ => _Locks.MainTPO
+                    };
+  
                     lock (whichLock) {
                         switch (extraID)
                         {
@@ -1584,13 +1484,13 @@ namespace cAlgo
                         configHasChanged = false;
                         isUpdateTPO = false;
 
-                        if (UpdateProfile_Input != UpdateProfile_Data.EveryTick_CPU_Workout)
+                        if (ProfileParams.UpdateProfile_Input != UpdateProfile_Data.EveryTick_CPU_Workout)
                             prevUpdatePrice = BarsCopy.Last().Close;
                     }
                 }
                 catch (Exception e) { Print($"CRASH at LiveTPO_Worker => {extraID}: {e}"); }
 
-                liveTPO_UpdateIt = false;
+                liveTPO_RunWorker = false;
             }
 
             void Worker_TPO_Bars(int index, ExtraProfiles extraTPO = ExtraProfiles.No, bool isLastBarLoop = false)
@@ -1636,9 +1536,9 @@ namespace cAlgo
 
         protected override void OnDestroy()
         {
-            cts.Cancel();
-            if (EnableFixedRange) {
-                foreach (ChartRectangle item in _rectangles)
+            _Tasks.cts.Cancel();
+            if (ProfileParams.EnableFixedRange) {
+                foreach (ChartRectangle item in RangeObjs.rectangles)
                     Chart.RemoveObject(item.Name);
             }
         }
@@ -1685,7 +1585,6 @@ namespace cAlgo
 
         // *********** FIXED RANGE PROFILE ***********
         // LLM code generating was used to quickly get the Drawings (Rectangles/Texts/ControlGrid) logic.
-
         void RangeInitialize()
         {
             Chart.ObjectsUpdated += OnObjectsUpdated;
@@ -1694,10 +1593,10 @@ namespace cAlgo
 
         private void OnObjectsUpdated(ChartObjectsEventArgs args)
         {
-            if (!EnableFixedRange)
+            if (!ProfileParams.EnableFixedRange)
                 return;
 
-            foreach (var rect in _rectangles.ToArray())
+            foreach (var rect in RangeObjs.rectangles.ToArray())
             {
                 if (rect == null) continue;
 
@@ -1712,7 +1611,7 @@ namespace cAlgo
         }
         private void HiddenRangeControls(ChartZoomEventArgs args)
         {
-            foreach (var control in _controlGrids.Values)
+            foreach (var control in RangeObjs.controlGrids.Values)
                 control.IsVisible = args.Chart.ZoomLevel >= FixedHiddenZoom;
         }
 
@@ -1736,7 +1635,7 @@ namespace cAlgo
             );
 
             rect.IsInteractive = true;
-            _rectangles.Add(rect);
+            RangeObjs.rectangles.Add(rect);
 
             FixedRank.Add(nameKey, new TPORankType());
 
@@ -1761,7 +1660,7 @@ namespace cAlgo
                 list.Add(t);
             }
 
-            _infoObjects[rect.Name] = list;
+            RangeObjs.infoObjects[rect.Name] = list;
             UpdateInfoBox(rect);
         }
 
@@ -1814,7 +1713,7 @@ namespace cAlgo
             };
 
             Chart.AddControl(border, rect.Time2, rect.Y2);
-            _controlGrids[rect.Name] = border;
+            RangeObjs.controlGrids[rect.Name] = border;
         }
 
         private void UpdateRectangle(ChartRectangle rect)
@@ -1851,7 +1750,7 @@ namespace cAlgo
 
         private void UpdateInfoBox(ChartRectangle rect)
         {
-            if (!_infoObjects.TryGetValue(rect.Name, out var objs)) return;
+            if (!RangeObjs.infoObjects.TryGetValue(rect.Name, out var objs)) return;
             if (objs.Count < 3) return;
 
             ChartText fromTxt = objs[0];
@@ -1893,7 +1792,7 @@ namespace cAlgo
 
         private void UpdateControlGrid(ChartRectangle rect)
         {
-            if (!_controlGrids.TryGetValue(rect.Name, out var grid)) return;
+            if (!RangeObjs.controlGrids.TryGetValue(rect.Name, out var grid)) return;
             double topY = Math.Max(rect.Y1, rect.Y2);
             DateTime rightTime = rect.Time1 > rect.Time2 ? rect.Time1 : rect.Time2;
             Chart.MoveControl(grid, rightTime, topY);
@@ -1903,21 +1802,21 @@ namespace cAlgo
         {
             if (rect == null) return;
             Chart.RemoveObject(rect.Name);
-            _rectangles.Remove(rect);
+            RangeObjs.rectangles.Remove(rect);
 
             // remove info objects
-            if (_infoObjects.TryGetValue(rect.Name, out var objs))
+            if (RangeObjs.infoObjects.TryGetValue(rect.Name, out var objs))
             {
                 foreach (var o in objs)
                     Chart.RemoveObject(o.Name);
-                _infoObjects.Remove(rect.Name);
+                RangeObjs.infoObjects.Remove(rect.Name);
             }
 
             // remove control grid
-            if (_controlGrids.TryGetValue(rect.Name, out var grid))
+            if (RangeObjs.controlGrids.TryGetValue(rect.Name, out var grid))
             {
                 Chart.RemoveControl(grid);
-                _controlGrids.Remove(rect.Name);
+                RangeObjs.controlGrids.Remove(rect.Name);
             }
 
             // remove histograms/lines drawings
@@ -1930,7 +1829,7 @@ namespace cAlgo
             FixedRank[fixedKey].TPO_Histogram.Clear();
             
             List<double> whichSegment;
-            if (SegmentsFixedRange_Input == SegmentsFixedRange_Data.Monthly_Aligned) {
+            if (ProfileParams.SegmentsFixedRange_Input == SegmentsFixedRange_Data.Monthly_Aligned) {
                 int endIdx = Bars.OpenTimes.GetIndexByTime(end);
                 int TF_idx = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[endIdx]); //Segments are always monthly
                 whichSegment = segmentsDict[TF_idx];
@@ -1970,9 +1869,9 @@ namespace cAlgo
         }
 
         public void ResetFixedRange_Dicts() {
-            _rectangles.Clear();
-            _infoObjects.Clear();
-            _controlGrids.Clear();
+            RangeObjs.rectangles.Clear();
+            RangeObjs.infoObjects.Clear();
+            RangeObjs.controlGrids.Clear();
         }
 
         // ====== Functions Area ======
@@ -2021,14 +1920,14 @@ namespace cAlgo
             if (timesBased.Any(currentTimeframe.Contains))
                 tfName = Chart.TimeFrame.ShortName.ToString();
             else
-                tfName = OffsetTimeframeInput.ShortName.ToString();
+                tfName = ProfileParams.OffsetTimeframeInput.ShortName.ToString();
 
             // Get the time-based interval value
             string tfString = string.Join("", tfName.Where(char.IsDigit));
             int tfValue = int.TryParse(tfString, out int value) ? value : 1;
 
             DateTime dateToReturn = dateBar;
-            int offsetCondiditon = !isSubt ? (OffsetBarsInput + 1) : Math.Max(2, OffsetBarsInput - 1);
+            int offsetCondiditon = !isSubt ? (ProfileParams.OffsetBarsInput + 1) : Math.Max(2, ProfileParams.OffsetBarsInput - 1);
             if (tfName.Contains('m'))
                 dateToReturn = dateBar.AddMinutes(tfValue * offsetCondiditon);
             else if (tfName.Contains('h'))
@@ -2057,33 +1956,21 @@ namespace cAlgo
             {
                 if (dividedTimestamp[i] != 0)
                 {
-                    string suffix = i == 4 ? "ms" : i == 3 ? "s" : i == 2 ? "m" : i == 1 ? "h" : "d";
-
-                    if (suffix == "ms")
-                    {
-                        timelapse_Value = ts.TotalMilliseconds;
-                        timelapse_Suffix = suffix;
-                    }
-                    else if (suffix == "s")
-                    {
-                        timelapse_Value = ts.TotalSeconds;
-                        timelapse_Suffix = suffix;
-                    }
-                    else if (suffix == "m")
-                    {
-                        timelapse_Value = ts.TotalMinutes;
-                        timelapse_Suffix = suffix;
-                    }
-                    else if (suffix == "h")
-                    {
-                        timelapse_Value = ts.TotalHours;
-                        timelapse_Suffix = suffix;
-                    }
-                    else if (suffix == "d")
-                    {
-                        timelapse_Value = ts.TotalDays;
-                        timelapse_Suffix = suffix;
-                    }
+                    string suffix = i switch {
+                        4 => "ms",
+                        3 => "s",
+                        2 => "m",
+                        1 => "h",
+                        _ => "d"
+                    };
+                    timelapse_Value = suffix switch {
+                        "ms" => ts.TotalMilliseconds,
+                        "s" => ts.TotalSeconds,
+                        "m" => ts.TotalMinutes,
+                        "h" => ts.TotalHours,
+                        _ => ts.TotalDays
+                    };
+                    timelapse_Suffix = suffix;
                     break;
                 }
             }
@@ -2102,11 +1989,11 @@ namespace cAlgo
         }
 
         // *********** VA + POC ***********
-        private void Draw_VA_POC(IDictionary<double, double> tpoDict, int iStart, DateTime x1_Start, DateTime xBar, ExtraProfiles extraTPO = ExtraProfiles.No, bool isIntraday = false, DateTime intraX1 = default, string fixedKey = "")
+        private void Draw_VA_POC(Dictionary<double, double> tpoDict, int iStart, DateTime x1_Start, DateTime xBar, ExtraProfiles extraTPO = ExtraProfiles.No, bool isIntraday = false, DateTime intraX1 = default, string fixedKey = "")
         {
             string prefix = extraTPO == ExtraProfiles.Fixed ? fixedKey : $"{iStart}";
 
-            if (ShowVA) {
+            if (VAParams.ShowVA) {
                 double[] VAL_VAH_POC = VA_Calculation(tpoDict);
 
                 if (!VAL_VAH_POC.Any())
@@ -2125,12 +2012,12 @@ namespace cAlgo
                 rectVA.IsFilled = true;
 
                 DateTime extDate = extraTPO == ExtraProfiles.Fixed ? Bars[Bars.OpenTimes.GetIndexByTime(Server.Time)].OpenTime : extendDate();
-                if (ExtendVA) {
+                if (VAParams.ExtendVA) {
                     vah.Time2 = extDate;
                     val.Time2 = extDate;
                     rectVA.Time2 = extDate;
                 }
-                if (ExtendPOC)
+                if (VAParams.ExtendPOC)
                     poc.Time2 = extDate;
 
                 if (isIntraday && extraTPO != ExtraProfiles.MiniTPO) {
@@ -2140,7 +2027,7 @@ namespace cAlgo
                     rectVA.Time1 = intraX1;
                 }
             }
-            else if (!ShowVA && KeepPOC)
+            else if (!VAParams.ShowVA && VAParams.KeepPOC)
             {
                 double largestVOL = Math.Abs(tpoDict.Values.Max());
 
@@ -2152,7 +2039,7 @@ namespace cAlgo
                 ChartTrendLine poc = Chart.DrawTrendLine($"{prefix}_POC_{extraTPO}", x1_Start, priceLVOL - rowHeight, xBar, priceLVOL - rowHeight, ColorPOC);
                 poc.LineStyle = LineStylePOC; poc.Thickness = ThicknessPOC; poc.Comment = "POC";
 
-                if (ExtendPOC)
+                if (VAParams.ExtendPOC)
                     poc.Time2 = extraTPO == ExtraProfiles.Fixed ? Bars[Bars.OpenTimes.GetIndexByTime(Server.Time)].OpenTime : extendDate();
 
                 if (isIntraday && extraTPO != ExtraProfiles.MiniTPO)
@@ -2161,9 +2048,9 @@ namespace cAlgo
 
             DateTime extendDate() {
                 string tfName = extraTPO == ExtraProfiles.No ?
-                (TPOInterval_Input == TPOInterval_Data.Daily ? "D1" :
-                    TPOInterval_Input == TPOInterval_Data.Weekly ? "W1" : "Month1" ) :
-                extraTPO == ExtraProfiles.MiniTPO ? MiniTPOs_Timeframe.ShortName.ToString() :
+                (GeneralParams.TPOInterval_Input == TPOInterval_Data.Daily ? "D1" :
+                    GeneralParams.TPOInterval_Input == TPOInterval_Data.Weekly ? "W1" : "Month1" ) :
+                extraTPO == ExtraProfiles.MiniTPO ? ProfileParams.MiniTPOs_Timeframe.ShortName.ToString() :
                 extraTPO == ExtraProfiles.Weekly ?  "W1" :  "Month1";
 
                 // Get the time-based interval value
@@ -2172,21 +2059,21 @@ namespace cAlgo
 
                 DateTime dateToReturn = xBar;
                 if (tfName.Contains('m'))
-                    dateToReturn = xBar.AddMinutes(tfValue * ExtendCount);
+                    dateToReturn = xBar.AddMinutes(tfValue * VAParams.ExtendCount);
                 else if (tfName.Contains('h'))
-                    dateToReturn = xBar.AddHours(tfValue * ExtendCount);
+                    dateToReturn = xBar.AddHours(tfValue * VAParams.ExtendCount);
                 else if (tfName.Contains('D'))
-                    dateToReturn = xBar.AddDays(tfValue * ExtendCount);
+                    dateToReturn = xBar.AddDays(tfValue * VAParams.ExtendCount);
                 else if (tfName.Contains('W'))
-                    dateToReturn = xBar.AddDays(7 * ExtendCount);
+                    dateToReturn = xBar.AddDays(7 * VAParams.ExtendCount);
                 else if (tfName.Contains("Month1"))
-                    dateToReturn = xBar.AddMonths(tfValue * ExtendCount);
+                    dateToReturn = xBar.AddMonths(tfValue * VAParams.ExtendCount);
 
                 return dateToReturn;
             }
         }
 
-        private double[] VA_Calculation(IDictionary<double, double> tpoDict)
+        private double[] VA_Calculation(Dictionary<double, double> tpoDict)
         {
             /*
                 https://onlinelibrary.wiley.com/doi/pdf/10.1002/9781118659724.app1
@@ -2199,7 +2086,7 @@ namespace cAlgo
 
             double largestVOL = Math.Abs(tpoDict.Values.Max());
             double totalvol = Math.Abs(tpoDict.Values.Sum());
-            double _70percent = Math.Round((PercentVA * totalvol) / 100);
+            double _70percent = Math.Round((VAParams.PercentVA * totalvol) / 100);
 
             double priceLVOL = 0;
             foreach (var kv in tpoDict)
@@ -2367,7 +2254,7 @@ namespace cAlgo
             return VA;
         }
 
-        private double[] VA_Calculation_Letter(IDictionary<double, string> tpoDict)
+        private double[] VA_Calculation_Letter(Dictionary<double, string> tpoDict)
         {
             /*
                 https://onlinelibrary.wiley.com/doi/pdf/10.1002/9781118659724.app1
@@ -2380,7 +2267,7 @@ namespace cAlgo
 
             double largestVOL = Math.Abs(tpoDict.Values.MaxBy(x => x.Length).Length);
             double totalvol = Math.Abs(tpoDict.Values.Sum(x => x.Length));
-            double _70percent = Math.Round((PercentVA * totalvol) / 100);
+            double _70percent = Math.Round((VAParams.PercentVA * totalvol) / 100);
 
             double priceLVOL = 0;
             foreach (var kv in tpoDict)
@@ -2550,9 +2437,9 @@ namespace cAlgo
 
         
         // *********** HVN + LVN ***********
-        private void DrawVolumeNodes(IDictionary<double, double> profileDict, int iStart, DateTime x1_Start, DateTime xBar, ExtraProfiles extraTPO = ExtraProfiles.No, bool isIntraday = false, DateTime intraX1 = default, string fixedKey = "") 
+        private void DrawVolumeNodes(Dictionary<double, double> profileDict, int iStart, DateTime x1_Start, DateTime xBar, ExtraProfiles extraTPO = ExtraProfiles.No, bool isIntraday = false, DateTime intraX1 = default, string fixedKey = "") 
         { 
-            if (!EnableNodeDetection)
+            if (!NodesParams.EnableNodeDetection)
                 return;
                 
             string prefix = extraTPO == ExtraProfiles.Fixed ? fixedKey : $"{iStart}";
@@ -2577,63 +2464,43 @@ namespace cAlgo
             */
             
             // Calculate Kernels/Coefficientes only once.
-            nodesKernel ??= ProfileSmooth_Input == ProfileSmooth_Data.Gaussian ?
-                            NodesAnalizer.FixedKernel() : NodesAnalizer.FixedCoefficients();
+            // nodesKernel should be null (params-panel)
+            nodesKernel ??= NodesParams.ProfileSmooth_Input == ProfileSmooth_Data.Gaussian ?
+                            NodesAnalizer.FixedKernel() :
+                            NodesAnalizer.FixedCoefficients();
             
             // Smooth values
-            double[] profileSmoothed = ProfileSmooth_Input == ProfileSmooth_Data.Gaussian ?
-                                       NodesAnalizer.GaussianSmooth(profileValues, nodesKernel) : NodesAnalizer.SavitzkyGolay(profileValues, nodesKernel);
-            
+            double[] profileSmoothed = NodesParams.ProfileSmooth_Input == ProfileSmooth_Data.Gaussian ?
+                                       NodesAnalizer.GaussianSmooth(profileValues, nodesKernel) :
+                                       NodesAnalizer.SavitzkyGolay(profileValues, nodesKernel);
+
             // Get indexes of LVNs/HVNs
-            var (hvnsRaw, lvnsRaw) = ProfileNode_Input switch {
+            var (hvnsRaw, lvnsRaw) = NodesParams.ProfileNode_Input switch {
                 ProfileNode_Data.LocalMinMax => NodesAnalizer.FindLocalMinMax(profileSmoothed),
                 ProfileNode_Data.Topology => NodesAnalizer.ProfileTopology(profileSmoothed),
-                _ => NodesAnalizer.PercentileNodes(profileSmoothed, pctileHVN_Value, pctileLVN_Value)
+                _ => NodesAnalizer.PercentileNodes(profileSmoothed, NodesParams.pctileHVN_Value, NodesParams.pctileLVN_Value)
             };
             
             // Filter it
-            if (onlyStrongNodes)
-            {
-                double globalPoc = profileSmoothed.Max();
+            if (NodesParams.onlyStrongNodes)
+                (hvnsRaw, lvnsRaw) = NodesAnalizer.GetStrongNodes(profileSmoothed, hvnsRaw, lvnsRaw, NodesParams.strongHVN_Pct, NodesParams.strongLVN_Pct);
 
-                double hvnPct = Math.Round(strongHVN_Pct / 100.0, 3);
-                double lvnPct = Math.Round(strongLVN_Pct / 100.0, 3);
-
-                var strongHvns = new List<int>();
-                var strongLvns = new List<int>();
-
-                foreach (int idx in hvnsRaw)
-                {
-                    if (profileSmoothed[idx] >= hvnPct * globalPoc)
-                        strongHvns.Add(idx);
-                }
-
-                foreach (int idx in lvnsRaw)
-                {
-                    if (profileSmoothed[idx] <= lvnPct * globalPoc)
-                        strongLvns.Add(idx);
-                }
-
-                hvnsRaw = strongHvns;
-                lvnsRaw = strongLvns;
-            }
-                
-            bool isRaw = ShowNode_Input == ShowNode_Data.HVN_Raw || ShowNode_Input == ShowNode_Data.LVN_Raw;
-            bool isBands = ShowNode_Input == ShowNode_Data.HVN_With_Bands || ShowNode_Input == ShowNode_Data.LVN_With_Bands;
-            
-            if (ProfileNode_Input == ProfileNode_Data.Percentile) 
+            bool isRaw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw || NodesParams.ShowNode_Input == ShowNode_Data.LVN_Raw;
+            bool isBands = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands || NodesParams.ShowNode_Input == ShowNode_Data.LVN_With_Bands;
+                        
+            if (NodesParams.ProfileNode_Input == ProfileNode_Data.Percentile) 
             {
                 ClearOldNodes();                                               
                 
                 if (isBands)
                 {
-                    Color _nodeColor = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColorHVN : ColorLVN;
+                    Color _nodeColor = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColorHVN : ColorLVN;
 
                     var hvnsGroups = NodesAnalizer.GroupConsecutiveIndexes(hvnsRaw);
                     var lvnsGroups = NodesAnalizer.GroupConsecutiveIndexes(lvnsRaw);
-                    List<List<int>> nodeGroups = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnsGroups : lvnsGroups;
+                    List<List<int>> nodeGroups = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnsGroups : lvnsGroups;
                     
-                    string nodeName = ShowNode_Input == ShowNode_Data.HVN_Raw ? "HVN" : "LVN";   
+                    string nodeName = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? "HVN" : "LVN";   
                     foreach (var group in nodeGroups) 
                     {
                         int idxLow = group[0];
@@ -2664,95 +2531,38 @@ namespace cAlgo
                 DrawRawNodes();
                 return;
             }
-                        
-            // Split profile by LVNs
-            var areasBetween = new List<(int Start, int End)>();
-            int start = 0;
-            foreach (int lvn in lvnsRaw)
-            {
-                areasBetween.Add((start, lvn));
-                start = lvn;
-            }
-            areasBetween.Add((start, profileSmoothed.Length - 1));
+                   
+            // Get Bands
+            var (hvnLevels, hvnIndexes, lvnLevels, lvnIndexes) = NodesAnalizer.
+            GetBandsTuples(profileSmoothed, profilePrices, lvnsRaw, NodesParams.bandHVN_Pct, NodesParams.bandLVN_Pct);
 
-            // Extract mini-bells
-            var bells = new List<(int Start, int End, int Poc)>();
-            foreach (var (Start, End) in areasBetween)
-            {
-                int startIndex = Start;
-                int endIndex = End;
-
-                if (endIndex <= startIndex)
-                    continue;
-
-                int pocIdx = startIndex;
-                double maxVol = profileSmoothed[startIndex];
-
-                for (int i = startIndex + 1; i < endIndex; i++)
-                {
-                    if (profileSmoothed[i] > maxVol)
-                    {
-                        maxVol = profileSmoothed[i];
-                        pocIdx = i;
-                    }
-                }
-
-                bells.Add((startIndex, endIndex, pocIdx));
-            }
-            
-            // Extract HVN/LVN/POC + Levels
-            // [(low, center, high), ...]
-            var hvnLevels = new List<(double Low, double Center, double High)>();
-            var hvnIndexes = new List<(int Low, int Center, int High)>();
-
-            var lvnLevels = new List<(double Low, double Center, double High)>();
-            var lvnIndexes = new List<(int Low, int Center, int High)>();
-
-            double hvnBandPct = Math.Round(bandHVN_Pct / 100.0, 3);
-            double lvnBandPct = Math.Round(bandLVN_Pct / 100.0, 3);
-
-            foreach (var (startIdx, endIdx, pocIdx) in bells)
-            {
-                // HVNs/POCs + levels
-                var (hvnLow, hvnHigh) = NodesAnalizer.HVN_SymmetricVA(startIdx, endIdx, pocIdx, hvnBandPct);
-
-                hvnLevels.Add( (profilePrices[hvnLow], profilePrices[pocIdx], profilePrices[hvnHigh]) );
-                hvnIndexes.Add( (hvnLow, pocIdx, hvnHigh) );
-
-                // LVNs + Levels
-                var (lvnLow, lvnHigh) = NodesAnalizer.LVN_SymmetricBand( startIdx, endIdx, lvnBandPct);
-
-                lvnIndexes.Add( (lvnLow, startIdx, lvnHigh) );
-                lvnLevels.Add( (profilePrices[lvnLow], profilePrices[startIdx], profilePrices[lvnHigh]) );
-            }
-            
             // Let's draw
             ClearOldNodes();
 
-            string node = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? "HVN" : "LVN";
-            Color nodeColor = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColorHVN : ColorLVN;
+            string node = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? "HVN" : "LVN";
+            Color nodeColor = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColorHVN : ColorLVN;
             
-            var nodeLvls = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnLevels : lvnLevels;
-            var nodeIdxes = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnIndexes : lvnIndexes;
+            var nodeLvls = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnLevels : lvnLevels;
+            var nodeIdxes = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnIndexes : lvnIndexes;
             
             for (int i = 0; i < nodeLvls.Count; i++)
             {
-                var level = nodeLvls[i];
-                var index = nodeIdxes[i];
-                
-                ChartTrendLine low = Chart.DrawTrendLine($"{prefix}_{node}_Low_{index.Low}_{extraTPO}", x1_Start, level.Low, xBar, level.Low, ColorBand_Lower);   
-                ChartTrendLine center = Chart.DrawTrendLine($"{prefix}_{node}_{index.Center}_{extraTPO}", x1_Start, level.Center, xBar, level.Center, nodeColor);   
-                ChartTrendLine high = Chart.DrawTrendLine($"{prefix}_{node}_High_{index.High}_{extraTPO}", x1_Start, level.High, xBar, level.High, ColorBand_Upper);   
-                ChartRectangle rectBand = Chart.DrawRectangle($"{prefix}_{node}_Band_{index.Center}_{extraTPO}", x1_Start, level.Low, xBar, level.High, ColorBand);
-                
+                var (lvlLow, lvlCenter, lvlHigh) = nodeLvls[i];
+                var (idxLow, idxCenter, idxHigh) = nodeIdxes[i];
+
+                ChartTrendLine low = Chart.DrawTrendLine($"{prefix}_{node}_Low_{idxLow}_{extraTPO}", x1_Start, lvlLow, xBar, lvlLow, ColorBand_Lower);
+                ChartTrendLine center = Chart.DrawTrendLine($"{prefix}_{node}_{idxCenter}_{extraTPO}", x1_Start, lvlCenter, xBar, lvlCenter, nodeColor);
+                ChartTrendLine high = Chart.DrawTrendLine($"{prefix}_{node}_High_{idxHigh}_{extraTPO}", x1_Start, lvlHigh, xBar, lvlHigh, ColorBand_Upper);
+                ChartRectangle rectBand = Chart.DrawRectangle($"{prefix}_{node}_Band_{idxCenter}_{extraTPO}", x1_Start, lvlLow, xBar, lvlHigh, ColorBand);
+
                 FinalizeBands(low, center, high, rectBand);
             }
             
             // Local
             void FinalizeBands(ChartTrendLine low, ChartTrendLine center, ChartTrendLine high, ChartRectangle rectBand) 
             {
-                LineStyle nodeStyle = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? LineStyleHVN : LineStyleLVN;
-                int  nodeThick = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ThicknessHVN : ThicknessLVN;
+                LineStyle nodeStyle = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? LineStyleHVN : LineStyleLVN;
+                int  nodeThick = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ThicknessHVN : ThicknessLVN;
             
                 rectBand.IsFilled = true; 
                 
@@ -2761,9 +2571,9 @@ namespace cAlgo
                 high.LineStyle = LineStyleBands; high.Thickness = ThicknessBands;
 
                 DateTime extDate = extraTPO == ExtraProfiles.Fixed ? Bars[Bars.OpenTimes.GetIndexByTime(Server.Time)].OpenTime : extendDate();
-                if (extendNodes) 
+                if (NodesParams.extendNodes) 
                 {
-                    if (!extendNodes_FromStart) {
+                    if (!NodesParams.extendNodes_FromStart) {
                         low.Time1 = xBar;
                         center.Time1 = xBar;
                         high.Time1 = xBar;
@@ -2771,7 +2581,7 @@ namespace cAlgo
                     }
                     
                     center.Time2 = extDate;
-                    if (extendNodes_WithBands) {
+                    if (NodesParams.extendNodes_WithBands) {
                         low.Time2 = extDate;
                         high.Time2 = extDate;
                         rectBand.Time2 = extDate;
@@ -2787,12 +2597,12 @@ namespace cAlgo
             }
             void DrawRawNodes() 
             {
-                string nodeRaw = ShowNode_Input == ShowNode_Data.HVN_Raw ? "HVN" : "LVN";
-                List<int> nodeIndexes = ShowNode_Input == ShowNode_Data.HVN_Raw ? hvnsRaw : lvnsRaw;
+                string nodeRaw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? "HVN" : "LVN";
+                List<int> nodeIndexes = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? hvnsRaw : lvnsRaw;
                 
-                LineStyle nodeStyle_Raw = ShowNode_Input == ShowNode_Data.HVN_Raw ? LineStyleHVN : LineStyleLVN;
-                int  nodeThick_Raw = ShowNode_Input == ShowNode_Data.HVN_Raw ? ThicknessHVN : ThicknessLVN;
-                Color nodeColor_Raw = ShowNode_Input == ShowNode_Data.HVN_Raw ? ColorHVN : ColorLVN;
+                LineStyle nodeStyle_Raw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? LineStyleHVN : LineStyleLVN;
+                int  nodeThick_Raw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? ThicknessHVN : ThicknessLVN;
+                Color nodeColor_Raw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? ColorHVN : ColorLVN;
 
                 foreach (int idx in nodeIndexes) 
                 {
@@ -2801,8 +2611,8 @@ namespace cAlgo
                     center.LineStyle = nodeStyle_Raw; center.Thickness = nodeThick_Raw;
                                         
                     DateTime extDate = extraTPO == ExtraProfiles.Fixed ? Bars[Bars.OpenTimes.GetIndexByTime(Server.Time)].OpenTime : extendDate();
-                    if (extendNodes) {
-                        if (!extendNodes_FromStart)
+                    if (NodesParams.extendNodes) {
+                        if (!NodesParams.extendNodes_FromStart)
                             center.Time1 = xBar;
                         center.Time2 = extDate;
                     }
@@ -2829,9 +2639,9 @@ namespace cAlgo
             }
             DateTime extendDate() {
                 string tfName = extraTPO == ExtraProfiles.No ?
-                (TPOInterval_Input == TPOInterval_Data.Daily ? "D1" :
-                    TPOInterval_Input == TPOInterval_Data.Weekly ? "W1" : "Month1" ) :
-                extraTPO == ExtraProfiles.MiniTPO ? MiniTPOs_Timeframe.ShortName.ToString() :
+                (GeneralParams.TPOInterval_Input == TPOInterval_Data.Daily ? "D1" :
+                    GeneralParams.TPOInterval_Input == TPOInterval_Data.Weekly ? "W1" : "Month1" ) :
+                extraTPO == ExtraProfiles.MiniTPO ? ProfileParams.MiniTPOs_Timeframe.ShortName.ToString() :
                 extraTPO == ExtraProfiles.Weekly ?  "W1" :  "Month1";
 
                 // Get the time-based interval value
@@ -2840,15 +2650,15 @@ namespace cAlgo
 
                 DateTime dateToReturn = xBar;
                 if (tfName.Contains('m'))
-                    dateToReturn = xBar.AddMinutes(tfValue * extendNodes_Count);
+                    dateToReturn = xBar.AddMinutes(tfValue * NodesParams.extendNodes_Count);
                 else if (tfName.Contains('h'))
-                    dateToReturn = xBar.AddHours(tfValue * extendNodes_Count);
+                    dateToReturn = xBar.AddHours(tfValue * NodesParams.extendNodes_Count);
                 else if (tfName.Contains('D'))
-                    dateToReturn = xBar.AddDays(tfValue * extendNodes_Count);
+                    dateToReturn = xBar.AddDays(tfValue * NodesParams.extendNodes_Count);
                 else if (tfName.Contains('W'))
-                    dateToReturn = xBar.AddDays(7 * extendNodes_Count);
+                    dateToReturn = xBar.AddDays(7 * NodesParams.extendNodes_Count);
                 else if (tfName.Contains("Month1"))
-                    dateToReturn = xBar.AddMonths(tfValue * extendNodes_Count);
+                    dateToReturn = xBar.AddMonths(tfValue * NodesParams.extendNodes_Count);
 
                 return dateToReturn;
             }            
@@ -2861,13 +2671,13 @@ namespace cAlgo
             Thread.Sleep(300);
 
             // LookBack from TPO
-            Bars tpoBars = TPOInterval_Input == TPOInterval_Data.Daily ? DailyBars :
-                           TPOInterval_Input == TPOInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
+            Bars tpoBars = GeneralParams.TPOInterval_Input == TPOInterval_Data.Daily ? DailyBars :
+                           GeneralParams.TPOInterval_Input == TPOInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
             int firstIndex = Bars.OpenTimes.GetIndexByTime(tpoBars.OpenTimes.FirstOrDefault());
 
             // Get index of TPO Interval to continue only in Lookback
             int iVerify = tpoBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[firstIndex]);
-            while (tpoBars.ClosePrices.Count - iVerify > Lookback) {
+            while (tpoBars.ClosePrices.Count - iVerify > GeneralParams.Lookback) {
                 firstIndex++;
                 iVerify = tpoBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[firstIndex]);
             }
@@ -2877,25 +2687,33 @@ namespace cAlgo
             int startIndex = Bars.OpenTimes.GetIndexByTime(tpoBars.OpenTimes[TF_idx]);
 
             // Weekly Profile but Daily TPO
-            bool extraWeekly = EnableTPO && EnableWeeklyProfile && TPOInterval_Input == TPOInterval_Data.Daily;
+            bool extraWeekly = ProfileParams.EnableWeeklyProfile && GeneralParams.TPOInterval_Input == TPOInterval_Data.Daily;
             if (extraWeekly) {
                 TF_idx = WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[firstIndex]);
                 startIndex = Bars.OpenTimes.GetIndexByTime(WeeklyBars.OpenTimes[TF_idx]);
             }
 
             // Monthly Profile
-            bool extraMonthly = EnableTPO && EnableMonthlyProfile;
+            bool extraMonthly = ProfileParams.EnableMonthlyProfile;
             if (extraMonthly) {
                 TF_idx = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[firstIndex]);
                 startIndex = Bars.OpenTimes.GetIndexByTime(MonthlyBars.OpenTimes[TF_idx]);
             }
 
+            // Reset last update
+            ClearIdx.ResetAll();
             // Reset Segments
             Segments.Clear();
             segmentInfo.Clear();
+            // Reset Fixed Range
+            foreach (ChartRectangle rect in RangeObjs.rectangles)
+            {
+                DateTime end = rect.Time1 < rect.Time2 ? rect.Time2 : rect.Time1;
+                ResetFixedRange(rect.Name, end);
+            }
 
             // Reset Fixed Range
-            foreach (ChartRectangle rect in _rectangles)
+            foreach (ChartRectangle rect in RangeObjs.rectangles)
             {
                 DateTime end = rect.Time1 < rect.Time2 ? rect.Time2 : rect.Time1;
                 ResetFixedRange(rect.Name, end);
@@ -2906,15 +2724,13 @@ namespace cAlgo
             {
                 CreateSegments(index);
 
-                if (EnableTPO) {
-                    CreateMonthlyTPO(index);
-                    CreateWeeklyTPO(index);
-                }
+                CreateMonthlyTPO(index);
+                CreateWeeklyTPO(index);
 
                 // Calculate TPO only in lookback
                 if (extraWeekly || extraMonthly) {
                     iVerify = tpoBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
-                    if (tpoBars.ClosePrices.Count - iVerify > Lookback)
+                    if (tpoBars.ClosePrices.Count - iVerify > GeneralParams.Lookback)
                         continue;
                 }
 
@@ -2923,12 +2739,13 @@ namespace cAlgo
 
                 if (index == startIndex ||
                    (index - 1) == startIndex && isPriceBased_Chart ||
-                   (index - 1) == startIndex && (index - 1) != lastCleaned._TPO_Interval)
+                   (index - 1) == startIndex && (index - 1) != ClearIdx.MainTPO)
                     CleanUp_MainTPO(startIndex, index);
 
+                if (ProfileParams.EnableMainTPO) 
+                    TPO_Profile(startIndex, index);
+                
                 CreateMiniTPOs(index);
-
-                if (EnableTPO) TPO_Profile(startIndex, index);
             }
 
             configHasChanged = true;
@@ -2940,11 +2757,11 @@ namespace cAlgo
         }
         public void SetLookback(int number)
         {
-            Lookback = number;
+            GeneralParams.Lookback = number;
         }
         public int GetLookback()
         {
-            return Lookback;
+            return GeneralParams.Lookback;
         }
         public double GetRowHeight()
         {
@@ -2952,7 +2769,7 @@ namespace cAlgo
         }
 
         public void SetMiniTPOsBars() {
-            MiniTPOs_Bars = MarketData.GetBars(MiniTPOs_Timeframe);
+            MiniTPOs_Bars = MarketData.GetBars(ProfileParams.MiniTPOs_Timeframe);
         }
     }
 
@@ -3018,6 +2835,20 @@ namespace cAlgo
 
         private List<ParamDefinition> DefineParams()
         {
+            bool isNodeBand() => (
+                Outside.NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ||
+                Outside.NodesParams.ShowNode_Input == ShowNode_Data.LVN_With_Bands
+            ) && Outside.NodesParams.ProfileNode_Input != ProfileNode_Data.Percentile;
+            bool isStrongHVN() => (
+                Outside.NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ||
+                Outside.NodesParams.ProfileNode_Input == ProfileNode_Data.Percentile && Outside.NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands
+            );
+            bool isStrongLVN() => (
+                Outside.NodesParams.ShowNode_Input != ShowNode_Data.HVN_Raw && Outside.NodesParams.ProfileNode_Input != ProfileNode_Data.Percentile ||
+                Outside.NodesParams.ProfileNode_Input == ProfileNode_Data.Percentile &&
+                (Outside.NodesParams.ShowNode_Input == ShowNode_Data.LVN_With_Bands || Outside.NodesParams.ShowNode_Input == ShowNode_Data.LVN_Raw)
+            );
+
             return new List<ParamDefinition>
             {
                 new()
@@ -3027,7 +2858,7 @@ namespace cAlgo
                     Key = "LookbackKey",
                     Label = "Lookback",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.LookBack,
+                    GetDefault = p => p.GeneralParams.Lookback,
                     OnChanged = _ => UpdateLookback()
                 },
                 new()
@@ -3047,7 +2878,7 @@ namespace cAlgo
                     Key = "TPOIntervalKey",
                     Label = "Interval",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.TPOInterval.ToString(),
+                    GetDefault = p => p.GeneralParams.TPOInterval_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(TPOInterval_Data)),
                     OnChanged = _ => UpdateTPOInterval(),
                 },
@@ -3057,10 +2888,10 @@ namespace cAlgo
                     Region = "TPO Profile",
                     RegionOrder = 2,
                     Key = "EnableTPOKey",
-                    Label = "Enable?",
+                    Label = "Main Profile?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.EnableTPO,
-                    OnChanged = _ => UpdateCheckbox("EnableTPOKey", val => Outside.EnableTPO = val),
+                    GetDefault = p => p.ProfileParams.EnableMainTPO,
+                    OnChanged = _ => UpdateCheckbox("EnableTPOKey", val => Outside.ProfileParams.EnableMainTPO = val),
                 },
                 new()
                 {
@@ -3069,9 +2900,9 @@ namespace cAlgo
                     Key = "WeeklyTPOKey",
                     Label = "Weekly?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.EnableWeeklyProfile,
-                    OnChanged = _ => UpdateCheckbox("WeeklyTPOKey", val => Outside.EnableWeeklyProfile = val),
-                    IsVisible = () => Outside.TPOInterval_Input != TPOInterval_Data.Weekly
+                    GetDefault = p => p.ProfileParams.EnableWeeklyProfile,
+                    OnChanged = _ => UpdateCheckbox("WeeklyTPOKey", val => Outside.ProfileParams.EnableWeeklyProfile = val),
+                    IsVisible = () => Outside.GeneralParams.TPOInterval_Input != TPOInterval_Data.Weekly
                 },
                 new()
                 {
@@ -3080,9 +2911,9 @@ namespace cAlgo
                     Key = "MonthlyTPOKey",
                     Label = "Monthly?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.EnableMonthlyProfile,
-                    OnChanged = _ => UpdateCheckbox("MonthlyTPOKey", val => Outside.EnableMonthlyProfile = val),
-                    IsVisible = () => Outside.TPOInterval_Input != TPOInterval_Data.Monthly
+                    GetDefault = p => p.ProfileParams.EnableMonthlyProfile,
+                    OnChanged = _ => UpdateCheckbox("MonthlyTPOKey", val => Outside.ProfileParams.EnableMonthlyProfile = val),
+                    IsVisible = () => Outside.GeneralParams.TPOInterval_Input != TPOInterval_Data.Monthly
                 },
                 new()
                 {
@@ -3091,8 +2922,8 @@ namespace cAlgo
                     Key = "FillTPOKey",
                     Label = "Fill Histogram?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.FillHist_TPO,
-                    OnChanged = _ => UpdateCheckbox("FillTPOKey", val => Outside.FillHist_TPO = val),
+                    GetDefault = p => p.ProfileParams.FillHist_TPO,
+                    OnChanged = _ => UpdateCheckbox("FillTPOKey", val => Outside.ProfileParams.FillHist_TPO = val),
                 },
                 new()
                 {
@@ -3101,7 +2932,7 @@ namespace cAlgo
                     Key = "SideTPOKey",
                     Label = "Side",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.HistogramSide.ToString(),
+                    GetDefault = p => p.ProfileParams.HistogramSide_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(HistSide_Data)),
                     OnChanged = _ => UpdateSideTPO(),
                 },
@@ -3112,7 +2943,7 @@ namespace cAlgo
                     Key = "WidthTPOKey",
                     Label = "Width",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.HistogramWidth.ToString(),
+                    GetDefault = p => p.ProfileParams.HistogramWidth_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(HistWidth_Data)),
                     OnChanged = _ => UpdateWidthTPO(),
                 },
@@ -3123,8 +2954,8 @@ namespace cAlgo
                     Key = "IntradayTPOKey",
                     Label = "Intraday?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ShowIntradayProfile,
-                    OnChanged = _ => UpdateCheckbox("IntradayTPOKey", val => Outside.ShowIntradayProfile = val),
+                    GetDefault = p => p.ProfileParams.ShowIntradayProfile,
+                    OnChanged = _ => UpdateCheckbox("IntradayTPOKey", val => Outside.ProfileParams.ShowIntradayProfile = val),
                 },
                 new()
                 {
@@ -3133,9 +2964,9 @@ namespace cAlgo
                     Key = "IntraOffsetKey",
                     Label = "Offset(bars)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.OffsetBarsIntraday.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.ProfileParams.OffsetBarsInput.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateIntradayOffset(),
-                    IsVisible = () => Outside.ShowIntradayProfile
+                    IsVisible = () => Outside.ProfileParams.ShowIntradayProfile
                 },
                 new()
                 {
@@ -3144,10 +2975,10 @@ namespace cAlgo
                     Key = "IntraTFKey",
                     Label = "Offset(time)",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.OffsetTimeframeIntraday.ShortName,
+                    GetDefault = p => p.ProfileParams.OffsetTimeframeInput.ShortName,
                     EnumOptions = () => Enum.GetNames(typeof(Supported_Timeframes)),
                     OnChanged = _ => UpdateIntradayTimeframe(),
-                    IsVisible = () => Outside.ShowIntradayProfile && Outside.isPriceBased_Chart
+                    IsVisible = () => Outside.ProfileParams.ShowIntradayProfile && Outside.isPriceBased_Chart
                 },
                 new()
                 {
@@ -3156,8 +2987,8 @@ namespace cAlgo
                     Key = "FixedRangeKey",
                     Label = "Fixed Range?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.FixedRange,
-                    OnChanged = _ => UpdateCheckbox("FixedRangeKey", val => Outside.EnableFixedRange = val),
+                    GetDefault = p => p.ProfileParams.EnableFixedRange,
+                    OnChanged = _ => UpdateCheckbox("FixedRangeKey", val => Outside.ProfileParams.EnableFixedRange = val),
                 },
                 new()
                 {
@@ -3166,10 +2997,10 @@ namespace cAlgo
                     Key = "FixedSegmentsKey",
                     Label = "Segments",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.SegmentsFixedRange.ToString(),
+                    GetDefault = p => p.ProfileParams.SegmentsFixedRange_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(SegmentsFixedRange_Data)),
                     OnChanged = _ => UpdateRangeSegments(),
-                    IsVisible = () => Outside.EnableFixedRange
+                    IsVisible = () => Outside.ProfileParams.EnableFixedRange
                 },
                 new()
                 {
@@ -3178,8 +3009,8 @@ namespace cAlgo
                     Key = "ShowOHLCKey",
                     Label = "OHLC Body?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.OHLC,
-                    OnChanged = _ => UpdateCheckbox("ShowOHLCKey", val => Outside.ShowOHLC = val),
+                    GetDefault = p => p.ProfileParams.ShowOHLC,
+                    OnChanged = _ => UpdateCheckbox("ShowOHLCKey", val => Outside.ProfileParams.ShowOHLC = val),
                 },
                 new()
                 {
@@ -3188,9 +3019,9 @@ namespace cAlgo
                     Key = "FillIntraTPOKey",
                     Label = "Intra-Space?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.FillIntradaySpace,
-                    OnChanged = _ => UpdateCheckbox("FillIntraTPOKey", val => Outside.FillIntradaySpace = val),
-                    IsVisible = () => Outside.ShowIntradayProfile && (Outside.EnableWeeklyProfile || Outside.EnableMonthlyProfile)
+                    GetDefault = p => p.ProfileParams.FillIntradaySpace,
+                    OnChanged = _ => UpdateCheckbox("FillIntraTPOKey", val => Outside.ProfileParams.FillIntradaySpace = val),
+                    IsVisible = () => Outside.ProfileParams.ShowIntradayProfile && (Outside.ProfileParams.EnableWeeklyProfile || Outside.ProfileParams.EnableMonthlyProfile)
                 },
 
                 new()
@@ -3200,8 +3031,8 @@ namespace cAlgo
                     Key = "MiniTPOsKey",
                     Label = "Enable?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.EnableMiniProfiles,
-                    OnChanged = _ => UpdateCheckbox("MiniTPOsKey", val => Outside.EnableMiniProfiles = val)
+                    GetDefault = p => p.ProfileParams.EnableMiniProfiles,
+                    OnChanged = _ => UpdateCheckbox("MiniTPOsKey", val => Outside.ProfileParams.EnableMiniProfiles = val)
                 },
                 new()
                 {
@@ -3210,7 +3041,7 @@ namespace cAlgo
                     Key = "MiniTFKey",
                     Label = "Mini-Interval",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.MiniTPOsTimeframe.ShortName.ToString(),
+                    GetDefault = p => p.ProfileParams.MiniTPOs_Timeframe.ShortName.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(Supported_Timeframes)),
                     OnChanged = _ => UpdateMiniTPOTimeframe()
                 },
@@ -3221,8 +3052,8 @@ namespace cAlgo
                     Key = "MiniResultKey",
                     Label = "Mini-Result?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ShowMiniResults,
-                    OnChanged = _ => UpdateCheckbox("MiniResultKey", val => Outside.ShowMiniResults = val)
+                    GetDefault = p => p.ProfileParams.ShowMiniResults,
+                    OnChanged = _ => UpdateCheckbox("MiniResultKey", val => Outside.ProfileParams.ShowMiniResults = val)
                 },
 
                 new()
@@ -3232,8 +3063,8 @@ namespace cAlgo
                     Key = "EnableVAKey",
                     Label = "Enable VA?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ShowVA,
-                    OnChanged = _ => UpdateCheckbox("EnableVAKey", val => Outside.ShowVA = val)
+                    GetDefault = p => p.VAParams.ShowVA,
+                    OnChanged = _ => UpdateCheckbox("EnableVAKey", val => Outside.VAParams.ShowVA = val)
                 },
                 new()
                 {
@@ -3242,9 +3073,9 @@ namespace cAlgo
                     Key = "VAValueKey",
                     Label = "VA(%)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.PercentVA.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.VAParams.PercentVA.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdatePercentVA(),
-                    IsVisible = () => Outside.ShowVA
+                    IsVisible = () => Outside.VAParams.ShowVA
                 },
                 new()
                 {
@@ -3253,8 +3084,8 @@ namespace cAlgo
                     Key = "OnlyPOCKey",
                     Label = "Only POC?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.KeepPOC,
-                    OnChanged = _ => UpdateCheckbox("OnlyPOCKey", val => Outside.KeepPOC = val)
+                    GetDefault = p => p.VAParams.KeepPOC,
+                    OnChanged = _ => UpdateCheckbox("OnlyPOCKey", val => Outside.VAParams.KeepPOC = val)
                 },
                 new()
                 {
@@ -3263,8 +3094,8 @@ namespace cAlgo
                     Key = "ExtendVAKey",
                     Label = "Extend VA?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ExtendVA,
-                    OnChanged = _ => UpdateCheckbox("ExtendVAKey", val => Outside.ExtendVA = val)
+                    GetDefault = p => p.VAParams.ExtendVA,
+                    OnChanged = _ => UpdateCheckbox("ExtendVAKey", val => Outside.VAParams.ExtendVA = val)
                 },
                 new()
                 {
@@ -3273,9 +3104,9 @@ namespace cAlgo
                     Key = "ExtendCountKey",
                     Label = "Extend(count)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.ExtendCount.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.VAParams.ExtendCount.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateExtendCount(),
-                    IsVisible = () => Outside.ExtendVA || Outside.ExtendPOC
+                    IsVisible = () => Outside.VAParams.ExtendVA || Outside.VAParams.ExtendPOC
                 },
                 new()
                 {
@@ -3284,8 +3115,8 @@ namespace cAlgo
                     Key = "ExtendPOCKey",
                     Label = "Extend POC?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ExtendPOC,
-                    OnChanged = _ => UpdateCheckbox("ExtendPOCKey", val => Outside.ExtendPOC = val)
+                    GetDefault = p => p.VAParams.ExtendPOC,
+                    OnChanged = _ => UpdateCheckbox("ExtendPOCKey", val => Outside.VAParams.ExtendPOC = val)
                 },
 
                 
@@ -3296,8 +3127,8 @@ namespace cAlgo
                     Key = "EnableNodeKey",
                     Label = "Enable?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.EnableNodes,
-                    OnChanged = _ => UpdateCheckbox("EnableNodeKey", val => Outside.EnableNodeDetection = val)
+                    GetDefault = p => p.NodesParams.EnableNodeDetection,
+                    OnChanged = _ => UpdateCheckbox("EnableNodeKey", val => Outside.NodesParams.EnableNodeDetection = val)
                 },
                 new()
                 {
@@ -3306,7 +3137,7 @@ namespace cAlgo
                     Key = "NodeSmoothKey",
                     Label = "Smooth",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.ProfileSmooth.ToString(),
+                    GetDefault = p => p.NodesParams.ProfileSmooth_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(ProfileSmooth_Data)),
                     OnChanged = _ => UpdateNodeSmooth()
                 },
@@ -3317,7 +3148,7 @@ namespace cAlgo
                     Key = "NodeTypeKey",
                     Label = "Nodes",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.ProfileNode.ToString(),
+                    GetDefault = p => p.NodesParams.ProfileNode_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(ProfileNode_Data)),
                     OnChanged = _ => UpdateNodeType()
                 },
@@ -3328,7 +3159,7 @@ namespace cAlgo
                     Key = "ShowNodeKey",
                     Label = "Show",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.ShowNode.ToString(),
+                    GetDefault = p => p.NodesParams.ShowNode_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(ShowNode_Data)),
                     OnChanged = _ => UpdateShowNode(),
                 },
@@ -3339,10 +3170,9 @@ namespace cAlgo
                     Key = "HvnBandPctKey",
                     Label = "HVN Band(%)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.BandHVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.NodesParams.bandHVN_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateHVN_Band(),
-                    IsVisible = () => (Outside.ShowNode_Input == ShowNode_Data.HVN_With_Bands || Outside.ShowNode_Input == ShowNode_Data.LVN_With_Bands) &&
-                                       Outside.ProfileNode_Input != ProfileNode_Data.Percentile
+                    IsVisible = () => isNodeBand()
                 },
                 new()
                 {
@@ -3351,10 +3181,9 @@ namespace cAlgo
                     Key = "LvnBandPctKey",
                     Label = "LVN Band(%)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.BandLVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.NodesParams.bandLVN_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateLVN_Band(),
-                    IsVisible = () => (Outside.ShowNode_Input == ShowNode_Data.HVN_With_Bands || Outside.ShowNode_Input == ShowNode_Data.LVN_With_Bands) &&
-                                       Outside.ProfileNode_Input != ProfileNode_Data.Percentile
+                    IsVisible = () => isNodeBand()
                 },
                 new()
                 {
@@ -3363,8 +3192,8 @@ namespace cAlgo
                     Key = "NodeStrongKey",
                     Label = "Only Strong?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.OnlyStrong, 
-                    OnChanged = _ => UpdateCheckbox("NodeStrongKey", val => Outside.onlyStrongNodes = val)
+                    GetDefault = p => p.NodesParams.onlyStrongNodes, 
+                    OnChanged = _ => UpdateCheckbox("NodeStrongKey", val => Outside.NodesParams.onlyStrongNodes = val)
                 },
                 // 'Strong HVN' for HVN_Raw(only) on [LocalMinMax, Topology]
                 new()
@@ -3374,10 +3203,9 @@ namespace cAlgo
                     Key = "StrongHvnPctKey",
                     Label = "(%) >= POC",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.StrongHVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.NodesParams.strongHVN_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateHVN_Strong(),
-                    IsVisible = () => Outside.onlyStrongNodes && (Outside.ShowNode_Input == ShowNode_Data.HVN_Raw ||
-                                      Outside.ProfileNode_Input == ProfileNode_Data.Percentile && Outside.ShowNode_Input == ShowNode_Data.HVN_With_Bands)
+                    IsVisible = () => Outside.NodesParams.onlyStrongNodes && isStrongHVN()
                 },
                 // 'Strong LVN' should be used by HVN_With_Bands, since the POCs are derived from LVN Split.
                 // on [LocalMinMax, Topology] 
@@ -3388,12 +3216,9 @@ namespace cAlgo
                     Key = "StrongLvnPctKey",
                     Label = "(%) <= POC",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.StrongLVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.NodesParams.strongLVN_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateLVN_Strong(),
-                    IsVisible = () => Outside.onlyStrongNodes &&
-                            (Outside.ShowNode_Input != ShowNode_Data.HVN_Raw && Outside.ProfileNode_Input != ProfileNode_Data.Percentile ||
-                            Outside.ProfileNode_Input == ProfileNode_Data.Percentile && 
-                            (Outside.ShowNode_Input == ShowNode_Data.LVN_With_Bands || Outside.ShowNode_Input == ShowNode_Data.LVN_Raw))
+                    IsVisible = () => Outside.NodesParams.onlyStrongNodes && isStrongLVN()
                 },
                 new()
                 {
@@ -3402,8 +3227,8 @@ namespace cAlgo
                     Key = "ExtendNodeKey",
                     Label = "Extend?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ExtendNodes,
-                    OnChanged = _ => UpdateCheckbox("ExtendNodeKey", val => Outside.extendNodes = val)
+                    GetDefault = p => p.NodesParams.extendNodes,
+                    OnChanged = _ => UpdateCheckbox("ExtendNodeKey", val => Outside.NodesParams.extendNodes = val)
                 },
                 new()
                 {
@@ -3412,9 +3237,9 @@ namespace cAlgo
                     Key = "ExtNodesCountKey",
                     Label = "Extend(count)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.ExtendNodes_Count.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.NodesParams.extendNodes_Count.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateExtendNodesCount(),
-                    IsVisible = () => Outside.extendNodes
+                    IsVisible = () => Outside.NodesParams.extendNodes
                 },
                 new()
                 {
@@ -3423,9 +3248,9 @@ namespace cAlgo
                     Key = "ExtBandsKey",
                     Label = "Ext.(bands)?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ExtendNodes_WithBands,
-                    OnChanged = _ => UpdateCheckbox("ExtBandsKey", val => Outside.extendNodes_WithBands = val),
-                    IsVisible = () => Outside.extendNodes
+                    GetDefault = p => p.NodesParams.extendNodes_WithBands,
+                    OnChanged = _ => UpdateCheckbox("ExtBandsKey", val => Outside.NodesParams.extendNodes_WithBands = val),
+                    IsVisible = () => Outside.NodesParams.extendNodes
                 },
                 new()
                 {
@@ -3434,9 +3259,9 @@ namespace cAlgo
                     Key = "HvnPctileKey",
                     Label = "HVN(%)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.PctileHVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.NodesParams.pctileHVN_Value.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateHVN_Pctile(),
-                    IsVisible = () => Outside.ProfileNode_Input == ProfileNode_Data.Percentile
+                    IsVisible = () => Outside.NodesParams.ProfileNode_Input == ProfileNode_Data.Percentile
                 },
                 new()
                 {
@@ -3445,9 +3270,9 @@ namespace cAlgo
                     Key = "LvnPctileKey",
                     Label = "LVN(%)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.PctileLVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.NodesParams.pctileLVN_Value.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateLVN_Pctile(),
-                    IsVisible = () => Outside.ProfileNode_Input == ProfileNode_Data.Percentile
+                    IsVisible = () => Outside.NodesParams.ProfileNode_Input == ProfileNode_Data.Percentile
                 },
                 new()
                 {
@@ -3456,9 +3281,9 @@ namespace cAlgo
                     Key = "ExtNodeStartKey",
                     Label = "From start?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ExtendNodes_FromStart,
-                    OnChanged = _ => UpdateCheckbox("ExtNodeStartKey", val => Outside.extendNodes_FromStart = val),
-                    IsVisible = () => Outside.extendNodes
+                    GetDefault = p => p.NodesParams.extendNodes_FromStart,
+                    OnChanged = _ => UpdateCheckbox("ExtNodeStartKey", val => Outside.NodesParams.extendNodes_FromStart = val),
+                    IsVisible = () => Outside.NodesParams.extendNodes
                 },
 
                 new()
@@ -3468,7 +3293,7 @@ namespace cAlgo
                     Key = "UpdateTPOKey",
                     Label = "Update At",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.UpdateProfileStrategy.ToString(),
+                    GetDefault = p => p.ProfileParams.UpdateProfile_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(UpdateProfile_Data)),
                     OnChanged = _ => UpdateTPO(),
                 },
@@ -3479,8 +3304,8 @@ namespace cAlgo
                     Key = "ShowResultsKey",
                     Label = "Results?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ShowResults,
-                    OnChanged = _ => UpdateCheckbox("ShowResultsKey", val => Outside.ShowResults = val),
+                    GetDefault = p => p.ProfileParams.ShowResults,
+                    OnChanged = _ => UpdateCheckbox("ShowResultsKey", val => Outside.ProfileParams.ShowResults = val),
                 },
             };
         }
@@ -3520,7 +3345,7 @@ namespace cAlgo
                 BorderThickness = "0 0 0 1",
                 Style = Styles.CreateCommonBorderStyle(),
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Width = 230, // ParamsPanel Width
+                Width = 250, // ParamsPanel Width
                 Child = grid
             };
             return border;
@@ -3562,7 +3387,7 @@ namespace cAlgo
             {
                 Margin = 10,
                 // Fix MacOS => large string increase column and hidden others
-                Width = 230, // ParamsPanel Width
+                Width = 250, // ParamsPanel Width
                 // Fix MacOS(maybe) => panel is cut short/half the size
                 VerticalAlignment = VerticalAlignment.Top,
             };
@@ -3576,7 +3401,7 @@ namespace cAlgo
             grid.Rows[0].SetHeightInPixels(45);
 
             grid.AddChild(CreatePassButton("<"), 0, 0);
-            grid.AddChild(CreateModeInfo_Button(FirstParams.ModeTPO.ToString()), 0, 1, 1, 3);
+            grid.AddChild(CreateModeInfo_Button(FirstParams.GeneralParams.TPOMode_Input.ToString()), 0, 1, 1, 3);
             grid.AddChild(CreatePassButton(">"), 0, 4);
 
             contentPanel.AddChild(grid);
@@ -3840,6 +3665,18 @@ namespace cAlgo
                     RangeBtn.IsVisible = value;
                     RefreshVisibility();
                     return;
+                case "NodeStrongKey":
+                    RecalculateOutsideWithMsg(false);
+                    return;
+                case "ExtendNodeKey":
+                    RecalculateOutsideWithMsg(false);
+                    return;
+                case "ExtBandsKey":
+                    RecalculateOutsideWithMsg(false);
+                    return;
+                case "ExtNodeStartKey":
+                    RecalculateOutsideWithMsg(false);
+                    return;
             }
 
             RecalculateOutsideWithMsg();
@@ -3870,9 +3707,9 @@ namespace cAlgo
         private void UpdateTPOInterval()
         {
             var selected = comboBoxMap["TPOIntervalKey"].SelectedItem;
-            if (Enum.TryParse(selected, out TPOInterval_Data intervalType) && intervalType != Outside.TPOInterval_Input)
+            if (Enum.TryParse(selected, out TPOInterval_Data intervalType) && intervalType != Outside.GeneralParams.TPOInterval_Input)
             {
-                Outside.TPOInterval_Input = intervalType;
+                Outside.GeneralParams.TPOInterval_Input = intervalType;
                 RecalculateOutsideWithMsg();
             }
         }
@@ -3881,27 +3718,27 @@ namespace cAlgo
         private void UpdateSideTPO()
         {
             var selected = comboBoxMap["SideTPOKey"].SelectedItem;
-            if (Enum.TryParse(selected, out HistSide_Data sideType) && sideType != Outside.HistogramSide_Input)
+            if (Enum.TryParse(selected, out HistSide_Data sideType) && sideType != Outside.ProfileParams.HistogramSide_Input)
             {
-                Outside.HistogramSide_Input = sideType;
+                Outside.ProfileParams.HistogramSide_Input = sideType;
                 RecalculateOutsideWithMsg(false);
             }
         }
         private void UpdateWidthTPO()
         {
             var selected = comboBoxMap["WidthTPOKey"].SelectedItem;
-            if (Enum.TryParse(selected, out HistWidth_Data widthType) && widthType != Outside.HistogramWidth_Input)
+            if (Enum.TryParse(selected, out HistWidth_Data widthType) && widthType != Outside.ProfileParams.HistogramWidth_Input)
             {
-                Outside.HistogramWidth_Input = widthType;
+                Outside.ProfileParams.HistogramWidth_Input = widthType;
                 RecalculateOutsideWithMsg(false);
             }
         }
         private void UpdateIntradayOffset()
         {
             int value = int.TryParse(textInputMap["IntraOffsetKey"].Text, out var n) ? n : -1;
-            if (value > 0 && value != Outside.OffsetBarsInput)
+            if (value > 0 && value != Outside.ProfileParams.OffsetBarsInput)
             {
-                Outside.OffsetBarsInput = value;
+                Outside.ProfileParams.OffsetBarsInput = value;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -3909,17 +3746,17 @@ namespace cAlgo
         {
             var selected = comboBoxMap["IntraTFKey"].SelectedItem;
             TimeFrame value = StringToTimeframe(selected);
-            if (value != TimeFrame.Minute && value != Outside.OffsetTimeframeInput)
+            if (value != TimeFrame.Minute && value != Outside.ProfileParams.OffsetTimeframeInput)
             {
-                Outside.OffsetTimeframeInput = value;
+                Outside.ProfileParams.OffsetTimeframeInput = value;
                 RecalculateOutsideWithMsg(false);
             }
         }
         private void UpdateRangeSegments() {
             var selected = comboBoxMap["FixedSegmentsKey"].SelectedItem;
-            if (Enum.TryParse(selected, out SegmentsFixedRange_Data segmentsType) && segmentsType != Outside.SegmentsFixedRange_Input)
+            if (Enum.TryParse(selected, out SegmentsFixedRange_Data segmentsType) && segmentsType != Outside.ProfileParams.SegmentsFixedRange_Input)
             {
-                Outside.SegmentsFixedRange_Input = segmentsType;
+                Outside.ProfileParams.SegmentsFixedRange_Input = segmentsType;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -3927,9 +3764,9 @@ namespace cAlgo
         {
             var selected = comboBoxMap["MiniTFKey"].SelectedItem;
             TimeFrame value = StringToTimeframe(selected);
-            if (value != TimeFrame.Minute && value != Outside.MiniTPOs_Timeframe)
+            if (value != TimeFrame.Minute && value != Outside.ProfileParams.MiniTPOs_Timeframe)
             {
-                Outside.MiniTPOs_Timeframe = value;
+                Outside.ProfileParams.MiniTPOs_Timeframe = value;
                 Outside.SetMiniTPOsBars();
                 RecalculateOutsideWithMsg();
             }
@@ -3975,18 +3812,18 @@ namespace cAlgo
         private void UpdatePercentVA()
         {
             int value = int.TryParse(textInputMap["VAValueKey"].Text, out var n) ? n : -1;
-            if (value > 0 && value <= 100 && value != Outside.PercentVA)
+            if (value > 0 && value <= 100 && value != Outside.VAParams.PercentVA)
             {
-                Outside.PercentVA = value;
+                Outside.VAParams.PercentVA = value;
                 SetApplyVisibility();
             }
         }
         private void UpdateExtendCount()
         {
             int value = int.TryParse(textInputMap["ExtendCountKey"].Text, out var n) ? n : -1;
-            if (value > 0 && value != Outside.ExtendCount)
+            if (value > 0 && value != Outside.VAParams.ExtendCount)
             {
-                Outside.ExtendCount = value;
+                Outside.VAParams.ExtendCount = value;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -3995,27 +3832,28 @@ namespace cAlgo
         private void UpdateNodeSmooth()
         {
             var selected = comboBoxMap["NodeSmoothKey"].SelectedItem;
-            if (Enum.TryParse(selected, out ProfileSmooth_Data smoothType) && smoothType != Outside.ProfileSmooth_Input)
+            if (Enum.TryParse(selected, out ProfileSmooth_Data smoothType) && smoothType != Outside.NodesParams.ProfileSmooth_Input)
             {
-                Outside.ProfileSmooth_Input = smoothType;
+                Outside.NodesParams.ProfileSmooth_Input = smoothType;
+                Outside.nodesKernel = null;
                 RecalculateOutsideWithMsg(false);
             }
         }
         private void UpdateNodeType()
         {
             var selected = comboBoxMap["NodeTypeKey"].SelectedItem;
-            if (Enum.TryParse(selected, out ProfileNode_Data nodeType) && nodeType != Outside.ProfileNode_Input)
+            if (Enum.TryParse(selected, out ProfileNode_Data nodeType) && nodeType != Outside.NodesParams.ProfileNode_Input)
             {
-                Outside.ProfileNode_Input = nodeType;
+                Outside.NodesParams.ProfileNode_Input = nodeType;
                 RecalculateOutsideWithMsg(false);
             }
         }
         private void UpdateShowNode()
         {
             var selected = comboBoxMap["ShowNodeKey"].SelectedItem;
-            if (Enum.TryParse(selected, out ShowNode_Data showNodeType) && showNodeType != Outside.ShowNode_Input)
+            if (Enum.TryParse(selected, out ShowNode_Data showNodeType) && showNodeType != Outside.NodesParams.ShowNode_Input)
             {
-                Outside.ShowNode_Input = showNodeType;
+                Outside.NodesParams.ShowNode_Input = showNodeType;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -4023,9 +3861,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["HvnBandPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
             {
-                if (value != Outside.bandHVN_Pct)
+                if (value != Outside.NodesParams.bandHVN_Pct)
                 {
-                    Outside.bandHVN_Pct = value;
+                    Outside.NodesParams.bandHVN_Pct = value;
                     SetApplyVisibility();
                 }
             }
@@ -4034,9 +3872,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["LvnBandPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
             {
-                if (value != Outside.bandLVN_Pct)
+                if (value != Outside.NodesParams.bandLVN_Pct)
                 {
-                    Outside.bandLVN_Pct = value;
+                    Outside.NodesParams.bandLVN_Pct = value;
                     SetApplyVisibility();
                 }
             }
@@ -4045,9 +3883,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["StrongHvnPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
             {
-                if (value != Outside.strongHVN_Pct)
+                if (value != Outside.NodesParams.strongHVN_Pct)
                 {
-                    Outside.strongHVN_Pct = value;
+                    Outside.NodesParams.strongHVN_Pct = value;
                     SetApplyVisibility();
                 }
             }
@@ -4056,9 +3894,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["StrongLvnPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
             {
-                if (value != Outside.strongLVN_Pct)
+                if (value != Outside.NodesParams.strongLVN_Pct)
                 {
-                    Outside.strongLVN_Pct = value;
+                    Outside.NodesParams.strongLVN_Pct = value;
                     SetApplyVisibility();
                 }
             }
@@ -4066,27 +3904,27 @@ namespace cAlgo
         private void UpdateExtendNodesCount() 
         {
             int value = int.TryParse(textInputMap["ExtNodesCountKey"].Text, out var n) ? n : -1;
-            if (value > 0 && value != Outside.extendNodes_Count)
+            if (value > 0 && value != Outside.NodesParams.extendNodes_Count)
             {
-                Outside.extendNodes_Count = value;
+                Outside.NodesParams.extendNodes_Count = value;
                 RecalculateOutsideWithMsg(false);
             }
         }
         private void UpdateHVN_Pctile()
         {
             int value = int.TryParse(textInputMap["HvnPctileKey"].Text, out var n) ? n : -1;
-            if (value > 0 && value != Outside.pctileHVN_Value)
+            if (value > 0 && value != Outside.NodesParams.pctileHVN_Value)
             {
-                Outside.pctileHVN_Value = value;
+                Outside.NodesParams.pctileHVN_Value = value;
                 SetApplyVisibility();
             }
         }
         private void UpdateLVN_Pctile()
         {
             int value = int.TryParse(textInputMap["LvnPctileKey"].Text, out var n) ? n : -1;
-            if (value > 0 && value != Outside.pctileLVN_Value)
+            if (value > 0 && value != Outside.NodesParams.pctileLVN_Value)
             {
-                Outside.pctileLVN_Value = value;
+                Outside.NodesParams.pctileLVN_Value = value;
                 SetApplyVisibility();
             }
         }
@@ -4096,9 +3934,9 @@ namespace cAlgo
         private void UpdateTPO()
         {
             var selected = comboBoxMap["UpdateTPOKey"].SelectedItem;
-            if (Enum.TryParse(selected, out UpdateProfile_Data updateType) && updateType != Outside.UpdateProfile_Input)
+            if (Enum.TryParse(selected, out UpdateProfile_Data updateType) && updateType != Outside.ProfileParams.UpdateProfile_Input)
             {
-                Outside.UpdateProfile_Input = updateType;
+                Outside.ProfileParams.UpdateProfile_Input = updateType;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -4151,12 +3989,12 @@ namespace cAlgo
                 PopupNotificationState.InProgress
             );
 
-            Outside.TPOMode_Input = Outside.TPOMode_Input switch
+            Outside.GeneralParams.TPOMode_Input = Outside.GeneralParams.TPOMode_Input switch
             {
                 TPOMode_Data.Aggregated => TPOMode_Data.Aggregated,
                 _ => TPOMode_Data.Aggregated
             };
-            ModeBtn.Text = Outside.TPOMode_Input.ToString();
+            ModeBtn.Text = Outside.GeneralParams.TPOMode_Input.ToString();
             RefreshVisibility();
             RecalculateOutsideWithMsg();
 
@@ -4171,12 +4009,12 @@ namespace cAlgo
                 PopupNotificationState.InProgress
             );
 
-            Outside.TPOMode_Input = Outside.TPOMode_Input switch
+            Outside.GeneralParams.TPOMode_Input = Outside.GeneralParams.TPOMode_Input switch
             {
                 TPOMode_Data.Aggregated => TPOMode_Data.Aggregated,
                 _ => TPOMode_Data.Aggregated
             };
-            ModeBtn.Text = Outside.TPOMode_Input.ToString();
+            ModeBtn.Text = Outside.GeneralParams.TPOMode_Input.ToString();
             RefreshVisibility();
             RecalculateOutsideWithMsg();
 
@@ -4223,7 +4061,7 @@ namespace cAlgo
 
             // Manually hidden Apply Button
             ApplyBtn.IsVisible = false;
-            RangeBtn.IsVisible = Outside.EnableFixedRange;
+            RangeBtn.IsVisible = Outside.ProfileParams.EnableFixedRange;
         }
 
         private void RefreshHighlighting()
@@ -4337,7 +4175,7 @@ namespace cAlgo
             }
 
             // Save current volume mode to start from there later.
-            storageModel.Params["PanelMode"] = Outside.TPOMode_Input;
+            storageModel.Params["PanelMode"] = Outside.GeneralParams.TPOMode_Input;
 
             Outside.LocalStorage.SetObject(GetStorageKey(), storageModel, LocalStorageScope.Device);
             Outside.LocalStorage.Flush(LocalStorageScope.Device);
@@ -4397,7 +4235,7 @@ namespace cAlgo
             // Load the previously saved volume mode.
             string tpoModeText = storageModel.Params["PanelMode"].ToString();
             _ = Enum.TryParse(tpoModeText, out TPOMode_Data tpoMode);
-            Outside.TPOMode_Input = tpoMode;
+            Outside.GeneralParams.TPOMode_Input = tpoMode;
             ModeBtn.Text = tpoModeText;
 
             // Use loaded params as _originalValues
@@ -4439,7 +4277,7 @@ namespace cAlgo
                     Text = (_isExpanded ? "▼ " : "► ") + text, // ▼ expanded / ► collapsed
                     Padding = 0,
                     // Width = 200,
-                    Width = 230, // ParamsPanel Width
+                    Width = 250, // ParamsPanel Width
                     Height = 25,
                     Margin = "0 10 0 0",
                     Style = Styles.CreateButtonStyle(),
@@ -4588,13 +4426,13 @@ namespace cAlgo
 
     // ================ HVN + LVN ================
     public static class NodesAnalizer {
-        
+
         public static double[] FixedKernel(double sigma = 2.0) {
             int radius = (int)(3 * sigma);
             int size = radius * 2 + 1;
 
             double[] kernel = new double[size];
-            
+
             double sigma2 = sigma * sigma;
             double twoSigma2 = 2.0 * sigma2;
             double invSigma2 = 1.0 / twoSigma2;
@@ -4618,7 +4456,7 @@ namespace cAlgo
         public static double[] FixedCoefficients(int windowSize = 9) {
             if (windowSize % 2 == 0)
                 throw new ArgumentException("windowSize must be odd");
-            
+
             int polyOrder = 3;
             if (polyOrder >= windowSize)
                 throw new ArgumentException("polyOrder must be < windowSize");
@@ -4652,7 +4490,7 @@ namespace cAlgo
 
             return coeffs;
         }
-        
+
         // === Smoothing ==
         // logic generated/converted by LLM
         // Added fixed kernel/coefficients
@@ -4661,7 +4499,7 @@ namespace cAlgo
             int radius = (int)(3 * sigma);
 
             fixedKernel ??= Array.Empty<double>();
-            
+
             double[] kernel;
             if (fixedKernel.Length == 0)
             {
@@ -4709,22 +4547,22 @@ namespace cAlgo
         {
             if (windowSize % 2 == 0)
                 throw new ArgumentException("windowSize must be odd");
-            
+
             int polyOrder = 3;
             if (polyOrder >= windowSize)
                 throw new ArgumentException("polyOrder must be < windowSize");
 
             fixedCoeff ??= Array.Empty<double>();
-            
+
             double[] coeffs;
             if (fixedCoeff.Length == 0)
                 coeffs = FixedCoefficients(windowSize);
             else
                 coeffs = fixedCoeff;
-                
+
             int half = windowSize / 2;
             int size = windowSize;
-            
+
             // --- Pad signal (edge mode) ---
             int n = y.Length;
             double[] padded = new double[n + 2 * half];
@@ -4734,7 +4572,7 @@ namespace cAlgo
 
             for (int i = 0; i < n; i++)
                 padded[i + half] = y[i];
-            
+
             for (int i = 0; i < half; i++)
                 padded[n + half + i] = y[n - 1];
 
@@ -4832,7 +4670,7 @@ namespace cAlgo
                 if (arr[i] > arr[i - 1] && arr[i] > arr[i + 1])
                     maximum.Add(i);
             }
-            
+
             return (maximum, minimum);
         }
         public static (List<int> peaks, List<int> valleys) ProfileTopology(double[] profile)
@@ -4872,7 +4710,7 @@ namespace cAlgo
                 if (s1 < 0 && s2 > 0 && d2[i] > 0)
                     valleys.Add(i);
             }
-            
+
             return (peaks, valleys);
         }
         public static (List<int> hvnIdx, List<int> lvnIdx) PercentileNodes(double[] profile, int hvnPct, int lvnPct)
@@ -4894,7 +4732,7 @@ namespace cAlgo
                 if (profile[i] <= lvnThreshold)
                     lvnIdx.Add(i);
             }
-            
+
             return (hvnIdx, lvnIdx);
         }
 
@@ -4916,7 +4754,7 @@ namespace cAlgo
             double frac = pos - lo;
             return copy[lo] * (1.0 - frac) + copy[hi] * frac;
         }
-        
+
         // === Volume Node => Levels
         public static (int Low, int High) HVN_SymmetricVA(int startIdx, int endIdx, int pocIdx, double vaPct = 0.70)
         {
@@ -4950,7 +4788,7 @@ namespace cAlgo
 
             for (int i = 1; i < indices.Count; i++)
             {
-                if (indices[i] == indices[i - 1] + 1) 
+                if (indices[i] == indices[i - 1] + 1)
                     current.Add(indices[i]);
                 else {
                     current = new List<int> { indices[i] };
@@ -4959,6 +4797,107 @@ namespace cAlgo
             }
 
             return groups;
+        }
+
+        // === can/should be static ===
+        public static (List<int> strongHvnIdxs, List<int> stronglvnIdxs) GetStrongNodes(double[] profileSmoothed, List<int> hvnsRaw, List<int> lvnsRaw, double hvnPct, double lvnPct) {
+            double globalPoc = profileSmoothed.Max();
+
+            double decimalHvnPct = Math.Round(hvnPct / 100.0, 3);
+            double decimalLvnPct = Math.Round(lvnPct / 100.0, 3);
+
+            var strongHvns = new List<int>();
+            var strongLvns = new List<int>();
+
+            foreach (int idx in hvnsRaw)
+            {
+                if (profileSmoothed[idx] >= decimalHvnPct * globalPoc)
+                    strongHvns.Add(idx);
+            }
+
+            foreach (int idx in lvnsRaw)
+            {
+                if (profileSmoothed[idx] <= decimalLvnPct * globalPoc)
+                    strongLvns.Add(idx);
+            }
+
+            return (strongHvns, strongLvns);
+        }
+
+        public static List<(int Start, int End, int Poc)> GetBells(double[] profileSmoothed, List<int> lvnsRaw)
+        {
+            // Split profile by LVNs
+            var areasBetween = new List<(int Start, int End)>();
+            int start = 0;
+            foreach (int lvn in lvnsRaw)
+            {
+                areasBetween.Add((start, lvn));
+                start = lvn;
+            }
+            areasBetween.Add((start, profileSmoothed.Length - 1));
+
+            // Extract mini-bells
+            var bells = new List<(int Start, int End, int Poc)>();
+            foreach (var (Start, End) in areasBetween)
+            {
+                int startIndex = Start;
+                int endIndex = End;
+
+                if (endIndex <= startIndex)
+                    continue;
+
+                int pocIdx = startIndex;
+                double maxVol = profileSmoothed[startIndex];
+
+                for (int i = startIndex + 1; i < endIndex; i++)
+                {
+                    if (profileSmoothed[i] > maxVol)
+                    {
+                        maxVol = profileSmoothed[i];
+                        pocIdx = i;
+                    }
+                }
+
+                bells.Add((startIndex, endIndex, pocIdx));
+            }
+
+            return bells;
+        }
+
+        public static (List<(double Low, double Center, double High)> hvnLvls, List<(int Low, int Center, int High)> hvnIdxs,
+                       List<(double Low, double Center, double High)> lvnLvls, List<(int Low, int Center, int High)> lvnIdxs)
+                       GetBandsTuples(double[] profileSmoothed, double[] profilePrices, List<int> lvnsRaw, double hvnPct, double lvnPct)
+        {
+            // Extract mini-bells
+            var bells = GetBells(profileSmoothed, lvnsRaw);
+
+            // Extract HVN/LVN/POC + Levels
+            // [(low, center, high), ...]
+            var hvnLevels = new List<(double Low, double Center, double High)>();
+            var hvnIndexes = new List<(int Low, int Center, int High)>();
+
+            var lvnLevels = new List<(double Low, double Center, double High)>();
+            var lvnIndexes = new List<(int Low, int Center, int High)>();
+
+            double hvnBandPct = Math.Round(hvnPct / 100.0, 3);
+            double lvnBandPct = Math.Round(lvnPct / 100.0, 3);
+
+            foreach (var (startIdx, endIdx, pocIdx) in bells)
+            {
+                // HVNs/POCs + levels
+                var (hvnLow, hvnHigh) = HVN_SymmetricVA(startIdx, endIdx, pocIdx, hvnBandPct);
+
+                hvnLevels.Add( (profilePrices[hvnLow], profilePrices[pocIdx], profilePrices[hvnHigh]) );
+                hvnIndexes.Add( (hvnLow, pocIdx, hvnHigh) );
+
+                // LVNs + Levels
+                var (lvnLow, lvnHigh) = LVN_SymmetricBand( startIdx, endIdx, lvnBandPct);
+
+                lvnIndexes.Add( (lvnLow, startIdx, lvnHigh) );
+                lvnLevels.Add( (profilePrices[lvnLow], profilePrices[startIdx], profilePrices[lvnHigh]) );
+            }
+
+            return (hvnLevels, hvnIndexes, lvnLevels, lvnIndexes);
         }
     }
 }

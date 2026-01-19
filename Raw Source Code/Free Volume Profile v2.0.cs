@@ -26,7 +26,7 @@ What's new in rev. 1? (after ODF_AGG)
 - Concurrent Live VP Update
 - Show Any or All (Mini-VPs/Daily/Weekly/Monthly) Profiles at once!
 
-Last update => 09/01/2026
+Last update => 19/01/2026
 ===========================
 
 What's new in rev. 2? (2026)
@@ -34,9 +34,13 @@ What's new in rev. 2? (2026)
     - Detection:
       - Smoothing => [Gaussian, Savitzky_Golay]
       - Nodes => [LocalMinMax, Topology, Percentile]
+      - (Tip) Use "Percentile" for "Savitzky_Golay".
     - Levels(bands)
-      - VA-like (set by percentage)
-      - (Tip) Use 'LineStyles = Solid" if any stuttering/lagging occurs when scrolling at profiles on chart (Reduce GPU workload). 
+      - VA-like, set by percentage.
+      - (Important!) The "mini-pocs" shown in 'HVN_With_Bands' are derived from LVN splits!
+        - Decrease the "(%) <= POC" input of "Only Strong?" when filtering the LVNs or HVN_With_Bands.
+        - This 'rule' apply only to [LocalMinMax, Topology].
+    - (Tip) Use 'LineStyles = Solid" if any stuttering/lagging occurs when scrolling at profiles on chart (Reduce GPU workload). 
       
 - Improved Performance of (all modes):
     - 'VA + POC'
@@ -47,18 +51,6 @@ What's new in rev. 2? (2026)
     - Monthly_Aligned (limited to the current Month)
     - From_Profile (available to any period without the 'bug' between months)
     
-    
-Final revision (2025)
-- Fixed Range Profiles
-- Code optimization/readability, mostly switch expressions
-- Fix: Params Panel on MacOs
-    - Supposedly cut short/half the size (Can't reproduce it through VM)
-    - WrapPanel isn't fully supported (The button is hidden)
-    - MissingMethodException on cAlgo.API.Panel.get_Children() (...)
-        - At ToggleExpandCollapse event.
-
-- Tested on MacOS (12 Monterey / 13 Ventura) without 3D accelerated graphics
-
 ===========================
 
 AUTHOR: srlcarlg
@@ -240,7 +232,7 @@ namespace cAlgo
         public int ThicknessVA { get; set; }
 
         
-        [Parameter("Color HVN:", DefaultValue = "Gold" , Group = "==== HVN/LVN ====")]
+        [Parameter("Color HVN:", DefaultValue = "#DFFFD700" , Group = "==== HVN/LVN ====")]
         public Color ColorHVN { get; set; }
         
         [Parameter("LineStyle HVN:", DefaultValue = LineStyle.LinesDots, Group = "==== HVN/LVN ====")]
@@ -249,7 +241,7 @@ namespace cAlgo
         [Parameter("Thickness HVN:", DefaultValue = 1, MinValue = 1, MaxValue = 5, Group = "==== HVN/LVN ====")]
         public int ThicknessHVN { get; set; }
 
-        [Parameter("Color LVN:", DefaultValue = "Crimson", Group = "==== HVN/LVN ====")]
+        [Parameter("Color LVN:", DefaultValue = "#DFDC143C", Group = "==== HVN/LVN ====")]
         public Color ColorLVN { get; set; }
 
         [Parameter("LineStyle LVN:", DefaultValue = LineStyle.LinesDots, Group = "==== HVN/LVN ====")]
@@ -262,13 +254,13 @@ namespace cAlgo
         [Parameter("Color Band:", DefaultValue = "#19F0F8FF",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
         public Color ColorBand { get; set; }
         
-        [Parameter("Color Lower:", DefaultValue = "PowderBlue",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
+        [Parameter("Color Lower:", DefaultValue = "#6CB0E0E6",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
         public Color ColorBand_Lower { get; set; }
 
-        [Parameter("Color Upper:", DefaultValue = "PowderBlue",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
+        [Parameter("Color Upper:", DefaultValue = "#6CB0E0E6",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
         public Color ColorBand_Upper { get; set; }
 
-        [Parameter("LineStyle Bands:", DefaultValue = LineStyle.Dots, Group = "==== Symmetric Bands (HVN/LVN) ====")]
+        [Parameter("LineStyle Bands:", DefaultValue = LineStyle.DotsVeryRare, Group = "==== Symmetric Bands (HVN/LVN) ====")]
         public LineStyle LineStyleBands { get; set; }
 
         [Parameter("Thickness Bands:", DefaultValue = 1, MinValue = 1, MaxValue = 5, Group = "==== Symmetric Bands (HVN/LVN) ====")]
@@ -281,57 +273,28 @@ namespace cAlgo
         // Moved from cTrader Input to Params Panel
 
         // ==== General ====
-        public int Lookback = 1;
         public enum VolumeMode_Data
         {
             Normal,
             Buy_Sell,
             Delta,
         }
-        public VolumeMode_Data VolumeMode_Input = VolumeMode_Data.Normal;
-
         public enum VPInterval_Data
         {
             Daily,
             Weekly,
             Monthly
         }
-        public VPInterval_Data VPInterval_Input = VPInterval_Data.Daily;
+
+        public class GeneralParams_Info {
+            public int Lookback = 1;
+            public VolumeMode_Data VolumeMode_Input = VolumeMode_Data.Normal;
+            public VPInterval_Data VPInterval_Input = VPInterval_Data.Daily;
+        }
+        public GeneralParams_Info GeneralParams = new();
 
 
         // ==== Volume Profile ====
-        public bool EnableVP = false;
-
-        public enum UpdateProfile_Data
-        {
-            EveryTick_CPU_Workout,
-            ThroughSegments_Balanced,
-            Through_2_Segments_Best,
-        }
-        public UpdateProfile_Data UpdateProfile_Input = UpdateProfile_Data.Through_2_Segments_Best;
-        public bool FillHist_VP = true;
-
-        public enum HistSide_Data
-        {
-            Left,
-            Right,
-        }
-        public HistSide_Data HistogramSide_Input = HistSide_Data.Left;
-
-        public enum HistWidth_Data
-        {
-            _15,
-            _30,
-            _50,
-            _70,
-            _100
-        }
-        public HistWidth_Data HistogramWidth_Input = HistWidth_Data._70;
-
-        public bool EnableWeeklyProfile = false;
-        public bool EnableMonthlyProfile = false;
-        public bool EnableGradient = true;
-
         public enum Distribution_Data
         {
             OHLC,
@@ -345,92 +308,25 @@ namespace cAlgo
             Parabolic_Distribution,
             Triangular_Distribution,
         }
-        public Distribution_Data Distribution_Input = Distribution_Data.OHLC;
-        public bool ShowOHLC = false;
-        public bool EnableFixedRange = false;
-
-
-        // ==== Intraday Profiles ====
-        public bool ShowIntradayProfile = false;
-        public int OffsetBarsInput = 2;
-        public TimeFrame OffsetTimeframeInput = TimeFrame.Hour;
-        public bool FillIntradaySpace { get; set; }
-
-
-        // ==== Mini VPs ====
-        public bool EnableMiniProfiles = true;
-        public TimeFrame MiniVPs_Timeframe = TimeFrame.Hour4;
-        public bool ShowMiniResults = true;
-
-
-        // ==== VA + POC ====
-        public bool ShowVA = false;
-        public int PercentVA = 65;
-        public bool KeepPOC = true;
-        public bool ExtendPOC = false;
-        public bool ExtendVA = false;
-        public int ExtendCount = 1;
-
-        
-        // ==== HVN + LVN ====        
-        public bool EnableNodeDetection = false;
-
-        public enum ProfileSmooth_Data
+        public enum UpdateProfile_Data
         {
-            Gaussian,
-            Savitzky_Golay
+            EveryTick_CPU_Workout,
+            ThroughSegments_Balanced,
+            Through_2_Segments_Best,
         }
-        public ProfileSmooth_Data ProfileSmooth_Input = ProfileSmooth_Data.Gaussian;
-
-        public enum ProfileNode_Data
+        public enum HistSide_Data
         {
-            LocalMinMax,
-            Topology,
-            Percentile
+            Left,
+            Right,
         }
-        public ProfileNode_Data ProfileNode_Input = ProfileNode_Data.LocalMinMax;
-
-        public int pctileHVN_Value = 90;
-        public int pctileLVN_Value = 25;
-
-        public bool onlyStrongNodes = false;
-        public double strongHVN_Pct = 23.6;
-        public double strongLVN_Pct = 55.3;
-
-        public double bandHVN_Pct = 61.8;
-        public double bandLVN_Pct = 23.6;
-
-        public bool extendNodes = false;
-        public int extendNodes_Count = 1;
-        public bool extendNodes_WithBands = false;
-        public bool extendNodes_FromStart = true;
-
-
-        public enum ShowNode_Data
+        public enum HistWidth_Data
         {
-            HVN_With_Bands,
-            HVN_Raw,
-            LVN_With_Bands,
-            LVN_Raw
+            _15,
+            _30,
+            _50,
+            _70,
+            _100
         }
-        public ShowNode_Data ShowNode_Input = ShowNode_Data.HVN_With_Bands;
-
-
-        // ==== Results ====
-        public bool ShowResults = true;
-
-        public enum OperatorBuySell_Data
-        {
-            Sum,
-            Subtraction,
-        }
-        public OperatorBuySell_Data OperatorBuySell_Input = OperatorBuySell_Data.Subtraction;
-
-        public bool ShowMinMaxDelta = false;
-        public bool ShowOnlySubtDelta = true;
-
-        public TimeFrame VOL_Timeframe = TimeFrame.Minute;
-
         // Allow "old" segmentation "From_Profile", 
         // so the "Fixed Range" doesn't "bug" => remains on chart between months (end/start of each month)
         public enum SegmentsFixedRange_Data
@@ -438,8 +334,116 @@ namespace cAlgo
             Monthly_Aligned,
             From_Profile
         }       
-        public SegmentsFixedRange_Data SegmentsFixedRange_Input = SegmentsFixedRange_Data.From_Profile;
         
+        public class ProfileParams_Info {
+            public bool EnableMainVP = false;
+            public Distribution_Data Distribution_Input = Distribution_Data.OHLC;
+            public TimeFrame Source_Timeframe = TimeFrame.Minute;
+
+            // View
+            public UpdateProfile_Data UpdateProfile_Input = UpdateProfile_Data.Through_2_Segments_Best;
+            public bool FillHist_VP = true;
+            public HistSide_Data HistogramSide_Input = HistSide_Data.Left;
+            public HistWidth_Data HistogramWidth_Input = HistWidth_Data._70;
+            public bool EnableGradient = true;
+            public bool ShowOHLC = false;
+
+            // FWM Profiles
+            public bool EnableFixedRange = false;
+            public SegmentsFixedRange_Data SegmentsFixedRange_Input = SegmentsFixedRange_Data.From_Profile;
+            public bool EnableWeeklyProfile = false;
+            public bool EnableMonthlyProfile = false;
+
+            // Intraday Profiles
+            public bool ShowIntradayProfile = false;
+            public bool ShowIntradayNumbers = false;
+            public int OffsetBarsInput = 1;
+            public TimeFrame OffsetTimeframeInput = TimeFrame.Hour;
+            public bool FillIntradaySpace = false;
+
+            // Mini VPs
+            public bool EnableMiniProfiles = true;
+            public TimeFrame MiniVPs_Timeframe = TimeFrame.Hour4;
+            public bool ShowMiniResults = true;
+        }
+        public ProfileParams_Info ProfileParams = new();
+
+
+        // ==== VA + POC ====
+        public class VAParams_Info {
+            public bool ShowVA = false;
+            public int PercentVA = 65;
+            public bool KeepPOC = false;
+            public bool ExtendPOC = false;
+            public bool ExtendVA = false;
+            public int ExtendCount = 1;
+        }
+        public VAParams_Info VAParams = new();
+        
+        
+        // ==== HVN + LVN ====
+        public enum ProfileSmooth_Data
+        {
+            Gaussian,
+            Savitzky_Golay
+        }
+        public enum ProfileNode_Data
+        {
+            LocalMinMax,
+            Topology,
+            Percentile
+        }
+        public enum ShowNode_Data
+        {
+            HVN_With_Bands,
+            HVN_Raw,
+            LVN_With_Bands,
+            LVN_Raw
+        }
+        public class NodesParams_Info {
+
+            public bool EnableNodeDetection = true;
+
+            public ProfileSmooth_Data ProfileSmooth_Input = ProfileSmooth_Data.Gaussian;
+            public ProfileNode_Data ProfileNode_Input = ProfileNode_Data.LocalMinMax;
+
+            public ShowNode_Data ShowNode_Input = ShowNode_Data.LVN_With_Bands;
+            public int pctileHVN_Value = 90;
+            public int pctileLVN_Value = 25;
+
+            public bool onlyStrongNodes = false;
+            public double strongHVN_Pct = 23.6;
+            public double strongLVN_Pct = 55.3;
+
+            public double bandHVN_Pct = 61.8;
+            public double bandLVN_Pct = 23.6;
+
+            public bool extendNodes = false;
+            public int extendNodes_Count = 1;
+            public bool extendNodes_WithBands = false;
+            public bool extendNodes_FromStart = true;
+        }
+        public NodesParams_Info NodesParams = new();
+
+
+        // ==== Results ====
+        public enum OperatorBuySell_Data
+        {
+            Sum,
+            Subtraction,
+        }
+
+        public class ResultParams_Info {
+            public bool ShowResults = true;
+
+            public OperatorBuySell_Data OperatorBuySell_Input = OperatorBuySell_Data.Subtraction;
+
+            public bool ShowMinMaxDelta = false;
+            public bool ShowOnlySubtDelta = true;
+        }
+        public ResultParams_Info ResultParams = new();
+        
+
         // Always Monthly
         public enum SegmentsInterval_Data
         {
@@ -464,32 +468,56 @@ namespace cAlgo
         }
         // intKey is the intervalIndex
         // value is the last updated Highest/Lowest
-        private readonly IDictionary<int, SegmentsExtremumInfo> segmentInfo = new Dictionary<int, SegmentsExtremumInfo>();
-        private readonly IDictionary<int, List<double>> segmentsDict = new Dictionary<int, List<double>>();
-        private readonly IDictionary<string, List<double>> segmentsFromProfile = new Dictionary<string, List<double>>();
+        private readonly Dictionary<int, SegmentsExtremumInfo> segmentInfo = new();
+        private readonly Dictionary<int, List<double>> segmentsDict = new();
+        private readonly Dictionary<string, List<double>> segmentsFromProfile = new();
         private List<double> Segments_VP = new();
 
         // Volume Profile Bars
-        private IDictionary<double, double> VP_VolumesRank = new Dictionary<double, double>();
-        private IDictionary<double, double> VP_VolumesRank_Up = new Dictionary<double, double>();
-        private IDictionary<double, double> VP_VolumesRank_Down = new Dictionary<double, double>();
-        private IDictionary<double, double> VP_VolumesRank_Subt = new Dictionary<double, double>();
-        private IDictionary<double, double> VP_DeltaRank = new Dictionary<double, double>();
+        private Dictionary<double, double> VP_VolumesRank = new();
+        private Dictionary<double, double> VP_VolumesRank_Up = new();
+        private Dictionary<double, double> VP_VolumesRank_Down = new();
+        private Dictionary<double, double> VP_VolumesRank_Subt = new();
+        private Dictionary<double, double> VP_DeltaRank = new();
         private double[] VP_MinMaxDelta = { 0, 0 };
 
         // Weekly, Monthly and Mini VPs
         public class VolumeRankType
         {
-            public IDictionary<double, double> Normal { get; set; } = new Dictionary<double, double>();
-            public IDictionary<double, double> Up { get; set; } = new Dictionary<double, double>();
-            public IDictionary<double, double> Down { get; set; } = new Dictionary<double, double>();
-            public IDictionary<double, double> Delta { get; set;  } = new Dictionary<double, double>();
+            public Dictionary<double, double> Normal { get; set; } = new();
+            public Dictionary<double, double> Up { get; set; } = new();
+            public Dictionary<double, double> Down { get; set; } = new();
+            public Dictionary<double, double> Delta { get; set;  } = new();
             public double[] MinMaxDelta { get; set; } = new double[2];
+
+            public void ClearAllModes() {
+
+                Dictionary<double, double>[] _all = new[] {
+                    Normal, Up, Down, Delta,
+                };
+
+                foreach (var dict in _all)
+                    dict.Clear();
+
+                double[] resetDelta = {0, 0};
+                MinMaxDelta = resetDelta;
+            }
         }
         private readonly VolumeRankType MonthlyRank = new();
         private readonly VolumeRankType WeeklyRank = new();
         private readonly VolumeRankType MiniRank = new();
-        private readonly IDictionary<string, VolumeRankType> FixedRank = new Dictionary<string, VolumeRankType>();
+        private readonly Dictionary<string, VolumeRankType> FixedRank = new();
+
+        // Fixed Range Profile
+        public class RangeObjs_Info {
+            public List<ChartRectangle> rectangles = new();
+            public Dictionary<string, List<ChartText>> infoObjects = new();
+            public Dictionary<string, Border> controlGrids = new();
+        }
+        private readonly RangeObjs_Info RangeObjs = new();
+
+        // HVN + LVN => Performance
+        public double[] nodesKernel = null;
 
         private Bars MiniVPs_Bars;
         private Bars DailyBars;
@@ -504,167 +532,116 @@ namespace cAlgo
             Fixed
         }
 
-        // Its a annoying behavior that happens even in Candles Chart (Time-Based) on any symbol/broker.
-        // where it's jump/pass +1 index when .GetIndexByTime is used... the exactly behavior of Price-Based Charts
-        // Seems to happen only in Lower Timeframes (<=´Daily)
-        // So, to ensure that it works flawless, an additional verification is needed.
+        /*
+          Its a annoying behavior that happens even in Candles Chart (Time-Based) on any symbol/broker.
+          where it's jump/pass +1 index when .GetIndexByTime is used... the exactly behavior of Price-Based Charts
+          Seems to happen only in Lower Timeframes (<=´Daily)
+          So, to ensure that it works flawless, an additional verification is needed.
+        */
         public class CleanedIndex {
-            public int _VP_Interval = 0;
-            public int _Mini = 0;
+            public int MainVP = 0;
+            public int Mini = 0;
+            public void ResetAll() {
+                MainVP = 0;
+                Mini = 0;
+            }
         }
-        private readonly CleanedIndex lastCleaned = new();
+        private readonly CleanedIndex ClearIdx = new();
+
 
         // Concurrent Live VP Update
-        private readonly object _lockSource = new();
-        private readonly object _lockBars = new();
-        private readonly object _lock = new();
-        private readonly object _weeklyLock = new();
-        private readonly object _monthlyLock = new();
-        private readonly object _miniLock = new();
+        private class LockObjs_Info {
+            public readonly object Source = new();
+            public readonly object Bar = new();
+            public readonly object MainVP = new();
+            public readonly object WeeklyVP = new();
+            public readonly object MonthlyVP = new();
+            public readonly object MiniVP = new();
+        }
+        private readonly LockObjs_Info _Locks = new();
 
-        private CancellationTokenSource cts;
-        private Task liveVP_Task;
-        private Task weeklyVP_Task;
-        private Task monthlyVP_Task;
-        private Task miniVP_Task;
-        private bool liveVP_UpdateIt = false;
+
+        private class TaskObjs_Info {
+            public CancellationTokenSource cts;
+            public Task MainVP;
+            public Task WeeklyVP;
+            public Task MonthlyVP;
+            public Task MiniVP;
+        }
+        private readonly TaskObjs_Info _Tasks = new();
+        
+        private bool liveVP_RunWorker = false;
 
         public class LiveVPIndex {
-            public int VP { get; set; }
+            public int MainVP { get; set; }
             public int Mini { get; set; }
             public int Weekly { get; set; }
             public int Monthly { get; set; }
         }
-        private readonly LiveVPIndex liveVP_StartIndexes = new();
-        private List<Bar> Bars_SourceList = new();
-        private DateTime[] Bars_ChartArray = Array.Empty<DateTime>();
+        private readonly LiveVPIndex LiveVPIndexes = new();
+        private List<Bar> BarsSource_List = new();
+        private DateTime[] BarsTime_ChartArray = Array.Empty<DateTime>();
 
         // High-Performance VP_Bars()
-        public class LastBarIndex {
-            public int _Mini = 0;
-            public int _MiniStart = 0;
-            public int _Weekly = 0;
-            public int _WeeklyStart = 0;
-            public int _Monthly = 0;
-            public int _MonthlyStart = 0;
+        public class PerfSourceIndex {
+            public int startIdx_MainVP = 0;
+            public int startIdx_Mini = 0;
+            public int startIdx_Weekly = 0;
+            public int startIdx_Monthly = 0;
+
+            public int lastIdx_MainVP = 0;
+            public int lastIdx_Mini = 0;
+            public int lastIdx_Weekly = 0;
+            public int lastIdx_Monthly = 0;
+
+            public void ResetAll() {
+                lastIdx_MainVP = 0;
+                lastIdx_Mini = 0;
+                lastIdx_Weekly = 0;
+                lastIdx_Monthly = 0;
+            }
         }
-        private readonly LastBarIndex lastBar_ExtraProfiles = new();
-        private int lastBar_VP = 0;
-        private int lastBar_VPStart = 0;
-        private Bars VOL_Bars;
+        private readonly PerfSourceIndex PerformanceSource = new();
+        
+        private Bars Source_Bars;
 
-        // Fixed Range Profile
-        private readonly List<ChartRectangle> _rectangles = new();
-        private readonly Dictionary<string, List<ChartText>> _infoObjects = new();
-        private readonly Dictionary<string, Border> _controlGrids = new();
-
-        // Shared rowHeight
-        private double heightPips = 4;
-        public double heightATR = 4;
-        private double rowHeight = 0;
-
-        // Some required utils
-        private bool configHasChanged = false;
-        private bool isUpdateVP = false;
-        private bool isEndChart = false;
-        public bool isPriceBased_Chart = false;
-        public bool isRenkoChart = false;
-        private double prevUpdatePrice;
-
+        // Source Volume
+        public class SourceObjs_Info {
+            public PopupNotification asyncBarsPopup = null;
+            public bool startAsyncLoading = false;
+            public bool isLoadingComplete = false;
+        }
+        private readonly SourceObjs_Info SourceObjs = new();
+        
         // Timer
         private class TimerHandler {
             public bool isAsyncLoading = false;
         }
         private readonly TimerHandler timerHandler = new();
 
-        PopupNotification asyncBarsPopup = null;
-        private bool loadingAsyncBars = false;
-        private bool loadingBarsComplete = false;
+        // Shared rowHeight
+        private double rowHeight = 0;
+        private double heightPips = 4;
+        public double heightATR = 4;
 
-        // HVN + LVN => Performance
-        private double[] nodesKernel = null;
-        
+        // Some required utils
+        private double prevUpdatePrice;
+        private bool configHasChanged = false;
+        private bool isUpdateVP = false;
+        private bool isEndChart = false;
+        public bool isPriceBased_Chart = false;
+        public bool isRenkoChart = false;
+
         // Params Panel
         private Border ParamBorder;
         public class IndicatorParams
         {
-            // ==== General ====
-            public int LookBack { get; set; }
-            public VolumeMode_Data VolMode { get; set; }
+            public GeneralParams_Info GeneralParams { get; set; }
             public double RowHeightInPips { get; set; }
-            public VPInterval_Data VPInterval { get; set; }
-
-            // ==== Volume Profile ====
-            public bool EnableVP { get; set; }
-            public bool EnableWeeklyProfile { get; set; }
-            public bool EnableMonthlyProfile { get; set; }
-
-            // View
-            public bool FillHist_VP { get; set; }
-            public HistSide_Data HistogramSide { get; set; }
-            public HistWidth_Data HistogramWidth { get; set; }
-            public bool Gradient { get; set; }
-            public bool OHLC { get; set; }
-            public bool FixedRange { get; set; }
-
-            // Intraday View
-            public bool ShowIntradayProfile { get; set; }
-            public bool FillIntradaySpace { get; set; }
-            public int OffsetBarsIntraday { get; set; }
-            public TimeFrame OffsetTimeframeIntraday { get; set; }
-
-            // ==== Mini VPs ====
-            public bool EnableMiniProfiles { get; set; }
-            public TimeFrame MiniVPsTimeframe { get; set; }
-            public bool ShowMiniResults { get; set; }
-
-            // ==== VA + POC ====
-            public bool ShowVA { get; set; }
-            public int PercentVA { get; set; }
-            public bool KeepPOC { get; set; }
-            public bool ExtendPOC { get; set; }
-            public bool ExtendVA { get; set; }
-            public int ExtendCount { get; set; }
-            
-            
-            // ==== HVN + LVN ====        
-            public bool EnableNodes { get; set; }
-
-            public ProfileSmooth_Data ProfileSmooth { get; set; }
-
-            public ProfileNode_Data ProfileNode { get; set; }
-
-            public ShowNode_Data ShowNode { get; set; }
-            public double BandHVN { get; set; }
-            public double BandLVN { get; set; }
-
-            public bool OnlyStrong { get; set; }
-            public double StrongHVN { get; set; }
-            public double StrongLVN { get; set; }
-            
-            public int PctileHVN { get; set; }
-            public int PctileLVN { get; set; }
-
-            public bool ExtendNodes { get; set; }
-            public int ExtendNodes_Count { get; set; }
-            public bool ExtendNodes_WithBands { get; set; }
-            public bool ExtendNodes_FromStart { get; set; }
-
-
-            // ==== Results ====
-            public bool ShowResults { get; set; }
-            // Results - Buy_Sell / Delta
-            public bool ShowSideTotal { get; set; }
-            public OperatorBuySell_Data OperatorBuySell { get; set; }
-            // Results - Delta
-            public bool ShowMinMax { get; set; }
-            public bool ShowOnlySubtDelta { get; set; }
-
-            // ==== Misc ====
-            public UpdateProfile_Data UpdateProfileStrategy { get; set; }
-            public TimeFrame Source { get; set; }
-            public Distribution_Data Distribution { get; set; }
-            public SegmentsFixedRange_Data SegmentsFixedRange { get; set; }
+            public ProfileParams_Info ProfileParams { get; set; }
+            public VAParams_Info VAParams { get; set; }
+            public NodesParams_Info NodesParams { get; set; }
+            public ResultParams_Info ResultParams { get; set; }
         }
 
         private void AddHiddenButton(Panel panel, Color btnColor)
@@ -697,38 +674,38 @@ namespace cAlgo
                 if (Chart.TimeFrame >= TimeFrame.Minute && Chart.TimeFrame <= TimeFrame.Minute4)
                 {
                     if (Chart.TimeFrame == TimeFrame.Minute)
-                        MiniVPs_Timeframe = TimeFrame.Hour;
+                        ProfileParams.MiniVPs_Timeframe = TimeFrame.Hour;
                     else if (Chart.TimeFrame == TimeFrame.Minute2)
-                        MiniVPs_Timeframe = TimeFrame.Hour2;
+                        ProfileParams.MiniVPs_Timeframe = TimeFrame.Hour2;
                     else if (Chart.TimeFrame <= TimeFrame.Minute4)
-                        MiniVPs_Timeframe = TimeFrame.Hour3;
+                        ProfileParams.MiniVPs_Timeframe = TimeFrame.Hour3;
                 }
                 else if (Chart.TimeFrame >= TimeFrame.Minute5 && Chart.TimeFrame <= TimeFrame.Minute10)
                 {
                     if (Chart.TimeFrame == TimeFrame.Minute5)
-                        MiniVPs_Timeframe = TimeFrame.Hour4;
+                        ProfileParams.MiniVPs_Timeframe = TimeFrame.Hour4;
                     else if (Chart.TimeFrame == TimeFrame.Minute6)
-                        MiniVPs_Timeframe = TimeFrame.Hour6;
+                        ProfileParams.MiniVPs_Timeframe = TimeFrame.Hour6;
                     else if (Chart.TimeFrame <= TimeFrame.Minute8)
-                        MiniVPs_Timeframe = TimeFrame.Hour8;
+                        ProfileParams.MiniVPs_Timeframe = TimeFrame.Hour8;
                     else if (Chart.TimeFrame <= TimeFrame.Minute10)
-                        MiniVPs_Timeframe = TimeFrame.Hour12;
+                        ProfileParams.MiniVPs_Timeframe = TimeFrame.Hour12;
                 }
                 else if (Chart.TimeFrame >= TimeFrame.Minute15 && Chart.TimeFrame <= TimeFrame.Hour8)
                 {
                     if (Chart.TimeFrame >= TimeFrame.Minute15 && Chart.TimeFrame <= TimeFrame.Hour)
-                        MiniVPs_Timeframe = TimeFrame.Daily;
+                        ProfileParams.MiniVPs_Timeframe = TimeFrame.Daily;
 
                     else if (Chart.TimeFrame <= TimeFrame.Hour8) {
-                        EnableVP = true;
-                        EnableMiniProfiles = false;
-                        VPInterval_Input = VPInterval_Data.Weekly;
+                        ProfileParams.EnableMainVP = true;
+                        ProfileParams.EnableMiniProfiles = false;
+                        GeneralParams.VPInterval_Input = VPInterval_Data.Weekly;
                     }
                 }
                 else if (Chart.TimeFrame >= TimeFrame.Hour12 && Chart.TimeFrame <= TimeFrame.Weekly) {
-                    EnableVP = true;
-                    EnableMiniProfiles = false;
-                    VPInterval_Input = VPInterval_Data.Monthly;
+                    ProfileParams.EnableMainVP = true;
+                    ProfileParams.EnableMiniProfiles = false;
+                    GeneralParams.VPInterval_Input = VPInterval_Data.Monthly;
                 }
             }
 
@@ -763,13 +740,13 @@ namespace cAlgo
             DailyBars = MarketData.GetBars(TimeFrame.Daily);
             WeeklyBars = MarketData.GetBars(TimeFrame.Weekly);
             MonthlyBars = MarketData.GetBars(TimeFrame.Monthly);
-            MiniVPs_Bars = MarketData.GetBars(MiniVPs_Timeframe);
-            VOL_Bars = MarketData.GetBars(VOL_Timeframe);
+            MiniVPs_Bars = MarketData.GetBars(ProfileParams.MiniVPs_Timeframe);
+            Source_Bars = MarketData.GetBars(ProfileParams.Source_Timeframe);
 
             // Concurrent Live VP
             Bars.BarOpened += (_) => {
                 isUpdateVP = true;
-                if (UpdateProfile_Input != UpdateProfile_Data.EveryTick_CPU_Workout)
+                if (ProfileParams.UpdateProfile_Input != UpdateProfile_Data.EveryTick_CPU_Workout)
                     prevUpdatePrice = _.Bars.LastBar.Close;
             };
 
@@ -823,92 +800,27 @@ namespace cAlgo
 
             IndicatorParams DefaultParams = new()
             {
-                // General
-                LookBack = Lookback,
-                VolMode = VolumeMode_Input,
+                GeneralParams = GeneralParams,
                 RowHeightInPips = heightPips,
-                VPInterval = VPInterval_Input,
-
-                // Volume Profile
-                EnableVP = EnableVP,
-                EnableWeeklyProfile = EnableWeeklyProfile,
-                EnableMonthlyProfile = EnableMonthlyProfile,
-
-                // View
-                FillHist_VP = FillHist_VP,
-                HistogramSide = HistogramSide_Input,
-                HistogramWidth = HistogramWidth_Input,
-                Gradient = EnableGradient,
-                OHLC = ShowOHLC,
-                FixedRange = EnableFixedRange,
-
-                // Intraday View
-                ShowIntradayProfile = ShowIntradayProfile,
-                OffsetBarsIntraday = OffsetBarsInput,
-                OffsetTimeframeIntraday = OffsetTimeframeInput,
-                FillIntradaySpace = FillIntradaySpace,
-
-                // Mini VPs
-                EnableMiniProfiles = EnableMiniProfiles,
-                MiniVPsTimeframe = MiniVPs_Timeframe,
-                ShowMiniResults = ShowMiniResults,
-
-                // VA + POC
-                ShowVA = ShowVA,
-                PercentVA = PercentVA,
-                KeepPOC = KeepPOC,
-                ExtendPOC = ExtendPOC,
-                ExtendVA = ExtendVA,
-                ExtendCount = ExtendCount,
-
-                // HVN + LVN
-                EnableNodes = EnableNodeDetection,
-                ProfileSmooth = ProfileSmooth_Input,
-                ProfileNode = ProfileNode_Input,
-                
-                ShowNode = ShowNode_Input,
-                BandHVN = bandHVN_Pct,
-                BandLVN = bandLVN_Pct,
-
-                OnlyStrong = onlyStrongNodes,
-                StrongHVN = strongHVN_Pct,
-                StrongLVN = strongLVN_Pct,
-
-                PctileHVN = pctileHVN_Value,
-                PctileLVN = pctileLVN_Value,
-                
-                ExtendNodes = extendNodes,
-                ExtendNodes_Count = extendNodes_Count,
-                ExtendNodes_WithBands = extendNodes_WithBands,
-                ExtendNodes_FromStart = extendNodes_FromStart,
-
-                // Results
-                ShowResults = ShowResults,
-                OperatorBuySell = OperatorBuySell_Input,
-                ShowMinMax = ShowMinMaxDelta,
-                ShowOnlySubtDelta = ShowOnlySubtDelta,
-
-                // Misc
-                UpdateProfileStrategy = UpdateProfile_Input,
-                Source = VOL_Timeframe,
-                Distribution = Distribution_Input,
-                SegmentsFixedRange = SegmentsFixedRange_Input
+                ProfileParams = ProfileParams,
+                VAParams = VAParams,
+                NodesParams = NodesParams,
+                ResultParams = ResultParams,
             };
 
             ParamsPanel ParamPanel = new(this, DefaultParams);
 
-            Border borderParam = new()
+            ParamBorder = new()
             {
                 VerticalAlignment = vAlign,
                 HorizontalAlignment = hAlign,
                 Style = Styles.CreatePanelBackgroundStyle(),
                 Margin = "20 40 20 20",
                 // ParamsPanel - Lock Width
-                Width = 262,
+                Width = 290,
                 Child = ParamPanel
             };
-            Chart.AddControl(borderParam);
-            ParamBorder = borderParam;
+            Chart.AddControl(ParamBorder);
 
             StackPanel stackPanel = new() {
                 VerticalAlignment = vAlign,
@@ -930,18 +842,18 @@ namespace cAlgo
             CreateSegments(index);
 
             // WM
-            if (EnableVP && !IsLastBar){
+            if (!IsLastBar) {
                 CreateMonthlyVP(index);
                 CreateWeeklyVP(index);
             }
 
             // LookBack
-            Bars vpBars = VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
-                           VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
+            Bars vpBars = GeneralParams.VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
+                           GeneralParams.VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
 
             // Get Index of VP Interval to continue only in Lookback
             int iVerify = vpBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
-            if (vpBars.ClosePrices.Count - iVerify > Lookback)
+            if (vpBars.ClosePrices.Count - iVerify > GeneralParams.Lookback)
                 return;
 
             int TF_idx = vpBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
@@ -950,7 +862,7 @@ namespace cAlgo
             // === Clean Dicts/others ===
             if (index == startIndex ||
                 (index - 1) == startIndex && isPriceBased_Chart ||
-                (index - 1) == startIndex && (index - 1) != lastCleaned._VP_Interval
+                (index - 1) == startIndex && (index - 1) != ClearIdx.MainVP
             )
                 CleanUp_MainVP(index, startIndex);
 
@@ -960,7 +872,7 @@ namespace cAlgo
                 // Allows MiniVPs if (!EnableVP)
                 CreateMiniVPs(index);
 
-                if (EnableVP)
+                if (ProfileParams.EnableMainVP)
                     VolumeProfile(startIndex, index);
 
                 isUpdateVP = true; // chart end
@@ -969,9 +881,9 @@ namespace cAlgo
             {
                 if (UpdateStrategy_Input == UpdateStrategy_Data.SameThread_MayFreeze)
                 {
-                    if (EnableVP)
+                    if (ProfileParams.EnableMainVP)
                         LiveVP_Update(startIndex, index);
-                    else if (!EnableVP && EnableMiniProfiles)
+                    else if (!ProfileParams.EnableMainVP && ProfileParams.EnableMiniProfiles)
                         LiveVP_Update(startIndex, index, true);
                 }
                 else
@@ -990,7 +902,7 @@ namespace cAlgo
             // Segments are identified by TF_idx(start)
             // No need to clean up even if it's Daily Interval
             if (!IsLastBar)
-                lastBar_VPStart = lastBar_VP;
+                PerformanceSource.startIdx_MainVP = PerformanceSource.lastIdx_MainVP;
             VP_VolumesRank.Clear();
             VP_VolumesRank_Up.Clear();
             VP_VolumesRank_Down.Clear();
@@ -1000,7 +912,7 @@ namespace cAlgo
             double[] resetDelta = { 0, 0 };
             VP_MinMaxDelta = resetDelta;
 
-            lastCleaned._VP_Interval = index == startIndex ? index : (index - 1);
+            ClearIdx.MainVP = index == startIndex ? index : (index - 1);
         }
 
         // *********** INTERVAL SEGMENTS ***********
@@ -1117,131 +1029,21 @@ namespace cAlgo
         }
         private List<double> GetRangeSegments(int TF_idx, string fixedKey) 
         {
-            if (SegmentsFixedRange_Input == SegmentsFixedRange_Data.From_Profile)
+            if (ProfileParams.SegmentsFixedRange_Input == SegmentsFixedRange_Data.From_Profile)
                 return segmentsFromProfile[fixedKey];
             else
                 return segmentsDict[TF_idx];
         }
 
 
-        // *********** MWM PROFILES ***********
-        private void CreateMiniVPs(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
-            if (EnableMiniProfiles)
-            {
-                int miniIndex = MiniVPs_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
-                int miniStart = Bars.OpenTimes.GetIndexByTime(MiniVPs_Bars.OpenTimes[miniIndex]);
-
-                if (index == miniStart ||
-                    (index - 1) == miniStart && isPriceBased_Chart ||
-                    (index - 1) == miniStart && (index - 1) != lastCleaned._Mini || loopStart
-                ) {
-                    if (!IsLastBar)
-                        lastBar_ExtraProfiles._MiniStart = lastBar_ExtraProfiles._Mini;
-                    MiniRank.Normal.Clear();
-                    MiniRank.Up.Clear();
-                    MiniRank.Down.Clear();
-                    MiniRank.Delta.Clear();
-                    double[] resetDelta = {0, 0};
-                    MiniRank.MinMaxDelta = resetDelta;
-                    lastCleaned._Mini = index == miniStart ? index : (index - 1);
-                }
-                if (!isConcurrent)
-                    VolumeProfile(miniStart, index, ExtraProfiles.MiniVP, isLoop);
-                else
-                {
-                    miniVP_Task ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.MiniVP, cts.Token));
-
-                    liveVP_StartIndexes.Mini = miniStart;
-
-                    if (index != miniStart) {
-                        lock (_miniLock)
-                            VolumeProfile(miniStart, index, ExtraProfiles.MiniVP, false, true);
-                    }
-                }
-            }
-        }
-        private void CreateWeeklyVP(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
-            if (EnableVP && EnableWeeklyProfile)
-            {
-                // Avoid recalculating the same period.
-                if (VPInterval_Input == VPInterval_Data.Weekly)
-                    return;
-
-                int weekIndex = WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
-                int weekStart = Bars.OpenTimes.GetIndexByTime(WeeklyBars.OpenTimes[weekIndex]);
-
-                if (index == weekStart || (index - 1) == weekStart && isPriceBased_Chart || loopStart)
-                {
-                    if (!IsLastBar)
-                        lastBar_ExtraProfiles._WeeklyStart = lastBar_ExtraProfiles._Weekly;
-                    WeeklyRank.Normal.Clear();
-                    WeeklyRank.Up.Clear();
-                    WeeklyRank.Down.Clear();
-                    WeeklyRank.Delta.Clear();
-                    double[] resetDelta = {0, 0};
-                    WeeklyRank.MinMaxDelta = resetDelta;
-                }
-
-                if (!isConcurrent)
-                    VolumeProfile(weekStart, index, ExtraProfiles.Weekly, isLoop);
-                else
-                {
-                    weeklyVP_Task ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.Weekly, cts.Token));
-
-                    liveVP_StartIndexes.Weekly = weekStart;
-
-                    if (index != weekStart) {
-                        lock (_weeklyLock)
-                            VolumeProfile(weekStart, index, ExtraProfiles.Weekly, false, true);
-                    }
-                }
-            }
-        }
-        private void CreateMonthlyVP(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
-            // Avoid recalculating the same period.
-            if (VPInterval_Input == VPInterval_Data.Monthly)
-                return;
-
-            if (EnableVP && EnableMonthlyProfile)
-            {
-                int monthIndex = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
-                int monthStart = Bars.OpenTimes.GetIndexByTime(MonthlyBars.OpenTimes[monthIndex]);
-
-                if (index == monthStart || (index - 1) == monthStart && isPriceBased_Chart || loopStart) {
-                    if (!IsLastBar)
-                        lastBar_ExtraProfiles._MonthlyStart = lastBar_ExtraProfiles._Monthly;
-                    MonthlyRank.Normal.Clear();
-                    MonthlyRank.Up.Clear();
-                    MonthlyRank.Down.Clear();
-                    MonthlyRank.Delta.Clear();
-                    double[] resetDelta = {0, 0};
-                    MonthlyRank.MinMaxDelta = resetDelta;
-                }
-
-                if (!isConcurrent)
-                    VolumeProfile(monthStart, index, ExtraProfiles.Monthly, isLoop);
-                else
-                {
-                    monthlyVP_Task ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.Monthly, cts.Token));
-
-                    liveVP_StartIndexes.Monthly = monthStart;
-
-                    if (index != monthStart) {
-                        lock (_monthlyLock)
-                            VolumeProfile(monthStart, index, ExtraProfiles.Monthly, false, true);
-                    }
-                }
-            }
-        }
-
         // *********** VOLUME PROFILE BARS ***********
         private void VolumeProfile(int iStart, int index, ExtraProfiles extraProfiles = ExtraProfiles.No, bool isLoop = false, bool drawOnly = false, string fixedKey = "", double fixedLowest = 0, double fixedHighest = 0)
         {
             // Weekly/Monthly on Buy_Sell is a waste of time
-            if (VolumeMode_Input == VolumeMode_Data.Buy_Sell && (extraProfiles == ExtraProfiles.Weekly || extraProfiles == ExtraProfiles.Monthly))
+            if (GeneralParams.VolumeMode_Input == VolumeMode_Data.Buy_Sell && (extraProfiles == ExtraProfiles.Weekly || extraProfiles == ExtraProfiles.Monthly))
                return;
                
-            if (extraProfiles == ExtraProfiles.Fixed && SegmentsFixedRange_Input == SegmentsFixedRange_Data.From_Profile)
+            if (extraProfiles == ExtraProfiles.Fixed && ProfileParams.SegmentsFixedRange_Input == SegmentsFixedRange_Data.From_Profile)
                 CreateSegments_FromFixedRange(Bars.OpenPrices[iStart], fixedLowest, fixedHighest, fixedKey);
                 
             // ==== VP ====
@@ -1252,52 +1054,57 @@ namespace cAlgo
             if (Segments_VP.Count == 0 || isLoop)
                 return;
 
-            // For Results
-            Bars mainTF = VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
-                           VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
-            Bars TF_Bars = extraProfiles == ExtraProfiles.No ? mainTF:
-                           extraProfiles == ExtraProfiles.MiniVP ? MiniVPs_Bars :
-                           extraProfiles == ExtraProfiles.Weekly ? WeeklyBars : MonthlyBars; // Fixed should use Monthly Bars, so TF_idx can be used by "whichSegment" variable
-
+            // Results or Fixed Range
+            
+            Bars mainTF = GeneralParams.VPInterval_Input switch {
+                VPInterval_Data.Weekly => WeeklyBars,
+                VPInterval_Data.Monthly => MonthlyBars,
+                _ => DailyBars
+            };                           
+            Bars TF_Bars = extraProfiles switch {
+                ExtraProfiles.MiniVP => MiniVPs_Bars,
+                ExtraProfiles.Weekly => WeeklyBars,
+                ExtraProfiles.Monthly => MonthlyBars,
+                // Fixed should use Monthly Bars, so TF_idx can be used by "whichSegment" variable
+                ExtraProfiles.Fixed => MonthlyBars,
+                _ => mainTF
+            };
             int TF_idx = TF_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
-            double lowest = TF_Bars.LowPrices[TF_idx];
-            double highest = TF_Bars.HighPrices[TF_idx];
-
-            // Mini VPs avoid crash after recalculating
-            if (double.IsNaN(lowest)) {
-                lowest = TF_Bars.LowPrices.LastValue;
-                highest = TF_Bars.HighPrices.LastValue;
-            }
 
             bool gapWeekend = Bars.OpenTimes[iStart].DayOfWeek == DayOfWeek.Friday && Bars.OpenTimes[iStart].Hour < 2;
             DateTime x1_Start = Bars.OpenTimes[iStart + (gapWeekend ? 1 : 0)];
             DateTime xBar = Bars.OpenTimes[index];
 
-            bool isIntraday = ShowIntradayProfile && index == Chart.LastVisibleBarIndex && !isLoop;
+            bool isIntraday = ProfileParams.ShowIntradayProfile && index == Chart.LastVisibleBarIndex && !isLoop;
             DateTime intraDate = xBar;
             
             // Any Volume Mode
             double maxLength = xBar.Subtract(x1_Start).TotalMilliseconds;
-            bool histRightSide = HistogramSide_Input == HistSide_Data.Right;
-
-            HistWidth_Data selectedWidth = HistogramWidth_Input;
-            double maxWidth = selectedWidth == HistWidth_Data._15 ? 1.25 :
-                              selectedWidth == HistWidth_Data._30 ? 1.50 :
-                              selectedWidth == HistWidth_Data._50 ? 2 : 3;
-            double maxHalfWidth = selectedWidth == HistWidth_Data._15 ? 1.12 :
-                                  selectedWidth == HistWidth_Data._30 ? 1.25 :
-                                  selectedWidth == HistWidth_Data._50 ? 1.40 : 1.75;
+            
+            HistWidth_Data selectedWidth = ProfileParams.HistogramWidth_Input;
+            double maxWidth = ProfileParams.HistogramWidth_Input switch {
+                HistWidth_Data._15 => 1.25,
+                HistWidth_Data._30 => 1.50,
+                HistWidth_Data._50 => 2,
+                _ => 3
+            };
+            double maxHalfWidth = ProfileParams.HistogramWidth_Input switch {
+                HistWidth_Data._15 => 1.12,
+                HistWidth_Data._30 => 1.25,
+                HistWidth_Data._50 => 1.40,
+                _ => 1.75
+            };
 
             double proportion_VP = maxLength - (maxLength / maxWidth);
             if (selectedWidth == HistWidth_Data._100)
                 proportion_VP = maxLength;
 
             string prefix = extraProfiles == ExtraProfiles.Fixed ? fixedKey : $"{iStart}";
-            double y1_lowest = extraProfiles == ExtraProfiles.Fixed ? fixedLowest : lowest;
+            bool histRightSide = ProfileParams.HistogramSide_Input == HistSide_Data.Right;
 
             // Profile Selection
-            IDictionary<double, double> vpNormal = new Dictionary<double, double>();
-            if (VolumeMode_Input == VolumeMode_Data.Normal) {
+            Dictionary<double, double> vpNormal = new();
+            if (GeneralParams.VolumeMode_Input == VolumeMode_Data.Normal) {
                 vpNormal = extraProfiles switch
                 {
                     ExtraProfiles.Monthly => MonthlyRank.Normal,
@@ -1308,9 +1115,9 @@ namespace cAlgo
                 };
             }
 
-            IDictionary<double, double> vpBuy = new Dictionary<double, double>();
-            IDictionary<double, double> vpSell = new Dictionary<double, double>();
-            if (VolumeMode_Input == VolumeMode_Data.Buy_Sell) {
+            Dictionary<double, double> vpBuy = new();
+            Dictionary<double, double> vpSell = new();
+            if (GeneralParams.VolumeMode_Input == VolumeMode_Data.Buy_Sell) {
                 vpBuy = extraProfiles switch
                 {
                     ExtraProfiles.MiniVP => MiniRank.Up,
@@ -1325,8 +1132,8 @@ namespace cAlgo
                 };
             }
             
-            IDictionary<double, double> vpDelta = new Dictionary<double, double>();
-            if (VolumeMode_Input == VolumeMode_Data.Delta) {
+            Dictionary<double, double> vpDelta = new();
+            if (GeneralParams.VolumeMode_Input == VolumeMode_Data.Delta) {
                 vpDelta = extraProfiles switch
                 {
                     ExtraProfiles.Monthly => MonthlyRank.Delta,
@@ -1347,6 +1154,25 @@ namespace cAlgo
                 _ => isIntraday
             };
 
+            // (micro)Optimization for all modes
+            double maxValue = GeneralParams.VolumeMode_Input switch {
+                VolumeMode_Data.Normal => vpNormal.Any() ? vpNormal.Values.Max() : 0,
+                VolumeMode_Data.Delta => vpDelta.Any() ? vpDelta.Values.Max() : 0,
+                _ => 0
+            };
+
+            double buyMax = 0;
+            double sellMax = 0;
+            if (GeneralParams.VolumeMode_Input == VolumeMode_Data.Buy_Sell) {
+                buyMax = vpBuy.Any() ? vpBuy.Values.Max() : 0;
+                sellMax = vpSell.Any() ? vpSell.Values.Max() : 0;
+            }
+
+            IEnumerable<double> negativeList = new List<double>();
+            if (GeneralParams.VolumeMode_Input == VolumeMode_Data.Delta)
+                negativeList = vpDelta.Values.Where(n => n < 0);
+
+            // Segments selection
             List<double> whichSegment = extraProfiles == ExtraProfiles.Fixed ? GetRangeSegments(TF_idx, fixedKey) : Segments_VP;
             
             // Manual Refactoring.
@@ -1396,7 +1222,7 @@ namespace cAlgo
                         _ => HistColor,
                     };
 
-                    if (EnableGradient)
+                    if (ProfileParams.EnableGradient)
                     {
                         Color minColor = extraProfiles switch
                         {
@@ -1429,7 +1255,7 @@ namespace cAlgo
 
                     ChartRectangle volHist = Chart.DrawRectangle($"{prefix}_{i}_VP_{extraProfiles}_Normal", x1_Start, lowerSegmentY1, x2, upperSegmentY2, histogramColor);
 
-                    if (FillHist_VP)
+                    if (ProfileParams.FillHist_VP)
                         volHist.IsFilled = true;
 
                     if (histRightSide)
@@ -1467,7 +1293,7 @@ namespace cAlgo
                         {
                             volHist.Time1 = dateOffset_Duo;
                             volHist.Time2 = dateOffset_Duo.AddMilliseconds(-dynLength_Intraday);
-                            if (!EnableMonthlyProfile && FillIntradaySpace)
+                            if (!ProfileParams.EnableMonthlyProfile && ProfileParams.FillIntradaySpace)
                             {
                                 volHist.Time1 = dateOffset;
                                 volHist.Time2 = dateOffset.AddMilliseconds(dynLength_Intraday);
@@ -1475,12 +1301,12 @@ namespace cAlgo
                         }
                         if (extraProfiles == ExtraProfiles.Monthly)
                         {
-                            if (EnableWeeklyProfile) {
+                            if (ProfileParams.EnableWeeklyProfile) {
                                 // Show after
                                 volHist.Time1 = dateOffset_Triple;
                                 volHist.Time2 = dateOffset_Triple.AddMilliseconds(-dynLength_Intraday);
                                 // Show after together
-                                if (FillIntradaySpace) {
+                                if (ProfileParams.FillIntradaySpace) {
                                     volHist.Time1 = dateOffset_Duo;
                                     volHist.Time2 = dateOffset_Duo.AddMilliseconds(dynLength_Intraday);
                                 }
@@ -1489,7 +1315,7 @@ namespace cAlgo
                                 // Use Weekly position
                                 volHist.Time1 = dateOffset_Duo;
                                 volHist.Time2 = dateOffset_Duo.AddMilliseconds(-dynLength_Intraday);
-                                if (FillIntradaySpace) {
+                                if (ProfileParams.FillIntradaySpace) {
                                     volHist.Time1 = dateOffset;
                                     volHist.Time2 = dateOffset.AddMilliseconds(dynLength_Intraday);
                                 }
@@ -1528,12 +1354,12 @@ namespace cAlgo
                     ChartRectangle buyHist, sellHist;
                     sellHist = Chart.DrawRectangle($"{prefix}_{i}_VP_{extraProfiles}_Sell", x1_Start, lowerSegmentY1, x2_Sell, upperSegmentY2, SellColor);
                     buyHist = Chart.DrawRectangle($"{prefix}_{i}_VP_{extraProfiles}_Buy", x1_Start, lowerSegmentY1, x2_Buy, upperSegmentY2, BuyColor);
-                    if (FillHist_VP)
+                    if (ProfileParams.FillHist_VP)
                     {
                         buyHist.IsFilled = true;
                         sellHist.IsFilled = true;
                     }
-                    if (HistogramSide_Input == HistSide_Data.Right)
+                    if (ProfileParams.HistogramSide_Input == HistSide_Data.Right)
                     {
                         sellHist.Time1 = xBar;
                         sellHist.Time2 = xBar.AddMilliseconds(-dynLengthSell);
@@ -1570,7 +1396,7 @@ namespace cAlgo
                         subtHist.Time1 = dateOffset_Subt;
                         subtHist.Time2 = subtHist.Time2 != dateOffset_Subt ? dateOffset_Subt.AddMilliseconds(dynLength) : dateOffset_Subt;
 
-                        if (FillHist_VP)
+                        if (ProfileParams.FillHist_VP)
                             subtHist.IsFilled = true;
 
                         intraDate = subtHist.Time1;
@@ -1618,10 +1444,10 @@ namespace cAlgo
 
                     ChartRectangle deltaHist = Chart.DrawRectangle($"{prefix}_{i}_VP_{extraProfiles}_Delta", x1_Start, lowerSegmentY1, x2, upperSegmentY2, colorHist);
 
-                    if (FillHist_VP)
+                    if (ProfileParams.FillHist_VP)
                         deltaHist.IsFilled = true;
 
-                    if (HistogramSide_Input == HistSide_Data.Right)
+                    if (ProfileParams.HistogramSide_Input == HistSide_Data.Right)
                     {
                         deltaHist.Time1 = xBar;
                         deltaHist.Time2 = deltaHist.Time2 != x1_Start ? xBar.AddMilliseconds(-dynLength_Delta) : x1_Start;
@@ -1658,19 +1484,19 @@ namespace cAlgo
                         if (extraProfiles == ExtraProfiles.Weekly) {
                             deltaHist.Time1 = dateOffset_Duo;
                             deltaHist.Time2 = dateOffset_Duo.AddMilliseconds(-dynLength_Delta);
-                            if (!EnableMonthlyProfile && FillIntradaySpace) {
+                            if (!ProfileParams.EnableMonthlyProfile && ProfileParams.FillIntradaySpace) {
                                 deltaHist.Time1 = dateOffset;
                                 deltaHist.Time2 = dateOffset.AddMilliseconds(dynLength_Delta);
                             }
                         }
 
                         if (extraProfiles == ExtraProfiles.Monthly) {
-                            if (EnableWeeklyProfile) {
+                            if (ProfileParams.EnableWeeklyProfile) {
                                 // Show after
                                 deltaHist.Time1 = dateOffset_Triple;
                                 deltaHist.Time2 = dateOffset_Triple.AddMilliseconds(-dynLength_Delta);
                                 // Show after together
-                                if (FillIntradaySpace) {
+                                if (ProfileParams.FillIntradaySpace) {
                                     deltaHist.Time1 = dateOffset_Duo;
                                     deltaHist.Time2 = dateOffset_Duo.AddMilliseconds(dynLength_Delta);
                                 }
@@ -1679,7 +1505,7 @@ namespace cAlgo
                                 // Use Weekly position
                                 deltaHist.Time1 = dateOffset_Duo;
                                 deltaHist.Time2 = dateOffset_Duo.AddMilliseconds(-dynLength_Delta);
-                                if (FillIntradaySpace) {
+                                if (ProfileParams.FillIntradaySpace) {
                                     deltaHist.Time1 = dateOffset;
                                     deltaHist.Time2 = dateOffset.AddMilliseconds(dynLength_Delta);
                                 }
@@ -1690,24 +1516,17 @@ namespace cAlgo
                     }
                 }
                 
-                switch (VolumeMode_Input) 
+                switch (GeneralParams.VolumeMode_Input) 
                 {
                     case VolumeMode_Data.Normal:
                     {
                         double value = vpNormal[priceKey];
-                        double maxValue = vpNormal.Values.Max();
-
-                        // Draw histograms and update 'intraDate' for VA/POC, if applicable
+                        // Draw histograms and update 'intraDate', if applicable
                         DrawRectangle_Normal(value, maxValue, intraBool);
                         break;
                     }
                     case VolumeMode_Data.Buy_Sell:             
                     {
-                        double buyMax = 0;
-                        try { buyMax = vpBuy.Values.Max(); } catch { }
-                        double sellMax = 0;
-                        try { sellMax = vpSell.Values.Max(); } catch { }
-
                         if (vpBuy.ContainsKey(priceKey) && vpSell.ContainsKey(priceKey))
                             DrawRectangle_BuySell(vpBuy[priceKey], vpSell[priceKey], buyMax, sellMax, isIntraday);
                         break;
@@ -1715,10 +1534,7 @@ namespace cAlgo
                     default:
                     {
                         double value = vpDelta[priceKey];
-                        double maxValue = vpDelta.Values.Max();
-                        IEnumerable<double> negativeList = vpDelta.Values.Where(n => n < 0);
-
-                        // Draw histograms and update 'intraDate' for VA/POC, if applicable
+                        // Draw histograms and update 'intraDate', if applicable
                         DrawRectangle_Delta(value, maxValue, negativeList, intraBool);
                         break;
                     }   
@@ -1728,22 +1544,29 @@ namespace cAlgo
             // Drawings that don't require each segment-price as y-axis
             // It can/should be outside SegmentsLoop for better performance.
             
-            // Results
-            if (extraProfiles == ExtraProfiles.MiniVP && ShowMiniResults || 
-                extraProfiles != ExtraProfiles.MiniVP && ShowResults)
+            double lowest = TF_Bars.LowPrices[TF_idx];
+            double highest = TF_Bars.HighPrices[TF_idx];
+            if (double.IsNaN(lowest)) { // Mini VPs avoid crash after recalculating
+                lowest = TF_Bars.LowPrices.LastValue;
+                highest = TF_Bars.HighPrices.LastValue;
+            }
+            double y1_lowest = extraProfiles == ExtraProfiles.Fixed ? fixedLowest : lowest;
+
+            if (extraProfiles == ExtraProfiles.MiniVP && ProfileParams.ShowMiniResults || 
+                extraProfiles != ExtraProfiles.MiniVP && ResultParams.ShowResults)
             {
-                switch (VolumeMode_Input) 
+                switch (GeneralParams.VolumeMode_Input) 
                 {
                     case VolumeMode_Data.Normal:
                     {
                         double sum = Math.Round(vpNormal.Values.Sum());
                         string strValue = FormatResults ? FormatBigNumber(sum) : $"{sum}";
 
-                        ChartText Center = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Normal_Result", $"\n{strValue}", x1_Start, y1_lowest, EnableGradient ? ColorGrandient_Min : HistColor);
+                        ChartText Center = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Normal_Result", $"\n{strValue}", x1_Start, y1_lowest, ProfileParams.EnableGradient ? ColorGrandient_Min : HistColor);
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
                         Center.FontSize = FontSizeResults - 1;
 
-                        if (HistogramSide_Input == HistSide_Data.Right)
+                        if (ProfileParams.HistogramSide_Input == HistSide_Data.Right)
                             Center.Time = xBar;
 
                         // Intraday Right Profile
@@ -1782,8 +1605,8 @@ namespace cAlgo
                         string subtractValueFmtd = subtract > 0 ? FormatBigNumber(subtract) : $"-{FormatBigNumber(Math.Abs(subtract))}";
                         string subtractFmtd = FormatResults ? subtractValueFmtd : $"{subtract}";
 
-                        string strFormated = OperatorBuySell_Input == OperatorBuySell_Data.Sum ? sumFmtd :
-                                             OperatorBuySell_Input == OperatorBuySell_Data.Subtraction ? subtractFmtd : $"{divide}";
+                        string strFormated = ResultParams.OperatorBuySell_Input == OperatorBuySell_Data.Sum ? sumFmtd :
+                                             ResultParams.OperatorBuySell_Input == OperatorBuySell_Data.Subtraction ? subtractFmtd : $"{divide}";
 
                         Color centerColor = Math.Round(percentBuy) > Math.Round(percentSell) ? BuyColor : SellColor;
 
@@ -1791,7 +1614,7 @@ namespace cAlgo
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
                         Center.FontSize = FontSizeResults - 1;
 
-                        if (HistogramSide_Input == HistSide_Data.Right)
+                        if (ProfileParams.HistogramSide_Input == HistSide_Data.Right)
                         {
                             Right.Time = xBar;
                             Left.Time = xBar;
@@ -1833,7 +1656,7 @@ namespace cAlgo
                         Center = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_Result", $"\n{totalDeltaString}", x1_Start, y1_lowest, centerColor);
                         Center.HorizontalAlignment = HorizontalAlignment.Center; Center.FontSize = FontSizeResults - 1;
 
-                        if (HistogramSide_Input == HistSide_Data.Right)
+                        if (ProfileParams.HistogramSide_Input == HistSide_Data.Right)
                         {
                             Right.Time = xBar;
                             Left.Time = xBar;
@@ -1848,8 +1671,8 @@ namespace cAlgo
                             Center.Time = dateOffset;
                         }
 
-                        if (ShowMinMaxDelta)
-                            Draw_MinMaxDelta(extraProfiles, fixedKey, lowest, x1_Start, xBar, isIntraday, prefix);
+                        if (ResultParams.ShowMinMaxDelta)
+                            Draw_MinMaxDelta(extraProfiles, fixedKey, y1_lowest, x1_Start, xBar, isIntraday, prefix);
                         
                         break;
                     }
@@ -1857,7 +1680,7 @@ namespace cAlgo
             }
             
             // For [Normal, Delta] only
-            IDictionary<double, double> vpDict = VolumeMode_Input switch
+            Dictionary<double, double> vpDict = GeneralParams.VolumeMode_Input switch
             {
                 VolumeMode_Data.Normal => extraProfiles switch
                 {
@@ -1886,7 +1709,7 @@ namespace cAlgo
                 DrawVolumeNodes(vpDict, iStart, x1_Start, xBar, extraProfiles, isIntraday, intraDate, fixedKey);   
             }
             
-            if (!ShowOHLC || extraProfiles == ExtraProfiles.Fixed)
+            if (!ProfileParams.ShowOHLC || extraProfiles == ExtraProfiles.Fixed)
                 return;
 
             DateTime OHLC_Date = TF_Bars.OpenTimes[TF_idx];
@@ -1931,7 +1754,7 @@ namespace cAlgo
 
                 Color subColor = subDelta > 0 ? BuyColor : SellColor;
 
-                if (!ShowOnlySubtDelta)
+                if (!ResultParams.ShowOnlySubtDelta)
                 {
                     MinText = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_MinResult", $"\n\nMin: {minDeltaString}", x1_Start, lowest, SellColor);
                     MaxText = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_MaxResult", $"\n\n\nMax: {maxDeltaString}", x1_Start, lowest, BuyColor);
@@ -1943,7 +1766,7 @@ namespace cAlgo
                     MaxText.FontSize = FontSizeResults - 1;
                     SubText.FontSize = FontSizeResults - 1;
 
-                    if (HistogramSide_Input == HistSide_Data.Right)
+                    if (ProfileParams.HistogramSide_Input == HistSide_Data.Right)
                     {
                         MinText.Time = xBar;
                         MaxText.Time = xBar;
@@ -1965,7 +1788,7 @@ namespace cAlgo
                     SubText.HorizontalAlignment = HorizontalAlignment.Center;
                     SubText.FontSize = FontSizeResults - 1;
 
-                    if (HistogramSide_Input == HistSide_Data.Right)
+                    if (ProfileParams.HistogramSide_Input == HistSide_Data.Right)
                         SubText.Time = xBar;
                     // Intraday Right Profile
                     if (isIntraday && extraProfiles == ExtraProfiles.No)
@@ -1985,17 +1808,17 @@ namespace cAlgo
             // For real-time market - VP
             // Run conditional only in the last bar of repaint loop
             if (IsLastBar && Bars.OpenTimes[index] == Bars.LastBar.OpenTime)
-                endTime = VOL_Bars.LastBar.OpenTime;
+                endTime = Source_Bars.LastBar.OpenTime;
 
             int startIndex = extraVP switch
             {
-                ExtraProfiles.Monthly => !IsLastBar ? lastBar_ExtraProfiles._Monthly : lastBar_ExtraProfiles._MonthlyStart,
-                ExtraProfiles.Weekly => !IsLastBar ? lastBar_ExtraProfiles._Weekly : lastBar_ExtraProfiles._WeeklyStart,
-                ExtraProfiles.MiniVP => !IsLastBar ? lastBar_ExtraProfiles._Mini : lastBar_ExtraProfiles._MiniStart,
-                _ => lastBar_VPStart
+                ExtraProfiles.Monthly => !IsLastBar ? PerformanceSource.lastIdx_Monthly : PerformanceSource.startIdx_Monthly,
+                ExtraProfiles.Weekly => !IsLastBar ? PerformanceSource.lastIdx_Weekly : PerformanceSource.startIdx_Weekly,
+                ExtraProfiles.MiniVP => !IsLastBar ? PerformanceSource.lastIdx_Mini : PerformanceSource.startIdx_Mini,
+                _ => !IsLastBar ? PerformanceSource.lastIdx_MainVP : PerformanceSource.startIdx_MainVP
             };
             if (extraVP == ExtraProfiles.Fixed) {
-                ChartRectangle rect = _rectangles.Where(x => x.Name == fixedKey).FirstOrDefault();
+                ChartRectangle rect = RangeObjs.rectangles.Where(x => x.Name == fixedKey).FirstOrDefault();
                 DateTime start = rect.Time1 < rect.Time2 ? rect.Time1 : rect.Time2;
                 startIndex = Bars.OpenTimes.GetIndexByTime(start);
             }
@@ -2005,20 +1828,20 @@ namespace cAlgo
 
             // Keep shared VOL_Bars since 1min bars
             // are quite cheap in terms of RAM, even for 1 year.
-            for (int k = startIndex; k < VOL_Bars.Count; ++k)
+            for (int k = startIndex; k < Source_Bars.Count; ++k)
             {
                 Bar volBar;
-                volBar = VOL_Bars[k];
+                volBar = Source_Bars[k];
 
                 if (volBar.OpenTime < startTime || volBar.OpenTime > endTime)
                 {
                     if (volBar.OpenTime > endTime) {
                         _ = extraVP switch
                         {
-                            ExtraProfiles.Monthly => lastBar_ExtraProfiles._Monthly = k,
-                            ExtraProfiles.Weekly => lastBar_ExtraProfiles._Weekly = k,
-                            ExtraProfiles.MiniVP => lastBar_ExtraProfiles._Mini = k,
-                            _ => lastBar_VP = k
+                            ExtraProfiles.Monthly => PerformanceSource.lastIdx_Monthly = k,
+                            ExtraProfiles.Weekly => PerformanceSource.lastIdx_Weekly = k,
+                            ExtraProfiles.MiniVP => PerformanceSource.lastIdx_Mini = k,
+                            _ => PerformanceSource.lastIdx_MainVP = k
                         };
                         break;
                     }
@@ -2037,9 +1860,9 @@ namespace cAlgo
                 */
 
                 bool isBullish = volBar.Close >= volBar.Open;
-                if (Distribution_Input == Distribution_Data.OHLC || Distribution_Input == Distribution_Data.OHLC_No_Avg)
+                if (ProfileParams.Distribution_Input == Distribution_Data.OHLC || ProfileParams.Distribution_Input == Distribution_Data.OHLC_No_Avg)
                 {
-                    bool isAvg = Distribution_Input == Distribution_Data.OHLC;
+                    bool isAvg = ProfileParams.Distribution_Input == Distribution_Data.OHLC;
                     // ========= Tick Simulation =========
                     // Bull/Buy/Up bar
                     if (volBar.Close >= volBar.Open)
@@ -2079,9 +1902,9 @@ namespace cAlgo
                         }
                     }
                 }
-                else if (Distribution_Input == Distribution_Data.High || Distribution_Input == Distribution_Data.Low || Distribution_Input == Distribution_Data.Close)
+                else if (ProfileParams.Distribution_Input == Distribution_Data.High || ProfileParams.Distribution_Input == Distribution_Data.Low || ProfileParams.Distribution_Input == Distribution_Data.Close)
                 {
-                    var selected = Distribution_Input;
+                    var selected = ProfileParams.Distribution_Input;
                     if (selected == Distribution_Data.High)
                     {
                         double prevSegment = 0;
@@ -2116,7 +1939,7 @@ namespace cAlgo
                         }
                     }
                 }
-                else if (Distribution_Input == Distribution_Data.Uniform_Distribution)
+                else if (ProfileParams.Distribution_Input == Distribution_Data.Uniform_Distribution)
                 {
                     double HL = Math.Abs(volBar.High - volBar.Low);
                     double uniVol = volBar.TickVolume / HL;
@@ -2127,7 +1950,7 @@ namespace cAlgo
                             AddVolume(currentSegment, uniVol, isBullish);
                     }
                 }
-                else if (Distribution_Input == Distribution_Data.Uniform_Presence)
+                else if (ProfileParams.Distribution_Input == Distribution_Data.Uniform_Presence)
                 {
                     double uniP_Vol = 1;
                     for (int i = 0; i < whichSegment.Count; i++)
@@ -2137,7 +1960,7 @@ namespace cAlgo
                             AddVolume(currentSegment, uniP_Vol, isBullish);
                     }
                 }
-                else if (Distribution_Input == Distribution_Data.Parabolic_Distribution)
+                else if (ProfileParams.Distribution_Input == Distribution_Data.Parabolic_Distribution)
                 {
                     double HL2 = Math.Abs(volBar.High - volBar.Low) / 2;
                     double hl2SQRT = Math.Sqrt(HL2);
@@ -2152,7 +1975,7 @@ namespace cAlgo
                             AddVolume(currentSegment, parabolicVol, isBullish);
                     }
                 }
-                else if (Distribution_Input == Distribution_Data.Triangular_Distribution)
+                else if (ProfileParams.Distribution_Input == Distribution_Data.Triangular_Distribution)
                 {
                     double HL = Math.Abs(volBar.High - volBar.Low);
                     double HL2 = HL / 2;
@@ -2193,7 +2016,7 @@ namespace cAlgo
                 else
                     VP_VolumesRank[priceKey] += vol;
 
-                bool condition = VolumeMode_Input != VolumeMode_Data.Normal;
+                bool condition = GeneralParams.VolumeMode_Input != VolumeMode_Data.Normal;
                 if (condition)
                     Add_BuySell(priceKey, vol, isBullish);
             }
@@ -2214,8 +2037,32 @@ namespace cAlgo
                         VP_VolumesRank_Down[priceKey] += vol;
                 }
 
-                double prevDelta = VP_DeltaRank.Values.Sum();
+                // Subtract Profile - Plain Delta
+                if (!VP_VolumesRank_Subt.ContainsKey(priceKey))
+                {
+                    if (VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_VolumesRank_Subt.Add(priceKey, (VP_VolumesRank_Up[priceKey] - VP_VolumesRank_Down[priceKey]));
+                    else if (VP_VolumesRank_Up.ContainsKey(priceKey) && !VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_VolumesRank_Subt.Add(priceKey, (VP_VolumesRank_Up[priceKey]));
+                    else if (!VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_VolumesRank_Subt.Add(priceKey, (-VP_VolumesRank_Down[priceKey]));
+                    else
+                        VP_VolumesRank_Subt.Add(priceKey, 0);
+                }
+                else
+                {
+                    if (VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_VolumesRank_Subt[priceKey] = (VP_VolumesRank_Up[priceKey] - VP_VolumesRank_Down[priceKey]);
+                    else if (VP_VolumesRank_Up.ContainsKey(priceKey) && !VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_VolumesRank_Subt[priceKey] = (VP_VolumesRank_Up[priceKey]);
+                    else if (!VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
+                        VP_VolumesRank_Subt[priceKey] = (-VP_VolumesRank_Down[priceKey]);
+                }
 
+                if (GeneralParams.VolumeMode_Input != VolumeMode_Data.Delta)
+                    return;
+                    
+                double prevDelta = VP_DeltaRank.Values.Sum();
                 if (!VP_DeltaRank.ContainsKey(priceKey))
                 {
                     if (VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
@@ -2243,31 +2090,6 @@ namespace cAlgo
                     VP_MinMaxDelta[0] = prevDelta; // Min
                 if (prevDelta < currentDelta)
                     VP_MinMaxDelta[1] = prevDelta; // Max before final delta
-
-                if (VolumeMode_Input != VolumeMode_Data.Buy_Sell)
-                    return;
-
-                // Subtract Profile - Plain Delta
-                if (!VP_VolumesRank_Subt.ContainsKey(priceKey))
-                {
-                    if (VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
-                        VP_VolumesRank_Subt.Add(priceKey, (VP_VolumesRank_Up[priceKey] - VP_VolumesRank_Down[priceKey]));
-                    else if (VP_VolumesRank_Up.ContainsKey(priceKey) && !VP_VolumesRank_Down.ContainsKey(priceKey))
-                        VP_VolumesRank_Subt.Add(priceKey, (VP_VolumesRank_Up[priceKey]));
-                    else if (!VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
-                        VP_VolumesRank_Subt.Add(priceKey, (-VP_VolumesRank_Down[priceKey]));
-                    else
-                        VP_VolumesRank_Subt.Add(priceKey, 0);
-                }
-                else
-                {
-                    if (VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
-                        VP_VolumesRank_Subt[priceKey] = (VP_VolumesRank_Up[priceKey] - VP_VolumesRank_Down[priceKey]);
-                    else if (VP_VolumesRank_Up.ContainsKey(priceKey) && !VP_VolumesRank_Down.ContainsKey(priceKey))
-                        VP_VolumesRank_Subt[priceKey] = (VP_VolumesRank_Up[priceKey]);
-                    else if (!VP_VolumesRank_Up.ContainsKey(priceKey) && VP_VolumesRank_Down.ContainsKey(priceKey))
-                        VP_VolumesRank_Subt[priceKey] = (-VP_VolumesRank_Down[priceKey]);
-                }
             }
 
             void UpdateExtraProfiles(VolumeRankType volRank, double priceKey, double vol, bool isBullish) {
@@ -2276,7 +2098,7 @@ namespace cAlgo
                 else
                     volRank.Normal[priceKey] += vol;
 
-                bool condition = VolumeMode_Input != VolumeMode_Data.Normal;
+                bool condition = GeneralParams.VolumeMode_Input != VolumeMode_Data.Normal;
                 if (condition)
                     Add_BuySell_Extra(volRank, priceKey, vol, isBullish);
             }
@@ -2298,8 +2120,10 @@ namespace cAlgo
                         volRank.Down[priceKey] += vol;
                 }
 
-                double prevDelta = volRank.Delta.Values.Sum();
+                if (GeneralParams.VolumeMode_Input != VolumeMode_Data.Delta)
+                    return;
 
+                double prevDelta = volRank.Delta.Values.Sum();
                 if (!volRank.Delta.ContainsKey(priceKey))
                 {
                     if (volRank.Up.ContainsKey(priceKey) && volRank.Down.ContainsKey(priceKey))
@@ -2330,20 +2154,117 @@ namespace cAlgo
             }
         }
 
+        // *********** MWM PROFILES ***********
+        private void CreateMiniVPs(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
+            if (ProfileParams.EnableMiniProfiles)
+            {
+                int miniIndex = MiniVPs_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+                int miniStart = Bars.OpenTimes.GetIndexByTime(MiniVPs_Bars.OpenTimes[miniIndex]);
+
+                if (index == miniStart ||
+                    (index - 1) == miniStart && isPriceBased_Chart ||
+                    (index - 1) == miniStart && (index - 1) != ClearIdx.Mini || loopStart
+                ) {
+                    if (!IsLastBar)
+                        PerformanceSource.startIdx_Mini = PerformanceSource.lastIdx_Mini;
+                    
+                    MiniRank.ClearAllModes();
+                    ClearIdx.Mini = index == miniStart ? index : (index - 1);
+                }
+                if (!isConcurrent)
+                    VolumeProfile(miniStart, index, ExtraProfiles.MiniVP, isLoop);
+                else
+                {
+                    _Tasks.MiniVP ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.MiniVP, _Tasks.cts.Token));
+
+                    LiveVPIndexes.Mini = miniStart;
+
+                    if (index != miniStart) {
+                        lock (_Locks.MiniVP)
+                            VolumeProfile(miniStart, index, ExtraProfiles.MiniVP, false, true);
+                    }
+                }
+            }
+        }
+        private void CreateWeeklyVP(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
+            if (ProfileParams.EnableWeeklyProfile)
+            {
+                // Avoid recalculating the same period.
+                if (GeneralParams.VPInterval_Input == VPInterval_Data.Weekly)
+                    return;
+
+                int weekIndex = WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+                int weekStart = Bars.OpenTimes.GetIndexByTime(WeeklyBars.OpenTimes[weekIndex]);
+
+                if (index == weekStart || (index - 1) == weekStart && isPriceBased_Chart || loopStart)
+                {
+                    if (!IsLastBar)
+                        PerformanceSource.startIdx_Weekly = PerformanceSource.lastIdx_Weekly;
+                    WeeklyRank.ClearAllModes();
+                }
+
+                if (!isConcurrent)
+                    VolumeProfile(weekStart, index, ExtraProfiles.Weekly, isLoop);
+                else
+                {
+                    _Tasks.WeeklyVP ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.Weekly, _Tasks.cts.Token));
+
+                    LiveVPIndexes.Weekly = weekStart;
+
+                    if (index != weekStart) {
+                        lock (_Locks.WeeklyVP)
+                            VolumeProfile(weekStart, index, ExtraProfiles.Weekly, false, true);
+                    }
+                }
+            }
+        }
+        private void CreateMonthlyVP(int index, bool loopStart = false, bool isLoop = false, bool isConcurrent = false) {
+            // Avoid recalculating the same period.
+            if (GeneralParams.VPInterval_Input == VPInterval_Data.Monthly)
+                return;
+
+            if (ProfileParams.EnableMonthlyProfile)
+            {
+                int monthIndex = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
+                int monthStart = Bars.OpenTimes.GetIndexByTime(MonthlyBars.OpenTimes[monthIndex]);
+
+                if (index == monthStart || (index - 1) == monthStart && isPriceBased_Chart || loopStart) {
+                    if (!IsLastBar)
+                        PerformanceSource.startIdx_Monthly = PerformanceSource.lastIdx_Monthly;
+                    MonthlyRank.ClearAllModes();
+                }
+
+                if (!isConcurrent)
+                    VolumeProfile(monthStart, index, ExtraProfiles.Monthly, isLoop);
+                else
+                {
+                    _Tasks.MonthlyVP ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.Monthly, _Tasks.cts.Token));
+
+                    LiveVPIndexes.Monthly = monthStart;
+
+                    if (index != monthStart) {
+                        lock (_Locks.MonthlyVP)
+                            VolumeProfile(monthStart, index, ExtraProfiles.Monthly, false, true);
+                    }
+                }
+            }
+        }
+
         // *********** LIVE PROFILE UPDATE ***********
         private void LiveVP_Update(int startIndex, int index, bool onlyMini = false) {
             double price = Bars.ClosePrices[index];
 
-            bool updateStrategy = UpdateProfile_Input == UpdateProfile_Data.ThroughSegments_Balanced ?
-                                Math.Abs(price - prevUpdatePrice) >= rowHeight :
-                                UpdateProfile_Input != UpdateProfile_Data.Through_2_Segments_Best ||
-                                Math.Abs(price - prevUpdatePrice) >= (rowHeight + rowHeight);
+            bool updateStrategy = ProfileParams.UpdateProfile_Input switch {
+                UpdateProfile_Data.ThroughSegments_Balanced => Math.Abs(price - prevUpdatePrice) >= rowHeight,
+                UpdateProfile_Data.Through_2_Segments_Best => Math.Abs(price - prevUpdatePrice) >= (rowHeight + rowHeight),
+                _ => true
+            };
 
             if (updateStrategy || isUpdateVP || configHasChanged)
             {
                 if (!onlyMini)
                 {
-                    if (EnableMonthlyProfile && VPInterval_Input != VPInterval_Data.Monthly)
+                    if (ProfileParams.EnableMonthlyProfile && GeneralParams.VPInterval_Input != VPInterval_Data.Monthly)
                     {
                         int monthIndex = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
                         int monthStart = Bars.OpenTimes.GetIndexByTime(MonthlyBars.OpenTimes[monthIndex]);
@@ -2362,7 +2283,7 @@ namespace cAlgo
                         }
                     }
 
-                    if (EnableWeeklyProfile && VPInterval_Input != VPInterval_Data.Weekly)
+                    if (ProfileParams.EnableWeeklyProfile && GeneralParams.VPInterval_Input != VPInterval_Data.Weekly)
                     {
                         int weekIndex = WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
                         int weekStart = Bars.OpenTimes.GetIndexByTime(WeeklyBars.OpenTimes[weekIndex]);
@@ -2380,7 +2301,7 @@ namespace cAlgo
                         }
                     }
 
-                    if (EnableMiniProfiles)
+                    if (ProfileParams.EnableMiniProfiles)
                     {
                         int miniIndex = MiniVPs_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
                         int miniStart = Bars.OpenTimes.GetIndexByTime(MiniVPs_Bars.OpenTimes[miniIndex]);
@@ -2439,45 +2360,47 @@ namespace cAlgo
 
             configHasChanged = false;
             isUpdateVP = false;
-            if (UpdateProfile_Input != UpdateProfile_Data.EveryTick_CPU_Workout)
+            if (ProfileParams.UpdateProfile_Input != UpdateProfile_Data.EveryTick_CPU_Workout)
                 prevUpdatePrice = price;
         }
 
         private void LiveVP_Concurrent(int index, int startIndex)
         {
-            if (!EnableVP && !EnableMiniProfiles)
+            if (!ProfileParams.EnableMainVP && !ProfileParams.EnableMiniProfiles)
                 return;
 
             double price = Bars.ClosePrices[index];
-            bool updateStrategy = UpdateProfile_Input == UpdateProfile_Data.ThroughSegments_Balanced ?
-                                Math.Abs(price - prevUpdatePrice) >= rowHeight :
-                                UpdateProfile_Input != UpdateProfile_Data.Through_2_Segments_Best ||
-                                Math.Abs(price - prevUpdatePrice) >= (rowHeight + rowHeight);
+            bool updateStrategy = ProfileParams.UpdateProfile_Input switch {
+                UpdateProfile_Data.ThroughSegments_Balanced => Math.Abs(price - prevUpdatePrice) >= rowHeight,
+                UpdateProfile_Data.Through_2_Segments_Best => Math.Abs(price - prevUpdatePrice) >= (rowHeight + rowHeight),
+                _ => true
+            };
+
             if (updateStrategy || isUpdateVP || configHasChanged)
             {
-                if (Bars.Count > Bars_ChartArray.Length)
+                if (Bars.Count > BarsTime_ChartArray.Length)
                 {
-                    lock (_lockBars)
-                        Bars_ChartArray = Bars.OpenTimes.ToArray();
+                    lock (_Locks.Bar)
+                        BarsTime_ChartArray = Bars.OpenTimes.ToArray();
                 }
 
-                lock (_lockSource)
-                    Bars_SourceList = new List<Bar>(VOL_Bars);
+                lock (_Locks.Source)
+                    BarsSource_List = new List<Bar>(Source_Bars);
 
-                liveVP_UpdateIt = true;
+                liveVP_RunWorker = true;
             }
-            cts ??= new CancellationTokenSource();
+            _Tasks.cts ??= new CancellationTokenSource();
 
             CreateMonthlyVP(index, isConcurrent: true);
             CreateWeeklyVP(index, isConcurrent: true);
             CreateMiniVPs(index, isConcurrent: true);
 
-            if (EnableVP)
+            if (ProfileParams.EnableMainVP)
             {
-                liveVP_Task ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.No, cts.Token));
-                liveVP_StartIndexes.VP = startIndex;
+                _Tasks.MainVP ??= Task.Run(() => LiveVP_Worker(ExtraProfiles.No, _Tasks.cts.Token));
+                LiveVPIndexes.MainVP = startIndex;
                 if (index != startIndex) {
-                    lock (_lock)
+                    lock (_Locks.MainVP)
                         VolumeProfile(startIndex, index, ExtraProfiles.No, false, true);
                 }
             }
@@ -2491,11 +2414,11 @@ namespace cAlgo
             The major reason why Copy of Time/Bars are used.
             */
 
-            IDictionary<double, double> Worker_VolumesRank = new Dictionary<double, double>();
-            IDictionary<double, double> Worker_VolumesRank_Up = new Dictionary<double, double>();
-            IDictionary<double, double> Worker_VolumesRank_Down = new Dictionary<double, double>();
-            IDictionary<double, double> Worker_VolumesRank_Subt = new Dictionary<double, double>();
-            IDictionary<double, double> Worker_DeltaRank = new Dictionary<double, double>();
+            Dictionary<double, double> Worker_VolumesRank = new();
+            Dictionary<double, double> Worker_VolumesRank_Up = new();
+            Dictionary<double, double> Worker_VolumesRank_Down = new();
+            Dictionary<double, double> Worker_VolumesRank_Subt = new();
+            Dictionary<double, double> Worker_DeltaRank = new();
             double[] Worker_MinMaxDelta = { 0, 0 };
 
             DateTime lastTime = new();
@@ -2504,22 +2427,22 @@ namespace cAlgo
 
             while (!token.IsCancellationRequested)
             {
-                if (!liveVP_UpdateIt) {
+                if (!liveVP_RunWorker) {
                     // Stop itself
-                    if (extraID == ExtraProfiles.No && !EnableVP) {
-                        liveVP_Task = null;
+                    if (extraID == ExtraProfiles.No && !ProfileParams.EnableMainVP) {
+                        _Tasks.MainVP = null;
                         return;
                     }
-                    if (extraID == ExtraProfiles.MiniVP && !EnableMiniProfiles) {
-                        miniVP_Task = null;
+                    if (extraID == ExtraProfiles.MiniVP && !ProfileParams.EnableMiniProfiles) {
+                        _Tasks.MiniVP = null;
                         return;
                     }
-                    if (extraID == ExtraProfiles.Weekly && !EnableVP) {
-                        weeklyVP_Task = null;
+                    if (extraID == ExtraProfiles.Weekly && !ProfileParams.EnableWeeklyProfile) {
+                        _Tasks.WeeklyVP = null;
                         return;
                     }
-                    if (extraID == ExtraProfiles.Monthly && !EnableVP) {
-                        monthlyVP_Task = null;
+                    if (extraID == ExtraProfiles.Monthly && !ProfileParams.EnableMonthlyProfile) {
+                        _Tasks.MonthlyVP = null;
                         return;
                     }
 
@@ -2529,44 +2452,53 @@ namespace cAlgo
 
                 try
                 {
-                    Worker_VolumesRank = new Dictionary<double, double>();
-                    Worker_VolumesRank_Up = new Dictionary<double, double>();
-                    Worker_VolumesRank_Down = new Dictionary<double, double>();
-                    Worker_VolumesRank_Subt = new Dictionary<double, double>();
-                    Worker_DeltaRank = new Dictionary<double, double>();
+                    Worker_VolumesRank = new();
+                    Worker_VolumesRank_Up = new();
+                    Worker_VolumesRank_Down = new();
+                    Worker_VolumesRank_Subt = new();
+                    Worker_DeltaRank = new();
                     double[] resetDelta = {0, 0};
                     Worker_MinMaxDelta = resetDelta;
 
                     // Chart Bars
-                    int startIndex = extraID == ExtraProfiles.No ? liveVP_StartIndexes.VP :
-                                     extraID == ExtraProfiles.MiniVP ? liveVP_StartIndexes.Mini :
-                                     extraID == ExtraProfiles.Weekly ? liveVP_StartIndexes.Weekly : liveVP_StartIndexes.Monthly;
+                    int startIndex = extraID switch {
+                        ExtraProfiles.MiniVP => LiveVPIndexes.Mini,
+                        ExtraProfiles.Weekly => LiveVPIndexes.Weekly,
+                        ExtraProfiles.Monthly => LiveVPIndexes.Monthly,
+                        _ => LiveVPIndexes.MainVP
+                    };
                     DateTime lastBarTime = GetByInvoke(() => Bars.LastBar.OpenTime);
 
                     // Replace only when needed
                     if (lastTime != lastBarTime) {
-                        lock (_lockBars)
-                            TimesCopy = Bars_ChartArray.Skip(startIndex);
+                        lock (_Locks.Bar)
+                            TimesCopy = BarsTime_ChartArray.Skip(startIndex);
                         lastTime = lastBarTime;
                     }
                     int endIndex = TimesCopy.Count();
 
-                    // Source Bars
-                    int startSourceIndex = extraID == ExtraProfiles.No ? lastBar_VPStart:
-                                     extraID == ExtraProfiles.MiniVP ? lastBar_ExtraProfiles._MiniStart :
-                                     extraID == ExtraProfiles.Weekly ? lastBar_ExtraProfiles._WeeklyStart : lastBar_ExtraProfiles._MonthlyStart;
+                    // Source Bars => Always replace
+                    int startSourceIndex = extraID switch {
+                        ExtraProfiles.MiniVP => PerformanceSource.startIdx_Mini,
+                        ExtraProfiles.Weekly => PerformanceSource.startIdx_Weekly,
+                        ExtraProfiles.Monthly => PerformanceSource.startIdx_Monthly,
+                        _ => PerformanceSource.startIdx_MainVP
+                    };
 
-                    lock (_lockSource)
-                        BarsCopy = Bars_SourceList.Skip(startSourceIndex);
+                    lock (_Locks.Source)
+                        BarsCopy = BarsSource_List.Skip(startSourceIndex);
 
                     for (int i = 0; i < endIndex; i++)
                     {
                         Worker_VP_Bars(i, extraID, i == (endIndex - 1));
                     }
 
-                    object whichLock = extraID == ExtraProfiles.No ? _lock :
-                                       extraID == ExtraProfiles.MiniVP ? _miniLock :
-                                       extraID == ExtraProfiles.Weekly ? _weeklyLock : _monthlyLock;
+                    object whichLock = extraID switch {
+                        ExtraProfiles.MiniVP => _Locks.MiniVP,
+                        ExtraProfiles.Weekly => _Locks.WeeklyVP,
+                        ExtraProfiles.Monthly => _Locks.MonthlyVP,
+                        _ => _Locks.MainVP
+                    };
                     lock (whichLock) {
                         switch (extraID)
                         {
@@ -2604,20 +2536,21 @@ namespace cAlgo
                         configHasChanged = false;
                         isUpdateVP = false;
 
-                        if (UpdateProfile_Input != UpdateProfile_Data.EveryTick_CPU_Workout)
+                        if (ProfileParams.UpdateProfile_Input != UpdateProfile_Data.EveryTick_CPU_Workout)
                             prevUpdatePrice = BarsCopy.Last().Close;
                     }
                 }
                 catch (Exception e) { Print($"CRASH at LiveVP_Worker => {extraID}: {e}"); }
 
-                liveVP_UpdateIt = false;
+                liveVP_RunWorker = false;
             }
 
             void Worker_VP_Bars(int index, ExtraProfiles extraVP = ExtraProfiles.No, bool isLastBarLoop = false)
             {
                 DateTime startTime = TimesCopy.ElementAt(index);
                 DateTime endTime = !isLastBarLoop ? TimesCopy.ElementAt(index + 1) : BarsCopy.Last().OpenTime;
-
+                List<double> whichSegment = Segments_VP;
+                
                 for (int k = 0; k < BarsCopy.Count(); ++k)
                 {
                     Bar volBar = BarsCopy.ElementAt(k);
@@ -2641,10 +2574,10 @@ namespace cAlgo
                     */
 
                     bool isBullish = volBar.Close >= volBar.Open;
-                    if (Distribution_Input == Distribution_Data.OHLC || Distribution_Input == Distribution_Data.OHLC_No_Avg)
+                    if (ProfileParams.Distribution_Input == Distribution_Data.OHLC || ProfileParams.Distribution_Input == Distribution_Data.OHLC_No_Avg)
                     {
-                        bool isAvg = Distribution_Input == Distribution_Data.OHLC;
-                        // ========= Tick Simulation ================
+                        bool isAvg = ProfileParams.Distribution_Input == Distribution_Data.OHLC;
+                        // ========= Tick Simulation =========
                         // Bull/Buy/Up bar
                         if (volBar.Close >= volBar.Open)
                         {
@@ -2653,14 +2586,15 @@ namespace cAlgo
                             volBar.TickVolume / (volBar.Open + volBar.High + volBar.Low + volBar.Close / 4) :
                             volBar.TickVolume;
 
-                            for (int i = 0; i < Segments_VP.Count; i++)
+                            for (int i = 0; i < whichSegment.Count; i++)
                             {
-                                double priceKey = Segments_VP[i];
-                                if (Segments_VP[i] <= volBar.Open && Segments_VP[i] >= volBar.Low)
+                                double priceKey = whichSegment[i];
+                                double currentSegment = priceKey;
+                                if (currentSegment <= volBar.Open && currentSegment >= volBar.Low)
                                     AddVolume(priceKey, avgVol, isBullish);
-                                if (Segments_VP[i] <= volBar.High && Segments_VP[i] >= volBar.Low)
+                                if (currentSegment <= volBar.High && currentSegment >= volBar.Low)
                                     AddVolume(priceKey, avgVol, isBullish);
-                                if (Segments_VP[i] <= volBar.High && Segments_VP[i] >= volBar.Close)
+                                if (currentSegment <= volBar.High && currentSegment >= volBar.Close)
                                     AddVolume(priceKey, avgVol, isBullish);
                             }
                         }
@@ -2669,72 +2603,78 @@ namespace cAlgo
                         {
                             // Average Tick Volume
                             double avgVol = isAvg ? volBar.TickVolume / (volBar.Open + volBar.High + volBar.Low + volBar.Close / 4) : volBar.TickVolume;
-                            for (int i = 0; i < Segments_VP.Count; i++)
+                            for (int i = 0; i < whichSegment.Count; i++)
                             {
-                                double priceKey = Segments_VP[i];
-                                if (Segments_VP[i] >= volBar.Open && Segments_VP[i] <= volBar.High)
+                                double priceKey = whichSegment[i];
+                                double currentSegment = priceKey;
+                                if (currentSegment >= volBar.Open && currentSegment <= volBar.High)
                                     AddVolume(priceKey, avgVol, isBullish);
-                                if (Segments_VP[i] <= volBar.High && Segments_VP[i] >= volBar.Low)
+                                if (currentSegment <= volBar.High && currentSegment >= volBar.Low)
                                     AddVolume(priceKey, avgVol, isBullish);
-                                if (Segments_VP[i] >= volBar.Low && Segments_VP[i] <= volBar.Close)
+                                if (currentSegment >= volBar.Low && currentSegment <= volBar.Close)
                                     AddVolume(priceKey, avgVol, isBullish);
                             }
                         }
                     }
-                    else if (Distribution_Input == Distribution_Data.High || Distribution_Input == Distribution_Data.Low || Distribution_Input == Distribution_Data.Close)
+                    else if (ProfileParams.Distribution_Input == Distribution_Data.High || ProfileParams.Distribution_Input == Distribution_Data.Low || ProfileParams.Distribution_Input == Distribution_Data.Close)
                     {
-                        var selected = Distribution_Input;
+                        var selected = ProfileParams.Distribution_Input;
                         if (selected == Distribution_Data.High)
                         {
                             double prevSegment = 0;
-                            for (int i = 0; i < Segments_VP.Count; i++)
+                            for (int i = 0; i < whichSegment.Count; i++)
                             {
-                                if (Segments_VP[i] >= volBar.High && prevSegment <= volBar.High)
-                                    AddVolume(Segments_VP[i], volBar.TickVolume, isBullish);
-                                prevSegment = Segments_VP[i];
+                                double currentSegment = whichSegment[i];
+                                if (currentSegment >= volBar.High && prevSegment <= volBar.High)
+                                    AddVolume(currentSegment, volBar.TickVolume, isBullish);
+                                prevSegment = whichSegment[i];
                             }
                         }
                         else if (selected == Distribution_Data.Low)
                         {
                             double prevSegment = 0;
-                            for (int i = 0; i < Segments_VP.Count; i++)
+                            for (int i = 0; i < whichSegment.Count; i++)
                             {
-                                if (Segments_VP[i] >= volBar.Low && prevSegment <= volBar.Low)
-                                    AddVolume(Segments_VP[i], volBar.TickVolume, isBullish);
-                                prevSegment = Segments_VP[i];
+                                double currentSegment = whichSegment[i];
+                                if (currentSegment >= volBar.Low && prevSegment <= volBar.Low)
+                                    AddVolume(currentSegment, volBar.TickVolume, isBullish);
+                                prevSegment = whichSegment[i];
                             }
                         }
                         else
                         {
                             double prevSegment = 0;
-                            for (int i = 0; i < Segments_VP.Count; i++)
+                            for (int i = 0; i < whichSegment.Count; i++)
                             {
-                                if (Segments_VP[i] >= volBar.Close && prevSegment <= volBar.Close)
-                                    AddVolume(Segments_VP[i], volBar.TickVolume, isBullish);
-                                prevSegment = Segments_VP[i];
+                                double currentSegment = whichSegment[i];
+                                if (currentSegment >= volBar.Close && prevSegment <= volBar.Close)
+                                    AddVolume(currentSegment, volBar.TickVolume, isBullish);
+                                prevSegment = whichSegment[i];
                             }
                         }
                     }
-                    else if (Distribution_Input == Distribution_Data.Uniform_Distribution)
+                    else if (ProfileParams.Distribution_Input == Distribution_Data.Uniform_Distribution)
                     {
                         double HL = Math.Abs(volBar.High - volBar.Low);
                         double uniVol = volBar.TickVolume / HL;
-                        for (int i = 0; i < Segments_VP.Count; i++)
+                        for (int i = 0; i < whichSegment.Count; i++)
                         {
-                            if (Segments_VP[i] >= volBar.Low && Segments_VP[i] <= volBar.High)
-                                AddVolume(Segments_VP[i], uniVol, isBullish);
+                            double currentSegment = whichSegment[i];
+                            if (currentSegment >= volBar.Low && currentSegment <= volBar.High)
+                                AddVolume(currentSegment, uniVol, isBullish);
                         }
                     }
-                    else if (Distribution_Input == Distribution_Data.Uniform_Presence)
+                    else if (ProfileParams.Distribution_Input == Distribution_Data.Uniform_Presence)
                     {
                         double uniP_Vol = 1;
-                        for (int i = 0; i < Segments_VP.Count; i++)
+                        for (int i = 0; i < whichSegment.Count; i++)
                         {
-                            if (Segments_VP[i] >= volBar.Low && Segments_VP[i] <= volBar.High)
-                                AddVolume(Segments_VP[i], uniP_Vol, isBullish);
+                            double currentSegment = whichSegment[i];
+                            if (currentSegment >= volBar.Low && currentSegment <= volBar.High)
+                                AddVolume(currentSegment, uniP_Vol, isBullish);
                         }
                     }
-                    else if (Distribution_Input == Distribution_Data.Parabolic_Distribution)
+                    else if (ProfileParams.Distribution_Input == Distribution_Data.Parabolic_Distribution)
                     {
                         double HL2 = Math.Abs(volBar.High - volBar.Low) / 2;
                         double hl2SQRT = Math.Sqrt(HL2);
@@ -2742,13 +2682,14 @@ namespace cAlgo
 
                         double parabolicVol = volBar.TickVolume / final;
 
-                        for (int i = 0; i < Segments_VP.Count; i++)
+                        for (int i = 0; i < whichSegment.Count; i++)
                         {
-                            if (Segments_VP[i] >= volBar.Low && Segments_VP[i] <= volBar.High)
-                                AddVolume(Segments_VP[i], parabolicVol, isBullish);
+                            double currentSegment = whichSegment[i];
+                            if (currentSegment >= volBar.Low && currentSegment <= volBar.High)
+                                AddVolume(currentSegment, parabolicVol, isBullish);
                         }
                     }
-                    else if (Distribution_Input == Distribution_Data.Triangular_Distribution)
+                    else if (ProfileParams.Distribution_Input == Distribution_Data.Triangular_Distribution)
                     {
                         double HL = Math.Abs(volBar.High - volBar.Low);
                         double HL2 = HL / 2;
@@ -2760,10 +2701,11 @@ namespace cAlgo
 
                         double triangularVol = volBar.TickVolume / final;
 
-                        for (int i = 0; i < Segments_VP.Count; i++)
+                        for (int i = 0; i < whichSegment.Count; i++)
                         {
-                            if (Segments_VP[i] >= volBar.Low && Segments_VP[i] <= volBar.High)
-                                AddVolume(Segments_VP[i], triangularVol, isBullish);
+                            double currentSegment = whichSegment[i];
+                            if (currentSegment >= volBar.Low && currentSegment <= volBar.High)
+                                AddVolume(currentSegment, triangularVol, isBullish);
                         }
                     }
                 }
@@ -2775,7 +2717,7 @@ namespace cAlgo
                     else
                         Worker_VolumesRank[priceKey] += vol;
 
-                    bool condition = VolumeMode_Input != VolumeMode_Data.Normal;
+                    bool condition = GeneralParams.VolumeMode_Input != VolumeMode_Data.Normal;
                     if (condition)
                         Add_BuySell(priceKey, vol, isBullish);
                 }
@@ -2796,8 +2738,32 @@ namespace cAlgo
                             Worker_VolumesRank_Down[priceKey] += vol;
                     }
 
-                    double prevDelta = Worker_DeltaRank.Values.Sum();
+                    // Subtract Profile - Plain Delta
+                    if (!Worker_VolumesRank_Subt.ContainsKey(priceKey))
+                    {
+                        if (Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_VolumesRank_Subt.Add(priceKey, (Worker_VolumesRank_Up[priceKey] - Worker_VolumesRank_Down[priceKey]));
+                        else if (Worker_VolumesRank_Up.ContainsKey(priceKey) && !Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_VolumesRank_Subt.Add(priceKey, (Worker_VolumesRank_Up[priceKey]));
+                        else if (!Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_VolumesRank_Subt.Add(priceKey, (-Worker_VolumesRank_Down[priceKey]));
+                        else
+                            Worker_VolumesRank_Subt.Add(priceKey, 0);
+                    }
+                    else
+                    {
+                        if (Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_VolumesRank_Subt[priceKey] = (Worker_VolumesRank_Up[priceKey] - Worker_VolumesRank_Down[priceKey]);
+                        else if (Worker_VolumesRank_Up.ContainsKey(priceKey) && !Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_VolumesRank_Subt[priceKey] = (Worker_VolumesRank_Up[priceKey]);
+                        else if (!Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
+                            Worker_VolumesRank_Subt[priceKey] = (-Worker_VolumesRank_Down[priceKey]);
+                    }
 
+                    if (GeneralParams.VolumeMode_Input != VolumeMode_Data.Delta)
+                        return;
+                        
+                    double prevDelta = Worker_DeltaRank.Values.Sum();
                     if (!Worker_DeltaRank.ContainsKey(priceKey))
                     {
                         if (Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
@@ -2825,30 +2791,6 @@ namespace cAlgo
                         Worker_MinMaxDelta[0] = prevDelta; // Min
                     if (prevDelta < currentDelta)
                         Worker_MinMaxDelta[1] = prevDelta; // Max before final delta
-
-                    if (extraVP != ExtraProfiles.No && VolumeMode_Input != VolumeMode_Data.Buy_Sell)
-                        return;
-                    // Subtract Profile - Plain Delta
-                    if (!Worker_VolumesRank_Subt.ContainsKey(priceKey))
-                    {
-                        if (Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
-                            Worker_VolumesRank_Subt.Add(priceKey, (Worker_VolumesRank_Up[priceKey] - Worker_VolumesRank_Down[priceKey]));
-                        else if (Worker_VolumesRank_Up.ContainsKey(priceKey) && !Worker_VolumesRank_Down.ContainsKey(priceKey))
-                            Worker_VolumesRank_Subt.Add(priceKey, (Worker_VolumesRank_Up[priceKey]));
-                        else if (!Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
-                            Worker_VolumesRank_Subt.Add(priceKey, (-Worker_VolumesRank_Down[priceKey]));
-                        else
-                            Worker_VolumesRank_Subt.Add(priceKey, 0);
-                    }
-                    else
-                    {
-                        if (Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
-                            Worker_VolumesRank_Subt[priceKey] = (Worker_VolumesRank_Up[priceKey] - Worker_VolumesRank_Down[priceKey]);
-                        else if (Worker_VolumesRank_Up.ContainsKey(priceKey) && !Worker_VolumesRank_Down.ContainsKey(priceKey))
-                            Worker_VolumesRank_Subt[priceKey] = (Worker_VolumesRank_Up[priceKey]);
-                        else if (!Worker_VolumesRank_Up.ContainsKey(priceKey) && Worker_VolumesRank_Down.ContainsKey(priceKey))
-                            Worker_VolumesRank_Subt[priceKey] = (-Worker_VolumesRank_Down[priceKey]);
-                    }
                 }
             }
 
@@ -2856,9 +2798,9 @@ namespace cAlgo
 
         protected override void OnDestroy()
         {
-            cts.Cancel();
-            if (EnableFixedRange) {
-                foreach (ChartRectangle item in _rectangles)
+            _Tasks.cts.Cancel();
+            if (ProfileParams.EnableFixedRange) {
+                foreach (ChartRectangle item in RangeObjs.rectangles)
                     Chart.RemoveObject(item.Name);
             }
         }
@@ -2913,10 +2855,10 @@ namespace cAlgo
 
         private void OnObjectsUpdated(ChartObjectsEventArgs args)
         {
-            if (!EnableFixedRange)
+            if (!ProfileParams.EnableFixedRange)
                 return;
 
-            foreach (var rect in _rectangles.ToArray())
+            foreach (var rect in RangeObjs.rectangles.ToArray())
             {
                 if (rect == null) continue;
 
@@ -2931,7 +2873,7 @@ namespace cAlgo
         }
         private void HiddenRangeControls(ChartZoomEventArgs args)
         {
-            foreach (var control in _controlGrids.Values)
+            foreach (var control in RangeObjs.controlGrids.Values)
                 control.IsVisible = args.Chart.ZoomLevel >= FixedHiddenZoom;
         }
 
@@ -2955,7 +2897,7 @@ namespace cAlgo
             );
 
             rect.IsInteractive = true;
-            _rectangles.Add(rect);
+            RangeObjs.rectangles.Add(rect);
 
             FixedRank.Add(nameKey, new VolumeRankType());
 
@@ -2980,7 +2922,7 @@ namespace cAlgo
                 list.Add(t);
             }
 
-            _infoObjects[rect.Name] = list;
+            RangeObjs.infoObjects[rect.Name] = list;
             UpdateInfoBox(rect);
         }
 
@@ -3033,7 +2975,7 @@ namespace cAlgo
             };
 
             Chart.AddControl(border, rect.Time2, rect.Y2);
-            _controlGrids[rect.Name] = border;
+            RangeObjs.controlGrids[rect.Name] = border;
         }
 
         private void UpdateRectangle(ChartRectangle rect)
@@ -3070,7 +3012,7 @@ namespace cAlgo
 
         private void UpdateInfoBox(ChartRectangle rect)
         {
-            if (!_infoObjects.TryGetValue(rect.Name, out var objs)) return;
+            if (!RangeObjs.infoObjects.TryGetValue(rect.Name, out var objs)) return;
             if (objs.Count < 3) return;
 
             ChartText fromTxt = objs[0];
@@ -3112,7 +3054,7 @@ namespace cAlgo
 
         private void UpdateControlGrid(ChartRectangle rect)
         {
-            if (!_controlGrids.TryGetValue(rect.Name, out var grid)) return;
+            if (!RangeObjs.controlGrids.TryGetValue(rect.Name, out var grid)) return;
             double topY = Math.Max(rect.Y1, rect.Y2);
             DateTime rightTime = rect.Time1 > rect.Time2 ? rect.Time1 : rect.Time2;
             Chart.MoveControl(grid, rightTime, topY);
@@ -3122,21 +3064,21 @@ namespace cAlgo
         {
             if (rect == null) return;
             Chart.RemoveObject(rect.Name);
-            _rectangles.Remove(rect);
+            RangeObjs.rectangles.Remove(rect);
 
             // remove info objects
-            if (_infoObjects.TryGetValue(rect.Name, out var objs))
+            if (RangeObjs.infoObjects.TryGetValue(rect.Name, out var objs))
             {
                 foreach (var o in objs)
                     Chart.RemoveObject(o.Name);
-                _infoObjects.Remove(rect.Name);
+                RangeObjs.infoObjects.Remove(rect.Name);
             }
 
             // remove control grid
-            if (_controlGrids.TryGetValue(rect.Name, out var grid))
+            if (RangeObjs.controlGrids.TryGetValue(rect.Name, out var grid))
             {
                 Chart.RemoveControl(grid);
-                _controlGrids.Remove(rect.Name);
+                RangeObjs.controlGrids.Remove(rect.Name);
             }
 
             // remove histograms/lines drawings
@@ -3153,7 +3095,7 @@ namespace cAlgo
             FixedRank[fixedKey].MinMaxDelta = new double[2];
 
             List<double> whichSegment;
-            if (SegmentsFixedRange_Input == SegmentsFixedRange_Data.Monthly_Aligned) {
+            if (ProfileParams.SegmentsFixedRange_Input == SegmentsFixedRange_Data.Monthly_Aligned) {
                 int endIdx = Bars.OpenTimes.GetIndexByTime(end);
                 int TF_idx = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[endIdx]); //Segments are always monthly
                 whichSegment = segmentsDict[TF_idx];
@@ -3212,9 +3154,9 @@ namespace cAlgo
         }
 
         public void ResetFixedRange_Dicts() {
-            _rectangles.Clear();
-            _infoObjects.Clear();
-            _controlGrids.Clear();
+            RangeObjs.rectangles.Clear();
+            RangeObjs.infoObjects.Clear();
+            RangeObjs.controlGrids.Clear();
         }
 
         // ====== Functions Area ======
@@ -3263,14 +3205,14 @@ namespace cAlgo
             if (timesBased.Any(currentTimeframe.Contains))
                 tfName = Chart.TimeFrame.ShortName.ToString();
             else
-                tfName = OffsetTimeframeInput.ShortName.ToString();
+                tfName = ProfileParams.OffsetTimeframeInput.ShortName.ToString();
 
             // Get the time-based interval value
             string tfString = string.Join("", tfName.Where(char.IsDigit));
             int tfValue = int.TryParse(tfString, out int value) ? value : 1;
 
             DateTime dateToReturn = dateBar;
-            int offsetCondiditon = !isSubt ? (OffsetBarsInput + 1) : Math.Max(2, OffsetBarsInput - 1);
+            int offsetCondiditon = !isSubt ? (ProfileParams.OffsetBarsInput + 1) : Math.Max(2, ProfileParams.OffsetBarsInput - 1);
             if (tfName.Contains('m'))
                 dateToReturn = dateBar.AddMinutes(tfValue * offsetCondiditon);
             else if (tfName.Contains('h'))
@@ -3299,33 +3241,21 @@ namespace cAlgo
             {
                 if (dividedTimestamp[i] != 0)
                 {
-                    string suffix = i == 4 ? "ms" : i == 3 ? "s" : i == 2 ? "m" : i == 1 ? "h" : "d";
-
-                    if (suffix == "ms")
-                    {
-                        timelapse_Value = ts.TotalMilliseconds;
-                        timelapse_Suffix = suffix;
-                    }
-                    else if (suffix == "s")
-                    {
-                        timelapse_Value = ts.TotalSeconds;
-                        timelapse_Suffix = suffix;
-                    }
-                    else if (suffix == "m")
-                    {
-                        timelapse_Value = ts.TotalMinutes;
-                        timelapse_Suffix = suffix;
-                    }
-                    else if (suffix == "h")
-                    {
-                        timelapse_Value = ts.TotalHours;
-                        timelapse_Suffix = suffix;
-                    }
-                    else if (suffix == "d")
-                    {
-                        timelapse_Value = ts.TotalDays;
-                        timelapse_Suffix = suffix;
-                    }
+                    string suffix = i switch {
+                        4 => "ms",
+                        3 => "s",
+                        2 => "m",
+                        1 => "h",
+                        _ => "d"
+                    };
+                    timelapse_Value = suffix switch {
+                        "ms" => ts.TotalMilliseconds,
+                        "s" => ts.TotalSeconds,
+                        "m" => ts.TotalMinutes,
+                        "h" => ts.TotalHours,
+                        _ => ts.TotalDays
+                    };
+                    timelapse_Suffix = suffix;
                     break;
                 }
             }
@@ -3337,18 +3267,17 @@ namespace cAlgo
         {
             Chart.DrawStaticText("txt", $"{Msg}", V_Align, H_Align, Color.LightBlue);
         }
-
         private void Second_DrawOnScreen(string Msg)
         {
             Chart.DrawStaticText("txt2", $"{Msg}", VerticalAlignment.Top, HorizontalAlignment.Left, Color.LightBlue);
         }
 
         // *********** VA + POC ***********
-        private void Draw_VA_POC(IDictionary<double, double> vpDict, int iStart, DateTime x1_Start, DateTime xBar, ExtraProfiles extraVP = ExtraProfiles.No, bool isIntraday = false, DateTime intraX1 = default, string fixedKey = "")
+        private void Draw_VA_POC(Dictionary<double, double> vpDict, int iStart, DateTime x1_Start, DateTime xBar, ExtraProfiles extraVP = ExtraProfiles.No, bool isIntraday = false, DateTime intraX1 = default, string fixedKey = "")
         {
             string prefix = extraVP == ExtraProfiles.Fixed ? fixedKey : $"{iStart}";
 
-            if (ShowVA) {
+            if (VAParams.ShowVA) {
                 double[] VAL_VAH_POC = VA_Calculation(vpDict);
 
                 if (!VAL_VAH_POC.Any())
@@ -3367,12 +3296,12 @@ namespace cAlgo
                 rectVA.IsFilled = true;
 
                 DateTime extDate = extraVP == ExtraProfiles.Fixed ? Bars[Bars.OpenTimes.GetIndexByTime(Server.Time)].OpenTime : extendDate();
-                if (ExtendVA) {
+                if (VAParams.ExtendVA) {
                     vah.Time2 = extDate;
                     val.Time2 = extDate;
                     rectVA.Time2 = extDate;
                 }
-                if (ExtendPOC)
+                if (VAParams.ExtendPOC)
                     poc.Time2 = extDate;
 
                 if (isIntraday && extraVP != ExtraProfiles.MiniVP) {
@@ -3382,7 +3311,7 @@ namespace cAlgo
                     rectVA.Time1 = intraX1;
                 }
             }
-            else if (!ShowVA && KeepPOC)
+            else if (!VAParams.ShowVA && VAParams.KeepPOC)
             {
                 double positiveMax = Math.Abs(vpDict.Values.Max());
                 double negativeMax = 0;
@@ -3398,7 +3327,7 @@ namespace cAlgo
                 ChartTrendLine poc = Chart.DrawTrendLine($"{prefix}_POC_{extraVP}", x1_Start, priceLVOL - rowHeight, xBar, priceLVOL - rowHeight, ColorPOC);
                 poc.LineStyle = LineStylePOC; poc.Thickness = ThicknessPOC; poc.Comment = "POC";
 
-                if (ExtendPOC)
+                if (VAParams.ExtendPOC)
                     poc.Time2 = extraVP == ExtraProfiles.Fixed ? Bars[Bars.OpenTimes.GetIndexByTime(Server.Time)].OpenTime : extendDate();
 
                 if (isIntraday && extraVP != ExtraProfiles.MiniVP)
@@ -3407,9 +3336,9 @@ namespace cAlgo
 
             DateTime extendDate() {
                 string tfName = extraVP == ExtraProfiles.No ?
-                (VPInterval_Input == VPInterval_Data.Daily ? "D1" :
-                    VPInterval_Input == VPInterval_Data.Weekly ? "W1" : "Month1" ) :
-                extraVP == ExtraProfiles.MiniVP ? MiniVPs_Timeframe.ShortName.ToString() :
+                (GeneralParams.VPInterval_Input == VPInterval_Data.Daily ? "D1" :
+                    GeneralParams.VPInterval_Input == VPInterval_Data.Weekly ? "W1" : "Month1" ) :
+                extraVP == ExtraProfiles.MiniVP ? ProfileParams.MiniVPs_Timeframe.ShortName.ToString() :
                 extraVP == ExtraProfiles.Weekly ?  "W1" :  "Month1";
 
                 // Get the time-based interval value
@@ -3418,21 +3347,21 @@ namespace cAlgo
 
                 DateTime dateToReturn = xBar;
                 if (tfName.Contains('m'))
-                    dateToReturn = xBar.AddMinutes(tfValue * ExtendCount);
+                    dateToReturn = xBar.AddMinutes(tfValue * VAParams.ExtendCount);
                 else if (tfName.Contains('h'))
-                    dateToReturn = xBar.AddHours(tfValue * ExtendCount);
+                    dateToReturn = xBar.AddHours(tfValue * VAParams.ExtendCount);
                 else if (tfName.Contains('D'))
-                    dateToReturn = xBar.AddDays(tfValue * ExtendCount);
+                    dateToReturn = xBar.AddDays(tfValue * VAParams.ExtendCount);
                 else if (tfName.Contains('W'))
-                    dateToReturn = xBar.AddDays(7 * ExtendCount);
+                    dateToReturn = xBar.AddDays(7 * VAParams.ExtendCount);
                 else if (tfName.Contains("Month1"))
-                    dateToReturn = xBar.AddMonths(tfValue * ExtendCount);
+                    dateToReturn = xBar.AddMonths(tfValue * VAParams.ExtendCount);
 
                 return dateToReturn;
             }
         }
 
-        private double[] VA_Calculation(IDictionary<double, double> vpDict)
+        private double[] VA_Calculation(Dictionary<double, double> vpDict)
         {
             /*  https://onlinelibrary.wiley.com/doi/pdf/10.1002/9781118659724.app1
                 https://www.mypivots.com/dictionary/definition/40/calculating-market-profile-value-area
@@ -3448,7 +3377,7 @@ namespace cAlgo
             double largestVOL = positiveMax > negativeMax ? positiveMax : negativeMax;
 
             double totalvol = Math.Abs(vpDict.Values.Sum());
-            double _70percent = Math.Round((PercentVA * totalvol) / 100);
+            double _70percent = Math.Round((VAParams.PercentVA * totalvol) / 100);
 
             double priceLVOL = 0;
             foreach (var kv in vpDict)
@@ -3618,9 +3547,9 @@ namespace cAlgo
 
         
         // *********** HVN + LVN ***********
-        private void DrawVolumeNodes(IDictionary<double, double> profileDict, int iStart, DateTime x1_Start, DateTime xBar, ExtraProfiles extraTPO = ExtraProfiles.No, bool isIntraday = false, DateTime intraX1 = default, string fixedKey = "") 
+        private void DrawVolumeNodes(Dictionary<double, double> profileDict, int iStart, DateTime x1_Start, DateTime xBar, ExtraProfiles extraTPO = ExtraProfiles.No, bool isIntraday = false, DateTime intraX1 = default, string fixedKey = "") 
         { 
-            if (!EnableNodeDetection)
+            if (!NodesParams.EnableNodeDetection)
                 return;
                 
             string prefix = extraTPO == ExtraProfiles.Fixed ? fixedKey : $"{iStart}";
@@ -3645,27 +3574,27 @@ namespace cAlgo
             */
             
             // Calculate Kernels/Coefficientes only once.
-            nodesKernel ??= ProfileSmooth_Input == ProfileSmooth_Data.Gaussian ?
+            nodesKernel ??= NodesParams.ProfileSmooth_Input == ProfileSmooth_Data.Gaussian ?
                             NodesAnalizer.FixedKernel() : NodesAnalizer.FixedCoefficients();
             
             // Smooth values
-            double[] profileSmoothed = ProfileSmooth_Input == ProfileSmooth_Data.Gaussian ?
+            double[] profileSmoothed = NodesParams.ProfileSmooth_Input == ProfileSmooth_Data.Gaussian ?
                                        NodesAnalizer.GaussianSmooth(profileValues, nodesKernel) : NodesAnalizer.SavitzkyGolay(profileValues, nodesKernel);
             
             // Get indexes of LVNs/HVNs
-            var (hvnsRaw, lvnsRaw) = ProfileNode_Input switch {
+            var (hvnsRaw, lvnsRaw) = NodesParams.ProfileNode_Input switch {
                 ProfileNode_Data.LocalMinMax => NodesAnalizer.FindLocalMinMax(profileSmoothed),
                 ProfileNode_Data.Topology => NodesAnalizer.ProfileTopology(profileSmoothed),
-                _ => NodesAnalizer.PercentileNodes(profileSmoothed, pctileHVN_Value, pctileLVN_Value)
+                _ => NodesAnalizer.PercentileNodes(profileSmoothed, NodesParams.pctileHVN_Value, NodesParams.pctileLVN_Value)
             };
             
             // Filter it
-            if (onlyStrongNodes)
+            if (NodesParams.onlyStrongNodes)
             {
                 double globalPoc = profileSmoothed.Max();
 
-                double hvnPct = Math.Round(strongHVN_Pct / 100.0, 3);
-                double lvnPct = Math.Round(strongLVN_Pct / 100.0, 3);
+                double hvnPct = Math.Round(NodesParams.strongHVN_Pct / 100.0, 3);
+                double lvnPct = Math.Round(NodesParams.strongLVN_Pct / 100.0, 3);
 
                 var strongHvns = new List<int>();
                 var strongLvns = new List<int>();
@@ -3686,22 +3615,22 @@ namespace cAlgo
                 lvnsRaw = strongLvns;
             }
                 
-            bool isRaw = ShowNode_Input == ShowNode_Data.HVN_Raw || ShowNode_Input == ShowNode_Data.LVN_Raw;
-            bool isBands = ShowNode_Input == ShowNode_Data.HVN_With_Bands || ShowNode_Input == ShowNode_Data.LVN_With_Bands;
+            bool isRaw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw || NodesParams.ShowNode_Input == ShowNode_Data.LVN_Raw;
+            bool isBands = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands || NodesParams.ShowNode_Input == ShowNode_Data.LVN_With_Bands;
             
-            if (ProfileNode_Input == ProfileNode_Data.Percentile) 
+            if (NodesParams.ProfileNode_Input == ProfileNode_Data.Percentile) 
             {
                 ClearOldNodes();                                               
                 
                 if (isBands)
                 {
-                    Color _nodeColor = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColorHVN : ColorLVN;
+                    Color _nodeColor = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColorHVN : ColorLVN;
 
                     var hvnsGroups = NodesAnalizer.GroupConsecutiveIndexes(hvnsRaw);
                     var lvnsGroups = NodesAnalizer.GroupConsecutiveIndexes(lvnsRaw);
-                    List<List<int>> nodeGroups = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnsGroups : lvnsGroups;
+                    List<List<int>> nodeGroups = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnsGroups : lvnsGroups;
                     
-                    string nodeName = ShowNode_Input == ShowNode_Data.HVN_Raw ? "HVN" : "LVN";   
+                    string nodeName = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? "HVN" : "LVN";   
                     foreach (var group in nodeGroups) 
                     {
                         int idxLow = group[0];
@@ -3776,8 +3705,8 @@ namespace cAlgo
             var lvnLevels = new List<(double Low, double Center, double High)>();
             var lvnIndexes = new List<(int Low, int Center, int High)>();
 
-            double hvnBandPct = Math.Round(bandHVN_Pct / 100.0, 3);
-            double lvnBandPct = Math.Round(bandLVN_Pct / 100.0, 3);
+            double hvnBandPct = Math.Round(NodesParams.bandHVN_Pct / 100.0, 3);
+            double lvnBandPct = Math.Round(NodesParams.bandLVN_Pct / 100.0, 3);
 
             foreach (var (startIdx, endIdx, pocIdx) in bells)
             {
@@ -3797,11 +3726,11 @@ namespace cAlgo
             // Let's draw
             ClearOldNodes();
 
-            string node = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? "HVN" : "LVN";
-            Color nodeColor = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColorHVN : ColorLVN;
+            string node = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? "HVN" : "LVN";
+            Color nodeColor = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColorHVN : ColorLVN;
             
-            var nodeLvls = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnLevels : lvnLevels;
-            var nodeIdxes = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnIndexes : lvnIndexes;
+            var nodeLvls = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnLevels : lvnLevels;
+            var nodeIdxes = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnIndexes : lvnIndexes;
             
             for (int i = 0; i < nodeLvls.Count; i++)
             {
@@ -3819,8 +3748,8 @@ namespace cAlgo
             // Local
             void FinalizeBands(ChartTrendLine low, ChartTrendLine center, ChartTrendLine high, ChartRectangle rectBand) 
             {
-                LineStyle nodeStyle = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? LineStyleHVN : LineStyleLVN;
-                int  nodeThick = ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ThicknessHVN : ThicknessLVN;
+                LineStyle nodeStyle = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? LineStyleHVN : LineStyleLVN;
+                int  nodeThick = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ThicknessHVN : ThicknessLVN;
             
                 rectBand.IsFilled = true; 
                 
@@ -3829,9 +3758,9 @@ namespace cAlgo
                 high.LineStyle = LineStyleBands; high.Thickness = ThicknessBands;
 
                 DateTime extDate = extraTPO == ExtraProfiles.Fixed ? Bars[Bars.OpenTimes.GetIndexByTime(Server.Time)].OpenTime : extendDate();
-                if (extendNodes) 
+                if (NodesParams.extendNodes) 
                 {
-                    if (!extendNodes_FromStart) {
+                    if (!NodesParams.extendNodes_FromStart) {
                         low.Time1 = xBar;
                         center.Time1 = xBar;
                         high.Time1 = xBar;
@@ -3839,7 +3768,7 @@ namespace cAlgo
                     }
                     
                     center.Time2 = extDate;
-                    if (extendNodes_WithBands) {
+                    if (NodesParams.extendNodes_WithBands) {
                         low.Time2 = extDate;
                         high.Time2 = extDate;
                         rectBand.Time2 = extDate;
@@ -3855,12 +3784,12 @@ namespace cAlgo
             }
             void DrawRawNodes() 
             {
-                string nodeRaw = ShowNode_Input == ShowNode_Data.HVN_Raw ? "HVN" : "LVN";
-                List<int> nodeIndexes = ShowNode_Input == ShowNode_Data.HVN_Raw ? hvnsRaw : lvnsRaw;
+                string nodeRaw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? "HVN" : "LVN";
+                List<int> nodeIndexes = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? hvnsRaw : lvnsRaw;
                 
-                LineStyle nodeStyle_Raw = ShowNode_Input == ShowNode_Data.HVN_Raw ? LineStyleHVN : LineStyleLVN;
-                int  nodeThick_Raw = ShowNode_Input == ShowNode_Data.HVN_Raw ? ThicknessHVN : ThicknessLVN;
-                Color nodeColor_Raw = ShowNode_Input == ShowNode_Data.HVN_Raw ? ColorHVN : ColorLVN;
+                LineStyle nodeStyle_Raw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? LineStyleHVN : LineStyleLVN;
+                int  nodeThick_Raw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? ThicknessHVN : ThicknessLVN;
+                Color nodeColor_Raw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? ColorHVN : ColorLVN;
 
                 foreach (int idx in nodeIndexes) 
                 {
@@ -3869,8 +3798,8 @@ namespace cAlgo
                     center.LineStyle = nodeStyle_Raw; center.Thickness = nodeThick_Raw;
                                         
                     DateTime extDate = extraTPO == ExtraProfiles.Fixed ? Bars[Bars.OpenTimes.GetIndexByTime(Server.Time)].OpenTime : extendDate();
-                    if (extendNodes) {
-                        if (!extendNodes_FromStart)
+                    if (NodesParams.extendNodes) {
+                        if (!NodesParams.extendNodes_FromStart)
                             center.Time1 = xBar;
                         center.Time2 = extDate;
                     }
@@ -3897,9 +3826,9 @@ namespace cAlgo
             }
             DateTime extendDate() {
                 string tfName = extraTPO == ExtraProfiles.No ?
-                (VPInterval_Input == VPInterval_Data.Daily ? "D1" :
-                    VPInterval_Input == VPInterval_Data.Weekly ? "W1" : "Month1" ) :
-                extraTPO == ExtraProfiles.MiniVP ? MiniVPs_Timeframe.ShortName.ToString() :
+                (GeneralParams.VPInterval_Input == VPInterval_Data.Daily ? "D1" :
+                    GeneralParams.VPInterval_Input == VPInterval_Data.Weekly ? "W1" : "Month1" ) :
+                extraTPO == ExtraProfiles.MiniVP ? ProfileParams.MiniVPs_Timeframe.ShortName.ToString() :
                 extraTPO == ExtraProfiles.Weekly ?  "W1" :  "Month1";
 
                 // Get the time-based interval value
@@ -3908,15 +3837,15 @@ namespace cAlgo
 
                 DateTime dateToReturn = xBar;
                 if (tfName.Contains('m'))
-                    dateToReturn = xBar.AddMinutes(tfValue * extendNodes_Count);
+                    dateToReturn = xBar.AddMinutes(tfValue * NodesParams.extendNodes_Count);
                 else if (tfName.Contains('h'))
-                    dateToReturn = xBar.AddHours(tfValue * extendNodes_Count);
+                    dateToReturn = xBar.AddHours(tfValue * NodesParams.extendNodes_Count);
                 else if (tfName.Contains('D'))
-                    dateToReturn = xBar.AddDays(tfValue * extendNodes_Count);
+                    dateToReturn = xBar.AddDays(tfValue * NodesParams.extendNodes_Count);
                 else if (tfName.Contains('W'))
-                    dateToReturn = xBar.AddDays(7 * extendNodes_Count);
+                    dateToReturn = xBar.AddDays(7 * NodesParams.extendNodes_Count);
                 else if (tfName.Contains("Month1"))
-                    dateToReturn = xBar.AddMonths(tfValue * extendNodes_Count);
+                    dateToReturn = xBar.AddMonths(tfValue * NodesParams.extendNodes_Count);
 
                 return dateToReturn;
             }            
@@ -3930,13 +3859,13 @@ namespace cAlgo
             LoadMoreHistory_IfNeeded();
 
             // LookBack from VP
-            Bars vpBars = VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
-                           VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
+            Bars vpBars = GeneralParams.VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
+                           GeneralParams.VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
             int firstIndex = Bars.OpenTimes.GetIndexByTime(vpBars.OpenTimes.FirstOrDefault());
 
             // Get index of VP Interval to continue only in Lookback
             int iVerify = vpBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[firstIndex]);
-            while (vpBars.ClosePrices.Count - iVerify > Lookback) {
+            while (vpBars.ClosePrices.Count - iVerify > GeneralParams.Lookback) {
                 firstIndex++;
                 iVerify = vpBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[firstIndex]);
             }
@@ -3946,35 +3875,28 @@ namespace cAlgo
             int startIndex = Bars.OpenTimes.GetIndexByTime(vpBars.OpenTimes[TF_idx]);
 
             // Weekly Profile but Daily VP
-            bool extraWeekly = EnableVP && EnableWeeklyProfile && VPInterval_Input == VPInterval_Data.Daily;
+            bool extraWeekly = ProfileParams.EnableWeeklyProfile && GeneralParams.VPInterval_Input == VPInterval_Data.Daily;
             if (extraWeekly) {
                 TF_idx = WeeklyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[firstIndex]);
                 startIndex = Bars.OpenTimes.GetIndexByTime(WeeklyBars.OpenTimes[TF_idx]);
             }
 
             // Monthly Profile
-            bool extraMonthly = EnableVP && EnableMonthlyProfile;
+            bool extraMonthly = ProfileParams.EnableMonthlyProfile;
             if (extraMonthly) {
                 TF_idx = MonthlyBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[firstIndex]);
                 startIndex = Bars.OpenTimes.GetIndexByTime(MonthlyBars.OpenTimes[TF_idx]);
             }
 
             // Reset VOL_Bars/Source Index.
-            lastBar_VP = 0;
-            lastBar_ExtraProfiles._Mini = 0;
-            lastBar_ExtraProfiles._Weekly = 0;
-            lastBar_ExtraProfiles._Monthly = 0;
-
+            PerformanceSource.ResetAll();
             // Reset Segments
             Segments_VP.Clear();
             segmentInfo.Clear();
-
             // Reset last update
-            lastCleaned._VP_Interval = 0;
-            lastCleaned._Mini = 0;
-
+            ClearIdx.ResetAll();
             // Reset Fixed Range
-            foreach (ChartRectangle rect in _rectangles)
+            foreach (ChartRectangle rect in RangeObjs.rectangles)
             {
                 DateTime end = rect.Time1 < rect.Time2 ? rect.Time2 : rect.Time1;
                 ResetFixedRange(rect.Name, end);
@@ -3985,15 +3907,13 @@ namespace cAlgo
             {
                 CreateSegments(index);
 
-                if (EnableVP) {
-                    CreateMonthlyVP(index);
-                    CreateWeeklyVP(index);
-                }
+                CreateMonthlyVP(index);
+                CreateWeeklyVP(index);
 
                 // Calculate VP only in lookback
                 if (extraWeekly || extraMonthly) {
                     iVerify = vpBars.OpenTimes.GetIndexByTime(Bars.OpenTimes[index]);
-                    if (vpBars.ClosePrices.Count - iVerify > Lookback)
+                    if (vpBars.ClosePrices.Count - iVerify > GeneralParams.Lookback)
                         continue;
                 }
 
@@ -4002,12 +3922,12 @@ namespace cAlgo
 
                 if (index == startIndex ||
                    (index - 1) == startIndex && isPriceBased_Chart ||
-                   (index - 1) == startIndex && (index - 1) != lastCleaned._VP_Interval)
+                   (index - 1) == startIndex && (index - 1) != ClearIdx.MainVP)
                     CleanUp_MainVP(startIndex, index);
 
+                try { if (ProfileParams.EnableMainVP) VolumeProfile(startIndex, index); } catch { }
+                
                 CreateMiniVPs(index);
-
-                try { if (EnableVP) VolumeProfile(startIndex, index); } catch { }
             }
 
             configHasChanged = true;
@@ -4016,24 +3936,24 @@ namespace cAlgo
 
         public void DrawStartVolumeLine() {
             try {
-                DateTime firstVolDate = VOL_Bars.OpenTimes.FirstOrDefault();
-                double firstVolPrice = VOL_Bars.HighPrices.FirstOrDefault();
+                DateTime firstVolDate = Source_Bars.OpenTimes.FirstOrDefault();
+                double firstVolPrice = Source_Bars.HighPrices.FirstOrDefault();
                 ChartVerticalLine lineInfo = Chart.DrawVerticalLine("Volume_Start", firstVolDate, Color.Red);
                 lineInfo.LineStyle = LineStyle.Lines;
-                ChartText textInfo = Chart.DrawText($"Volume_Start_Text", $"{VOL_Timeframe.ShortName} Volume Data \n ends here", firstVolDate, firstVolPrice, Color.Red);
+                ChartText textInfo = Chart.DrawText($"Volume_Start_Text", $"{ProfileParams.Source_Timeframe.ShortName} Volume Data \n ends here", firstVolDate, firstVolPrice, Color.Red);
                 textInfo.FontSize = 8;
             }
             catch { };
 
             try {
-                Bar firstInterval_Bar = VPInterval_Input == VPInterval_Data.Daily ? DailyBars.FirstOrDefault() :
-                                       VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars.FirstOrDefault() : MonthlyBars.FirstOrDefault();
+                Bar firstInterval_Bar = GeneralParams.VPInterval_Input == VPInterval_Data.Daily ? DailyBars.FirstOrDefault() :
+                                       GeneralParams.VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars.FirstOrDefault() : MonthlyBars.FirstOrDefault();
                 DateTime firstInterval_Date = firstInterval_Bar.OpenTime;
                 double firstInterval_Price = firstInterval_Bar.High;
 
                 ChartVerticalLine lineInfo = Chart.DrawVerticalLine("Lookback_Start", firstInterval_Date, Color.Gray);
                 lineInfo.LineStyle = LineStyle.Lines;
-                ChartText textInfo = Chart.DrawText($"Lookback_Start_Text", $"{VPInterval_Input} Interval Data \n ends here", firstInterval_Date, firstInterval_Price, Color.Gray);
+                ChartText textInfo = Chart.DrawText($"Lookback_Start_Text", $"{GeneralParams.VPInterval_Input} Interval Data \n ends here", firstInterval_Date, firstInterval_Price, Color.Gray);
                 textInfo.FontSize = 8;
             }
             catch { };
@@ -4041,33 +3961,33 @@ namespace cAlgo
         public void DrawTargetDateLine() {
             try
             {
-                Bars VPInterval_Bars = VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
-                                       VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
-                DateTime TargetVolDate = VPInterval_Bars.OpenTimes[VPInterval_Bars.ClosePrices.Count - Lookback];
-                TargetVolDate = EnableWeeklyProfile && !EnableMonthlyProfile ? WeeklyBars.LastBar.OpenTime.Date :
-                                EnableMonthlyProfile ? MonthlyBars.LastBar.OpenTime.Date :
+                Bars VPInterval_Bars = GeneralParams.VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
+                                       GeneralParams.VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
+                DateTime TargetVolDate = VPInterval_Bars.OpenTimes[VPInterval_Bars.ClosePrices.Count - GeneralParams.Lookback];
+                TargetVolDate = ProfileParams.EnableWeeklyProfile && !ProfileParams.EnableMonthlyProfile ? WeeklyBars.LastBar.OpenTime.Date :
+                                ProfileParams.EnableMonthlyProfile ? MonthlyBars.LastBar.OpenTime.Date :
                                 TargetVolDate;
                 ChartVerticalLine lineInfo = Chart.DrawVerticalLine("VolumeTarget", TargetVolDate, Color.Yellow);
                 lineInfo.LineStyle = LineStyle.Lines;
-                ChartText textInfo = Chart.DrawText($"VolumeTargetText", $"Target Volume Data", TargetVolDate, VOL_Bars.HighPrices.FirstOrDefault(), Color.Red);
+                ChartText textInfo = Chart.DrawText($"VolumeTargetText", $"Target Volume Data", TargetVolDate, Source_Bars.HighPrices.FirstOrDefault(), Color.Red);
                 textInfo.FontSize = 8;
             }
             catch { }
         }
 
         public void LoadMoreHistory_IfNeeded() {
-            Bars VPInterval_Bars = VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
-                                   VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
+            Bars VPInterval_Bars = GeneralParams.VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
+                                   GeneralParams.VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
 
-            DateTime sourceDate = EnableWeeklyProfile && !EnableMonthlyProfile ? WeeklyBars.LastBar.OpenTime.Date :
-                                  EnableMonthlyProfile ? MonthlyBars.LastBar.OpenTime.Date :
-                                  VPInterval_Bars.OpenTimes[VPInterval_Bars.ClosePrices.Count - Lookback];
+            DateTime sourceDate = ProfileParams.EnableWeeklyProfile && !ProfileParams.EnableMonthlyProfile ? WeeklyBars.LastBar.OpenTime.Date :
+                                  ProfileParams.EnableMonthlyProfile ? MonthlyBars.LastBar.OpenTime.Date :
+                                  VPInterval_Bars.OpenTimes[VPInterval_Bars.ClosePrices.Count - GeneralParams.Lookback];
 
             if (LoadBarsStrategy_Input == LoadBarsStrategy_Data.Async)
             {
-                if (VPInterval_Bars.ClosePrices.Count < Lookback || VOL_Bars.OpenTimes.FirstOrDefault() > sourceDate) {
-                    loadingAsyncBars = false;
-                    loadingBarsComplete = false;
+                if (VPInterval_Bars.ClosePrices.Count < GeneralParams.Lookback || Source_Bars.OpenTimes.FirstOrDefault() > sourceDate) {
+                    SourceObjs.startAsyncLoading = false;
+                    SourceObjs.isLoadingComplete = false;
                     timerHandler.isAsyncLoading = true;
                     Timer.Start(TimeSpan.FromSeconds(0.5));
                 }
@@ -4075,11 +3995,11 @@ namespace cAlgo
             }
 
             // Lookback
-            if (VPInterval_Bars.ClosePrices.Count < Lookback)
+            if (VPInterval_Bars.ClosePrices.Count < GeneralParams.Lookback)
             {
                 PopupNotification notifyProgress = Notifications.ShowPopup(NOTIFY_CAPTION, $"Loading Sync => {VPInterval_Bars} Lookback Bars", PopupNotificationState.InProgress);
 
-                while (VPInterval_Bars.ClosePrices.Count < Lookback)
+                while (VPInterval_Bars.ClosePrices.Count < GeneralParams.Lookback)
                 {
                     int loadedCount = VPInterval_Bars.LoadMoreHistory();
                     if (loadedCount == 0)
@@ -4089,15 +4009,15 @@ namespace cAlgo
                 notifyProgress.Complete(PopupNotificationState.Success);
             }
 
-            DateTime lookbackDate = VPInterval_Bars.OpenTimes[VPInterval_Bars.ClosePrices.Count - Lookback];
+            DateTime lookbackDate = VPInterval_Bars.OpenTimes[VPInterval_Bars.ClosePrices.Count - GeneralParams.Lookback];
 
-            sourceDate = EnableWeeklyProfile && !EnableMonthlyProfile ? WeeklyBars.LastBar.OpenTime.Date :
-                         EnableMonthlyProfile ? MonthlyBars.LastBar.OpenTime.Date :
-                         VPInterval_Bars.OpenTimes[VPInterval_Bars.ClosePrices.Count - Lookback];
+            sourceDate = ProfileParams.EnableWeeklyProfile && !ProfileParams.EnableMonthlyProfile ? WeeklyBars.LastBar.OpenTime.Date :
+                         ProfileParams.EnableMonthlyProfile ? MonthlyBars.LastBar.OpenTime.Date :
+                         VPInterval_Bars.OpenTimes[VPInterval_Bars.ClosePrices.Count - GeneralParams.Lookback];
 
-            if (EnableMiniProfiles && MiniVPs_Bars.OpenTimes.FirstOrDefault() > lookbackDate)
+            if (ProfileParams.EnableMiniProfiles && MiniVPs_Bars.OpenTimes.FirstOrDefault() > lookbackDate)
             {
-                PopupNotification notifyProgress = Notifications.ShowPopup(NOTIFY_CAPTION, $"Loading Sync => {MiniVPs_Timeframe} Lookback Bars", PopupNotificationState.InProgress);
+                PopupNotification notifyProgress = Notifications.ShowPopup(NOTIFY_CAPTION, $"Loading Sync => {ProfileParams.MiniVPs_Timeframe} Lookback Bars", PopupNotificationState.InProgress);
 
                 while (MiniVPs_Bars.OpenTimes.FirstOrDefault() > lookbackDate)
                 {
@@ -4110,13 +4030,13 @@ namespace cAlgo
             }
 
             // Source
-            if (VOL_Bars.OpenTimes.FirstOrDefault() > sourceDate)
+            if (Source_Bars.OpenTimes.FirstOrDefault() > sourceDate)
             {
-                PopupNotification notifyProgress_Two = Notifications.ShowPopup(NOTIFY_CAPTION, $"Loading Sync => {VOL_Timeframe.ShortName} Bars", PopupNotificationState.InProgress);
+                PopupNotification notifyProgress_Two = Notifications.ShowPopup(NOTIFY_CAPTION, $"Loading Sync => {ProfileParams.Source_Timeframe.ShortName} Bars", PopupNotificationState.InProgress);
 
-                while (VOL_Bars.OpenTimes.FirstOrDefault() > sourceDate)
+                while (Source_Bars.OpenTimes.FirstOrDefault() > sourceDate)
                 {
-                    int loadedCount = VOL_Bars.LoadMoreHistory();
+                    int loadedCount = Source_Bars.LoadMoreHistory();
                     if (loadedCount == 0)
                         break;
                 }
@@ -4129,23 +4049,23 @@ namespace cAlgo
         {
             if (timerHandler.isAsyncLoading)
             {
-                if (!loadingAsyncBars)
+                if (!SourceObjs.startAsyncLoading)
                 {
                     string volumeLineInfo = "=> Zoom out and follow the Vertical Line";
-                    asyncBarsPopup = Notifications.ShowPopup(
+                    SourceObjs.asyncBarsPopup = Notifications.ShowPopup(
                         NOTIFY_CAPTION,
-                        $"[{Symbol.Name}] Loading Async {VOL_Timeframe.ShortName} Bars \n{volumeLineInfo}",
+                        $"[{Symbol.Name}] Loading Async {ProfileParams.Source_Timeframe.ShortName} Bars \n{volumeLineInfo}",
                         PopupNotificationState.InProgress
                     );
                 }
 
-                if (!loadingBarsComplete)
+                if (!SourceObjs.isLoadingComplete)
                 {
-                    Bars VPInterval_Bars = VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
-                                           VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
-                    if (VPInterval_Bars.ClosePrices.Count < Lookback)
+                    Bars VPInterval_Bars = GeneralParams.VPInterval_Input == VPInterval_Data.Daily ? DailyBars :
+                                           GeneralParams.VPInterval_Input == VPInterval_Data.Weekly ? WeeklyBars : MonthlyBars;
+                    if (VPInterval_Bars.ClosePrices.Count < GeneralParams.Lookback)
                     {
-                        while (VPInterval_Bars.ClosePrices.Count < Lookback)
+                        while (VPInterval_Bars.ClosePrices.Count < GeneralParams.Lookback)
                         {
                             int loadedCount = VPInterval_Bars.LoadMoreHistory();
                             if (loadedCount == 0)
@@ -4153,8 +4073,8 @@ namespace cAlgo
                         }
                     }
 
-                    DateTime lookbackDate = VPInterval_Bars.OpenTimes[VPInterval_Bars.ClosePrices.Count - Lookback];
-                    if (EnableMiniProfiles && MiniVPs_Bars.OpenTimes.FirstOrDefault() > lookbackDate) {
+                    DateTime lookbackDate = VPInterval_Bars.OpenTimes[VPInterval_Bars.ClosePrices.Count - GeneralParams.Lookback];
+                    if (ProfileParams.EnableMiniProfiles && MiniVPs_Bars.OpenTimes.FirstOrDefault() > lookbackDate) {
                         while (MiniVPs_Bars.OpenTimes.FirstOrDefault() > lookbackDate)
                         {
                             int loadedCount = MiniVPs_Bars.LoadMoreHistory();
@@ -4165,24 +4085,24 @@ namespace cAlgo
 
                     DrawTargetDateLine();
 
-                    DateTime sourceDate = EnableWeeklyProfile && !EnableMonthlyProfile ? WeeklyBars.LastBar.OpenTime.Date :
-                                          EnableMonthlyProfile ? MonthlyBars.LastBar.OpenTime.Date :
+                    DateTime sourceDate = ProfileParams.EnableWeeklyProfile && !ProfileParams.EnableMonthlyProfile ? WeeklyBars.LastBar.OpenTime.Date :
+                                          ProfileParams.EnableMonthlyProfile ? MonthlyBars.LastBar.OpenTime.Date :
                                           lookbackDate;
 
-                    VOL_Bars.LoadMoreHistoryAsync((_) => {
+                    Source_Bars.LoadMoreHistoryAsync((_) => {
                         DateTime currentDate = _.Bars.FirstOrDefault().OpenTime;
 
                         DrawStartVolumeLine();
 
                         if (currentDate != default && currentDate < sourceDate) {
-                            if (asyncBarsPopup.State != PopupNotificationState.Success)
-                                asyncBarsPopup.Complete(PopupNotificationState.Success);
+                            if (SourceObjs.asyncBarsPopup.State != PopupNotificationState.Success)
+                                SourceObjs.asyncBarsPopup.Complete(PopupNotificationState.Success);
 
-                            loadingBarsComplete = true;
+                            SourceObjs.isLoadingComplete = true;
                         }
                     });
 
-                    loadingAsyncBars = true;
+                    SourceObjs.startAsyncLoading = true;
                 }
                 else {
                     ClearAndRecalculate();
@@ -4194,7 +4114,7 @@ namespace cAlgo
         }
 
         public int GetLookback() {
-            return Lookback;
+            return GeneralParams.Lookback;
         }
         public double GetRowHeight() {
             return rowHeight;
@@ -4204,14 +4124,14 @@ namespace cAlgo
             rowHeight = number;
         }
         public void SetLookback(int number) {
-            Lookback = number;
+            GeneralParams.Lookback = number;
             LoadMoreHistory_IfNeeded();
         }
         public void SetMiniVPsBars() {
-            MiniVPs_Bars = MarketData.GetBars(MiniVPs_Timeframe);
+            MiniVPs_Bars = MarketData.GetBars(ProfileParams.MiniVPs_Timeframe);
         }
         public void SetVPBars() {
-            VOL_Bars = MarketData.GetBars(VOL_Timeframe);
+            Source_Bars = MarketData.GetBars(ProfileParams.Source_Timeframe);
             LoadMoreHistory_IfNeeded();
         }
 
@@ -4286,6 +4206,26 @@ namespace cAlgo
 
         private List<ParamDefinition> DefineParams()
         {
+            bool isWeekly() => Outside.GeneralParams.VolumeMode_Input != VolumeMode_Data.Buy_Sell && Outside.GeneralParams.VPInterval_Input != VPInterval_Data.Weekly;
+            bool isMonthly() => Outside.GeneralParams.VolumeMode_Input != VolumeMode_Data.Buy_Sell && Outside.GeneralParams.VPInterval_Input != VPInterval_Data.Monthly;
+            
+            bool isOnlySubt() => Outside.GeneralParams.VolumeMode_Input == VolumeMode_Data.Delta && Outside.ResultParams.ShowMinMaxDelta && Outside.ResultParams.ShowResults;
+            bool isOperator() => Outside.GeneralParams.VolumeMode_Input == VolumeMode_Data.Buy_Sell && Outside.ResultParams.ShowResults;
+
+            bool isNodeBand() => (
+                Outside.NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ||
+                Outside.NodesParams.ShowNode_Input == ShowNode_Data.LVN_With_Bands
+            ) && Outside.NodesParams.ProfileNode_Input != ProfileNode_Data.Percentile;
+            bool isStrongHVN() => (
+                Outside.NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ||
+                Outside.NodesParams.ProfileNode_Input == ProfileNode_Data.Percentile && Outside.NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands
+            );
+            bool isStrongLVN() => (
+                Outside.NodesParams.ShowNode_Input != ShowNode_Data.HVN_Raw && Outside.NodesParams.ProfileNode_Input != ProfileNode_Data.Percentile ||
+                Outside.NodesParams.ProfileNode_Input == ProfileNode_Data.Percentile &&
+                (Outside.NodesParams.ShowNode_Input == ShowNode_Data.LVN_With_Bands || Outside.NodesParams.ShowNode_Input == ShowNode_Data.LVN_Raw)
+            );
+
             return new List<ParamDefinition>
             {
                 new()
@@ -4295,7 +4235,7 @@ namespace cAlgo
                     Key = "LookbackKey",
                     Label = "Lookback",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.LookBack,
+                    GetDefault = p => p.GeneralParams.Lookback,
                     OnChanged = _ => UpdateLookback()
                 },
                 new()
@@ -4315,7 +4255,7 @@ namespace cAlgo
                     Key = "VPIntervalKey",
                     Label = "Interval",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.VPInterval.ToString(),
+                    GetDefault = p => p.GeneralParams.VPInterval_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(VPInterval_Data)),
                     OnChanged = _ => UpdateVPInterval(),
                 },
@@ -4325,10 +4265,10 @@ namespace cAlgo
                     Region = "Volume Profile",
                     RegionOrder = 2,
                     Key = "EnableVPKey",
-                    Label = "Enable?",
+                    Label = "Main Profile?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.EnableVP,
-                    OnChanged = _ => UpdateCheckbox("EnableVPKey", val => Outside.EnableVP = val),
+                    GetDefault = p => p.ProfileParams.EnableMainVP,
+                    OnChanged = _ => UpdateCheckbox("EnableVPKey", val => Outside.ProfileParams.EnableMainVP = val),
                 },
                 new()
                 {
@@ -4337,9 +4277,9 @@ namespace cAlgo
                     Key = "WeeklyVPKey",
                     Label = "Weekly VP?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.EnableWeeklyProfile,
-                    OnChanged = _ => UpdateCheckbox("WeeklyVPKey", val => Outside.EnableWeeklyProfile = val),
-                    IsVisible = () => Outside.VolumeMode_Input != VolumeMode_Data.Buy_Sell && Outside.VPInterval_Input != VPInterval_Data.Weekly
+                    GetDefault = p => p.ProfileParams.EnableWeeklyProfile,
+                    OnChanged = _ => UpdateCheckbox("WeeklyVPKey", val => Outside.ProfileParams.EnableWeeklyProfile = val),
+                    IsVisible = () => isWeekly()
                 },
                 new()
                 {
@@ -4348,9 +4288,9 @@ namespace cAlgo
                     Key = "MonthlyVPKey",
                     Label = "Monthly VP?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.EnableMonthlyProfile,
-                    OnChanged = _ => UpdateCheckbox("MonthlyVPKey", val => Outside.EnableMonthlyProfile = val),
-                    IsVisible = () => Outside.VolumeMode_Input != VolumeMode_Data.Buy_Sell && Outside.VPInterval_Input != VPInterval_Data.Monthly
+                    GetDefault = p => p.ProfileParams.EnableMonthlyProfile,
+                    OnChanged = _ => UpdateCheckbox("MonthlyVPKey", val => Outside.ProfileParams.EnableMonthlyProfile = val),
+                    IsVisible = () => isMonthly()
                 },
                 new()
                 {
@@ -4359,8 +4299,8 @@ namespace cAlgo
                     Key = "FillVPKey",
                     Label = "Fill Histogram?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.FillHist_VP,
-                    OnChanged = _ => UpdateCheckbox("FillVPKey", val => Outside.FillHist_VP = val),
+                    GetDefault = p => p.ProfileParams.FillHist_VP,
+                    OnChanged = _ => UpdateCheckbox("FillVPKey", val => Outside.ProfileParams.FillHist_VP = val),
                 },
                 new()
                 {
@@ -4369,7 +4309,7 @@ namespace cAlgo
                     Key = "SideVPKey",
                     Label = "Side",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.HistogramSide.ToString(),
+                    GetDefault = p => p.ProfileParams.HistogramSide_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(HistSide_Data)),
                     OnChanged = _ => UpdateSideVP(),
                 },
@@ -4380,7 +4320,7 @@ namespace cAlgo
                     Key = "WidthVPKey",
                     Label = "Width",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.HistogramWidth.ToString(),
+                    GetDefault = p => p.ProfileParams.HistogramWidth_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(HistWidth_Data)),
                     OnChanged = _ => UpdateWidthVP(),
                 },
@@ -4391,8 +4331,8 @@ namespace cAlgo
                     Key = "IntradayVPKey",
                     Label = "Intraday?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ShowIntradayProfile,
-                    OnChanged = _ => UpdateCheckbox("IntradayVPKey", val => Outside.ShowIntradayProfile = val),
+                    GetDefault = p => p.ProfileParams.ShowIntradayProfile,
+                    OnChanged = _ => UpdateCheckbox("IntradayVPKey", val => Outside.ProfileParams.ShowIntradayProfile = val),
                 },
                 new()
                 {
@@ -4401,9 +4341,9 @@ namespace cAlgo
                     Key = "IntraOffsetKey",
                     Label = "Offset(bars)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.OffsetBarsIntraday.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.ProfileParams.OffsetBarsInput.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateIntradayOffset(),
-                    IsVisible = () => Outside.ShowIntradayProfile
+                    IsVisible = () => Outside.ProfileParams.ShowIntradayProfile
                 },
                 new()
                 {
@@ -4412,10 +4352,10 @@ namespace cAlgo
                     Key = "IntraTFKey",
                     Label = "Offset(time)",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.OffsetTimeframeIntraday.ShortName,
+                    GetDefault = p => p.ProfileParams.OffsetTimeframeInput.ShortName,
                     EnumOptions = () => Enum.GetNames(typeof(Supported_Timeframes)),
                     OnChanged = _ => UpdateIntradayTimeframe(),
-                    IsVisible = () => Outside.ShowIntradayProfile && Outside.isPriceBased_Chart
+                    IsVisible = () => Outside.ProfileParams.ShowIntradayProfile && Outside.isPriceBased_Chart
                 },
                 new()
                 {
@@ -4424,8 +4364,8 @@ namespace cAlgo
                     Key = "FixedRangeKey",
                     Label = "Fixed Range?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.FixedRange,
-                    OnChanged = _ => UpdateCheckbox("FixedRangeKey", val => Outside.EnableFixedRange = val),
+                    GetDefault = p => p.ProfileParams.EnableFixedRange,
+                    OnChanged = _ => UpdateCheckbox("FixedRangeKey", val => Outside.ProfileParams.EnableFixedRange = val),
                 },
                 new()
                 {
@@ -4434,10 +4374,10 @@ namespace cAlgo
                     Key = "FixedSegmentsKey",
                     Label = "Segments",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.SegmentsFixedRange.ToString(),
+                    GetDefault = p => p.ProfileParams.SegmentsFixedRange_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(SegmentsFixedRange_Data)),
                     OnChanged = _ => UpdateRangeSegments(),
-                    IsVisible = () => Outside.EnableFixedRange
+                    IsVisible = () => Outside.ProfileParams.EnableFixedRange
                 },
                 new()
                 {
@@ -4446,8 +4386,8 @@ namespace cAlgo
                     Key = "ShowOHLCKey",
                     Label = "OHLC Body?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.OHLC,
-                    OnChanged = _ => UpdateCheckbox("ShowOHLCKey", val => Outside.ShowOHLC = val),
+                    GetDefault = p => p.ProfileParams.ShowOHLC,
+                    OnChanged = _ => UpdateCheckbox("ShowOHLCKey", val => Outside.ProfileParams.ShowOHLC = val),
                 },
                 new()
                 {
@@ -4456,9 +4396,9 @@ namespace cAlgo
                     Key = "GradientKey",
                     Label = "Gradient?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.Gradient,
-                    OnChanged = _ => UpdateCheckbox("GradientKey", val => Outside.EnableGradient = val),
-                    IsVisible = () => Outside.VolumeMode_Input == VolumeMode_Data.Normal
+                    GetDefault = p => p.ProfileParams.EnableGradient,
+                    OnChanged = _ => UpdateCheckbox("GradientKey", val => Outside.ProfileParams.EnableGradient = val),
+                    IsVisible = () => Outside.GeneralParams.VolumeMode_Input == VolumeMode_Data.Normal
                 },
                 new()
                 {
@@ -4467,9 +4407,9 @@ namespace cAlgo
                     Key = "FillIntraVPKey",
                     Label = "Intra-Space?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.FillIntradaySpace,
-                    OnChanged = _ => UpdateCheckbox("FillIntraVPKey", val => Outside.FillIntradaySpace = val),
-                    IsVisible = () => Outside.ShowIntradayProfile && (Outside.EnableWeeklyProfile || Outside.EnableMonthlyProfile)
+                    GetDefault = p => p.ProfileParams.FillIntradaySpace,
+                    OnChanged = _ => UpdateCheckbox("FillIntraVPKey", val => Outside.ProfileParams.FillIntradaySpace = val),
+                    IsVisible = () => Outside.ProfileParams.ShowIntradayProfile && (Outside.ProfileParams.EnableWeeklyProfile || Outside.ProfileParams.EnableMonthlyProfile)
                 },
 
                 new()
@@ -4479,8 +4419,8 @@ namespace cAlgo
                     Key = "MiniVPsKey",
                     Label = "Enable?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.EnableMiniProfiles,
-                    OnChanged = _ => UpdateCheckbox("MiniVPsKey", val => Outside.EnableMiniProfiles = val)
+                    GetDefault = p => p.ProfileParams.EnableMiniProfiles,
+                    OnChanged = _ => UpdateCheckbox("MiniVPsKey", val => Outside.ProfileParams.EnableMiniProfiles = val)
                 },
                 new()
                 {
@@ -4489,7 +4429,7 @@ namespace cAlgo
                     Key = "MiniTFKey",
                     Label = "Mini-Interval",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.MiniVPsTimeframe.ShortName.ToString(),
+                    GetDefault = p => p.ProfileParams.MiniVPs_Timeframe.ShortName.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(Supported_Timeframes)),
                     OnChanged = _ => UpdateMiniVPTimeframe()
                 },
@@ -4500,260 +4440,254 @@ namespace cAlgo
                     Key = "MiniResultKey",
                     Label = "Mini-Result?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ShowMiniResults,
-                    OnChanged = _ => UpdateCheckbox("MiniResultKey", val => Outside.ShowMiniResults = val)
+                    GetDefault = p => p.ProfileParams.ShowMiniResults,
+                    OnChanged = _ => UpdateCheckbox("MiniResultKey", val => Outside.ProfileParams.ShowMiniResults = val)
                 },
 
                 new()
                 {
                     Region = "VA + POC",
-                    RegionOrder = 3,
+                    RegionOrder = 4,
                     Key = "EnableVAKey",
                     Label = "Enable VA?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ShowVA,
-                    OnChanged = _ => UpdateCheckbox("EnableVAKey", val => Outside.ShowVA = val)
+                    GetDefault = p => p.VAParams.ShowVA,
+                    OnChanged = _ => UpdateCheckbox("EnableVAKey", val => Outside.VAParams.ShowVA = val)
                 },
                 new()
                 {
                     Region = "VA + POC",
-                    RegionOrder = 3,
+                    RegionOrder = 4,
                     Key = "VAValueKey",
                     Label = "VA(%)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.PercentVA.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.VAParams.PercentVA.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdatePercentVA(),
-                    IsVisible = () => Outside.ShowVA
+                    IsVisible = () => Outside.VAParams.ShowVA
                 },
                 new()
                 {
                     Region = "VA + POC",
-                    RegionOrder = 3,
+                    RegionOrder = 4,
                     Key = "OnlyPOCKey",
                     Label = "Only POC?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.KeepPOC,
-                    OnChanged = _ => UpdateCheckbox("OnlyPOCKey", val => Outside.KeepPOC = val)
+                    GetDefault = p => p.VAParams.KeepPOC,
+                    OnChanged = _ => UpdateCheckbox("OnlyPOCKey", val => Outside.VAParams.KeepPOC = val)
                 },
                 new()
                 {
                     Region = "VA + POC",
-                    RegionOrder = 3,
+                    RegionOrder = 4,
                     Key = "ExtendVAKey",
                     Label = "Extend VA?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ExtendVA,
-                    OnChanged = _ => UpdateCheckbox("ExtendVAKey", val => Outside.ExtendVA = val)
+                    GetDefault = p => p.VAParams.ExtendVA,
+                    OnChanged = _ => UpdateCheckbox("ExtendVAKey", val => Outside.VAParams.ExtendVA = val)
                 },
                 new()
                 {
                     Region = "VA + POC",
-                    RegionOrder = 3,
+                    RegionOrder = 4,
                     Key = "ExtendCountKey",
                     Label = "Extend(count))",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.ExtendCount.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.VAParams.ExtendCount.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateExtendCount(),
-                    IsVisible = () => Outside.ExtendVA || Outside.ExtendPOC
+                    IsVisible = () => Outside.VAParams.ExtendVA || Outside.VAParams.ExtendPOC
                 },
                 new()
                 {
                     Region = "VA + POC",
-                    RegionOrder = 3,
+                    RegionOrder = 4,
                     Key = "ExtendPOCKey",
                     Label = "Extend POC?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ExtendPOC,
-                    OnChanged = _ => UpdateCheckbox("ExtendPOCKey", val => Outside.ExtendPOC = val)
+                    GetDefault = p => p.VAParams.ExtendPOC,
+                    OnChanged = _ => UpdateCheckbox("ExtendPOCKey", val => Outside.VAParams.ExtendPOC = val)
                 },
 
                 new()
                 {
                     Region = "HVN + LVN",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "EnableNodeKey",
                     Label = "Enable?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.EnableNodes,
-                    OnChanged = _ => UpdateCheckbox("EnableNodeKey", val => Outside.EnableNodeDetection = val)
+                    GetDefault = p => p.NodesParams.EnableNodeDetection,
+                    OnChanged = _ => UpdateCheckbox("EnableNodeKey", val => Outside.NodesParams.EnableNodeDetection = val)
                 },
                 new()
                 {
                     Region = "HVN + LVN",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "NodeSmoothKey",
                     Label = "Smooth",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.ProfileSmooth.ToString(),
+                    GetDefault = p => p.NodesParams.ProfileSmooth_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(ProfileSmooth_Data)),
                     OnChanged = _ => UpdateNodeSmooth()
                 },
                 new()
                 {
                     Region = "HVN + LVN",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "NodeTypeKey",
                     Label = "Nodes",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.ProfileNode.ToString(),
+                    GetDefault = p => p.NodesParams.ProfileNode_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(ProfileNode_Data)),
                     OnChanged = _ => UpdateNodeType()
                 },
                 new()
                 {
                     Region = "HVN + LVN",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "ShowNodeKey",
                     Label = "Show",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.ShowNode.ToString(),
+                    GetDefault = p => p.NodesParams.ShowNode_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(ShowNode_Data)),
                     OnChanged = _ => UpdateShowNode(),
                 },
                 new()
                 {
                     Region = "HVN + LVN",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "HvnBandPctKey",
                     Label = "HVN Band(%)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.BandHVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.NodesParams.bandHVN_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateHVN_Band(),
-                    IsVisible = () => (Outside.ShowNode_Input == ShowNode_Data.HVN_With_Bands || Outside.ShowNode_Input == ShowNode_Data.LVN_With_Bands) &&
-                                       Outside.ProfileNode_Input != ProfileNode_Data.Percentile
+                    IsVisible = () => isNodeBand()
                 },
                 new()
                 {
                     Region = "HVN + LVN",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "LvnBandPctKey",
                     Label = "LVN Band(%)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.BandLVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.NodesParams.bandLVN_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateLVN_Band(),
-                    IsVisible = () => (Outside.ShowNode_Input == ShowNode_Data.HVN_With_Bands || Outside.ShowNode_Input == ShowNode_Data.LVN_With_Bands) &&
-                                       Outside.ProfileNode_Input != ProfileNode_Data.Percentile
+                    IsVisible = () => isNodeBand()
                 },
                 new()
                 {
                     Region = "HVN + LVN",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "NodeStrongKey",
                     Label = "Only Strong?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.OnlyStrong, 
-                    OnChanged = _ => UpdateCheckbox("NodeStrongKey", val => Outside.onlyStrongNodes = val)
+                    GetDefault = p => p.NodesParams.onlyStrongNodes, 
+                    OnChanged = _ => UpdateCheckbox("NodeStrongKey", val => Outside.NodesParams.onlyStrongNodes = val)
                 },
                 // 'Strong HVN' for HVN_Raw(only) on [LocalMinMax, Topology]
                 new()
                 {
                     Region = "HVN + LVN",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "StrongHvnPctKey",
                     Label = "(%) >= POC",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.StrongHVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.NodesParams.strongHVN_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateHVN_Strong(),
-                    IsVisible = () => Outside.onlyStrongNodes && (Outside.ShowNode_Input == ShowNode_Data.HVN_Raw ||
-                                      Outside.ProfileNode_Input == ProfileNode_Data.Percentile && Outside.ShowNode_Input == ShowNode_Data.HVN_With_Bands)
+                    IsVisible = () => Outside.NodesParams.onlyStrongNodes && isStrongHVN()
                 },
                 // 'Strong LVN' should be used by HVN_With_Bands, since the POCs are derived from LVN Split.
                 // on [LocalMinMax, Topology] 
                 new()
                 {
                     Region = "HVN + LVN",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "StrongLvnPctKey",
                     Label = "(%) <= POC",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.StrongLVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.NodesParams.strongLVN_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateLVN_Strong(),
-                    IsVisible = () => Outside.onlyStrongNodes &&
-                            (Outside.ShowNode_Input != ShowNode_Data.HVN_Raw && Outside.ProfileNode_Input != ProfileNode_Data.Percentile ||
-                            Outside.ProfileNode_Input == ProfileNode_Data.Percentile && 
-                            (Outside.ShowNode_Input == ShowNode_Data.LVN_With_Bands || Outside.ShowNode_Input == ShowNode_Data.LVN_Raw))
+                    IsVisible = () => Outside.NodesParams.onlyStrongNodes && isStrongLVN()
                 },
                 new()
                 {
                     Region = "HVN + LVN",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "ExtendNodeKey",
                     Label = "Extend?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ExtendNodes,
-                    OnChanged = _ => UpdateCheckbox("ExtendNodeKey", val => Outside.extendNodes = val)
+                    GetDefault = p => p.NodesParams.extendNodes,
+                    OnChanged = _ => UpdateCheckbox("ExtendNodeKey", val => Outside.NodesParams.extendNodes = val)
                 },
                 new()
                 {
                     Region = "HVN + LVN",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "ExtNodesCountKey",
                     Label = "Extend(count)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.ExtendNodes_Count.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.NodesParams.extendNodes_Count.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateExtendNodesCount(),
-                    IsVisible = () => Outside.extendNodes
+                    IsVisible = () => Outside.NodesParams.extendNodes
                 },
                 new()
                 {
                     Region = "HVN + LVN",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "ExtBandsKey",
                     Label = "Ext.(bands)?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ExtendNodes_WithBands,
-                    OnChanged = _ => UpdateCheckbox("ExtBandsKey", val => Outside.extendNodes_WithBands = val),
-                    IsVisible = () => Outside.extendNodes
+                    GetDefault = p => p.NodesParams.extendNodes_WithBands,
+                    OnChanged = _ => UpdateCheckbox("ExtBandsKey", val => Outside.NodesParams.extendNodes_WithBands = val),
+                    IsVisible = () => Outside.NodesParams.extendNodes
                 },
                 new()
                 {
                     Region = "HVN + LVN",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "HvnPctileKey",
                     Label = "HVN(%)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.PctileHVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.NodesParams.pctileHVN_Value.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateHVN_Pctile(),
-                    IsVisible = () => Outside.ProfileNode_Input == ProfileNode_Data.Percentile
+                    IsVisible = () => Outside.NodesParams.ProfileNode_Input == ProfileNode_Data.Percentile
                 },
                 new()
                 {
                     Region = "HVN + LVN",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "LvnPctileKey",
                     Label = "LVN(%)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.PctileLVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.NodesParams.pctileLVN_Value.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateLVN_Pctile(),
-                    IsVisible = () => Outside.ProfileNode_Input == ProfileNode_Data.Percentile
+                    IsVisible = () => Outside.NodesParams.ProfileNode_Input == ProfileNode_Data.Percentile
                 },
                 new()
                 {
                     Region = "HVN + LVN",
-                    RegionOrder = 4,
+                    RegionOrder = 5,
                     Key = "ExtNodeStartKey",
                     Label = "From start?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ExtendNodes_FromStart,
-                    OnChanged = _ => UpdateCheckbox("ExtNodeStartKey", val => Outside.extendNodes_FromStart = val),
-                    IsVisible = () => Outside.extendNodes
+                    GetDefault = p => p.NodesParams.extendNodes_FromStart,
+                    OnChanged = _ => UpdateCheckbox("ExtNodeStartKey", val => Outside.NodesParams.extendNodes_FromStart = val),
+                    IsVisible = () => Outside.NodesParams.extendNodes
                 },
 
                 new()
                 {
                     Region = "Misc",
-                    RegionOrder = 5,
+                    RegionOrder = 6,
                     Key = "UpdateVPKey",
                     Label = "Update At",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.UpdateProfileStrategy.ToString(),
+                    GetDefault = p => p.ProfileParams.UpdateProfile_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(UpdateProfile_Data)),
                     OnChanged = _ => UpdateVP(),
                 },
                 new()
                 {
                     Region = "Misc",
-                    RegionOrder = 5,
+                    RegionOrder = 6,
                     Key = "SourceVPKey",
                     Label = "Source",
                     InputType = ParamInputType.ComboBox,
@@ -4764,11 +4698,11 @@ namespace cAlgo
                 new()
                 {
                     Region = "Misc",
-                    RegionOrder = 5,
+                    RegionOrder = 6,
                     Key = "DistributionKey",
                     Label = "Distribution",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.Distribution.ToString(),
+                    GetDefault = p => p.ProfileParams.Distribution_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(Distribution_Data)),
                     OnChanged = _ => UpdateDistribution(),
                 },
@@ -4776,46 +4710,46 @@ namespace cAlgo
                 new()
                 {
                     Region = "Misc",
-                    RegionOrder = 5,
+                    RegionOrder = 6,
                     Key = "ShowResultsKey",
                     Label = "Results?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ShowResults,
-                    OnChanged = _ => UpdateCheckbox("ShowResultsKey", val => Outside.ShowResults = val),
+                    GetDefault = p => p.ResultParams.ShowResults,
+                    OnChanged = _ => UpdateCheckbox("ShowResultsKey", val => Outside.ResultParams.ShowResults = val),
                 },
                 new()
                 {
                     Region = "Misc",
-                    RegionOrder = 5,
+                    RegionOrder = 6,
                     Key = "ShowMinMaxKey",
                     Label = "Min/Max?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ShowMinMax,
-                    OnChanged = _ => UpdateCheckbox("ShowMinMaxKey", val => Outside.ShowMinMaxDelta = val),
-                    IsVisible = () => Outside.VolumeMode_Input == VolumeMode_Data.Delta && Outside.ShowResults
+                    GetDefault = p => p.ResultParams.ShowMinMaxDelta,
+                    OnChanged = _ => UpdateCheckbox("ShowMinMaxKey", val => Outside.ResultParams.ShowMinMaxDelta = val),
+                    IsVisible = () => Outside.GeneralParams.VolumeMode_Input == VolumeMode_Data.Delta && Outside.ResultParams.ShowResults
                 },
                 new()
                 {
                     Region = "Misc",
-                    RegionOrder = 5,
+                    RegionOrder = 6,
                     Key = "OnlySubtKey",
                     Label = "Only Subtract?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ShowOnlySubtDelta,
-                    OnChanged = _ => UpdateCheckbox("OnlySubtKey", val => Outside.ShowOnlySubtDelta = val),
-                    IsVisible = () => Outside.VolumeMode_Input == VolumeMode_Data.Delta && Outside.ShowMinMaxDelta && Outside.ShowResults
+                    GetDefault = p => p.ResultParams.ShowOnlySubtDelta,
+                    OnChanged = _ => UpdateCheckbox("OnlySubtKey", val => Outside.ResultParams.ShowOnlySubtDelta = val),
+                    IsVisible = () => isOnlySubt()
                 },
                 new()
                 {
                     Region = "Misc",
-                    RegionOrder = 5,
+                    RegionOrder = 6,
                     Key = "OperatorKey",
                     Label = "Operator",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.OperatorBuySell.ToString(),
+                    GetDefault = p => p.ResultParams.OperatorBuySell_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(OperatorBuySell_Data)),
                     OnChanged = _ => UpdateOperator(),
-                    IsVisible = () => Outside.VolumeMode_Input == VolumeMode_Data.Buy_Sell && Outside.ShowResults
+                    IsVisible = () => isOperator()
                 },
             };
         }
@@ -4855,7 +4789,7 @@ namespace cAlgo
                 BorderThickness = "0 0 0 1",
                 Style = Styles.CreateCommonBorderStyle(),
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Width = 230, // ParamsPanel Width
+                Width = 250, // ParamsPanel Width
                 Child = grid
             };
             return border;
@@ -4897,7 +4831,7 @@ namespace cAlgo
             {
                 Margin = 10,
                 // Fix MacOS => large string increase column and hidden others
-                Width = 230, // ParamsPanel Width
+                Width = 250, // ParamsPanel Width
                 // Fix MacOS(maybe) => panel is cut short/half the size
                 VerticalAlignment = VerticalAlignment.Top,
             };
@@ -4911,7 +4845,7 @@ namespace cAlgo
             grid.Rows[0].SetHeightInPixels(45);
 
             grid.AddChild(CreatePassButton("<"), 0, 0);
-            grid.AddChild(CreateModeInfo_Button(FirstParams.VolMode.ToString()), 0, 1, 1, 3);
+            grid.AddChild(CreateModeInfo_Button(FirstParams.GeneralParams.VolumeMode_Input.ToString()), 0, 1, 1, 3);
             grid.AddChild(CreatePassButton(">"), 0, 4);
 
             contentPanel.AddChild(grid);
@@ -5179,6 +5113,18 @@ namespace cAlgo
                     RangeBtn.IsVisible = value;
                     RefreshVisibility();
                     return;
+                case "NodeStrongKey":
+                    RecalculateOutsideWithMsg(false);
+                    return;
+                case "ExtendNodeKey":
+                    RecalculateOutsideWithMsg(false);
+                    return;
+                case "ExtBandsKey":
+                    RecalculateOutsideWithMsg(false);
+                    return;
+                case "ExtNodeStartKey":
+                    RecalculateOutsideWithMsg(false);
+                    return;
             }
 
             RecalculateOutsideWithMsg();
@@ -5209,9 +5155,9 @@ namespace cAlgo
         private void UpdateVPInterval()
         {
             var selected = comboBoxMap["VPIntervalKey"].SelectedItem;
-            if (Enum.TryParse(selected, out VPInterval_Data intervalType) && intervalType != Outside.VPInterval_Input)
+            if (Enum.TryParse(selected, out VPInterval_Data intervalType) && intervalType != Outside.GeneralParams.VPInterval_Input)
             {
-                Outside.VPInterval_Input = intervalType;
+                Outside.GeneralParams.VPInterval_Input = intervalType;
                 Outside.LoadMoreHistory_IfNeeded();
                 RecalculateOutsideWithMsg();
             }
@@ -5221,27 +5167,27 @@ namespace cAlgo
         private void UpdateSideVP()
         {
             var selected = comboBoxMap["SideVPKey"].SelectedItem;
-            if (Enum.TryParse(selected, out HistSide_Data sideType) && sideType != Outside.HistogramSide_Input)
+            if (Enum.TryParse(selected, out HistSide_Data sideType) && sideType != Outside.ProfileParams.HistogramSide_Input)
             {
-                Outside.HistogramSide_Input = sideType;
+                Outside.ProfileParams.HistogramSide_Input = sideType;
                 RecalculateOutsideWithMsg(false);
             }
         }
         private void UpdateWidthVP()
         {
             var selected = comboBoxMap["WidthVPKey"].SelectedItem;
-            if (Enum.TryParse(selected, out HistWidth_Data widthType) && widthType != Outside.HistogramWidth_Input)
+            if (Enum.TryParse(selected, out HistWidth_Data widthType) && widthType != Outside.ProfileParams.HistogramWidth_Input)
             {
-                Outside.HistogramWidth_Input = widthType;
+                Outside.ProfileParams.HistogramWidth_Input = widthType;
                 RecalculateOutsideWithMsg(false);
             }
         }
         private void UpdateIntradayOffset()
         {
             int value = int.TryParse(textInputMap["IntraOffsetKey"].Text, out var n) ? n : -1;
-            if (value > 0 && value != Outside.OffsetBarsInput)
+            if (value > 0 && value != Outside.ProfileParams.OffsetBarsInput)
             {
-                Outside.OffsetBarsInput = value;
+                Outside.ProfileParams.OffsetBarsInput = value;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -5249,17 +5195,17 @@ namespace cAlgo
         {
             var selected = comboBoxMap["IntraTFKey"].SelectedItem;
             TimeFrame value = StringToTimeframe(selected);
-            if (value != TimeFrame.Minute && value != Outside.OffsetTimeframeInput)
+            if (value != TimeFrame.Minute && value != Outside.ProfileParams.OffsetTimeframeInput)
             {
-                Outside.OffsetTimeframeInput = value;
+                Outside.ProfileParams.OffsetTimeframeInput = value;
                 RecalculateOutsideWithMsg(false);
             }
         }
         private void UpdateRangeSegments() {
             var selected = comboBoxMap["FixedSegmentsKey"].SelectedItem;
-            if (Enum.TryParse(selected, out SegmentsFixedRange_Data segmentsType) && segmentsType != Outside.SegmentsFixedRange_Input)
+            if (Enum.TryParse(selected, out SegmentsFixedRange_Data segmentsType) && segmentsType != Outside.ProfileParams.SegmentsFixedRange_Input)
             {
-                Outside.SegmentsFixedRange_Input = segmentsType;
+                Outside.ProfileParams.SegmentsFixedRange_Input = segmentsType;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -5267,9 +5213,9 @@ namespace cAlgo
         {
             var selected = comboBoxMap["MiniTFKey"].SelectedItem;
             TimeFrame value = StringToTimeframe(selected);
-            if (value != TimeFrame.Minute && value != Outside.MiniVPs_Timeframe)
+            if (value != TimeFrame.Minute && value != Outside.ProfileParams.MiniVPs_Timeframe)
             {
-                Outside.MiniVPs_Timeframe = value;
+                Outside.ProfileParams.MiniVPs_Timeframe = value;
                 Outside.SetMiniVPsBars();
                 RecalculateOutsideWithMsg();
             }
@@ -5315,18 +5261,18 @@ namespace cAlgo
         private void UpdatePercentVA()
         {
             int value = int.TryParse(textInputMap["VAValueKey"].Text, out var n) ? n : -1;
-            if (value > 0 && value <= 100 && value != Outside.PercentVA)
+            if (value > 0 && value <= 100 && value != Outside.VAParams.PercentVA)
             {
-                Outside.PercentVA = value;
+                Outside.VAParams.PercentVA = value;
                 SetApplyVisibility();
             }
         }
         private void UpdateExtendCount()
         {
             int value = int.TryParse(textInputMap["ExtendCountKey"].Text, out var n) ? n : -1;
-            if (value > 0 && value != Outside.ExtendCount)
+            if (value > 0 && value != Outside.VAParams.ExtendCount)
             {
-                Outside.ExtendCount = value;
+                Outside.VAParams.ExtendCount = value;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -5335,9 +5281,9 @@ namespace cAlgo
         private void UpdateOperator()
         {
             var selected = comboBoxMap["OperatorKey"].SelectedItem;
-            if (Enum.TryParse(selected, out OperatorBuySell_Data op) && op != Outside.OperatorBuySell_Input)
+            if (Enum.TryParse(selected, out OperatorBuySell_Data op) && op != Outside.ResultParams.OperatorBuySell_Input)
             {
-                Outside.OperatorBuySell_Input = op;
+                Outside.ResultParams.OperatorBuySell_Input = op;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -5346,27 +5292,28 @@ namespace cAlgo
         private void UpdateNodeSmooth()
         {
             var selected = comboBoxMap["NodeSmoothKey"].SelectedItem;
-            if (Enum.TryParse(selected, out ProfileSmooth_Data smoothType) && smoothType != Outside.ProfileSmooth_Input)
+            if (Enum.TryParse(selected, out ProfileSmooth_Data smoothType) && smoothType != Outside.NodesParams.ProfileSmooth_Input)
             {
-                Outside.ProfileSmooth_Input = smoothType;
+                Outside.NodesParams.ProfileSmooth_Input = smoothType;
+                Outside.nodesKernel = null;
                 RecalculateOutsideWithMsg(false);
             }
         }
         private void UpdateNodeType()
         {
             var selected = comboBoxMap["NodeTypeKey"].SelectedItem;
-            if (Enum.TryParse(selected, out ProfileNode_Data nodeType) && nodeType != Outside.ProfileNode_Input)
+            if (Enum.TryParse(selected, out ProfileNode_Data nodeType) && nodeType != Outside.NodesParams.ProfileNode_Input)
             {
-                Outside.ProfileNode_Input = nodeType;
+                Outside.NodesParams.ProfileNode_Input = nodeType;
                 RecalculateOutsideWithMsg(false);
             }
         }
         private void UpdateShowNode()
         {
             var selected = comboBoxMap["ShowNodeKey"].SelectedItem;
-            if (Enum.TryParse(selected, out ShowNode_Data showNodeType) && showNodeType != Outside.ShowNode_Input)
+            if (Enum.TryParse(selected, out ShowNode_Data showNodeType) && showNodeType != Outside.NodesParams.ShowNode_Input)
             {
-                Outside.ShowNode_Input = showNodeType;
+                Outside.NodesParams.ShowNode_Input = showNodeType;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -5374,9 +5321,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["HvnBandPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
             {
-                if (value != Outside.bandHVN_Pct)
+                if (value != Outside.NodesParams.bandHVN_Pct)
                 {
-                    Outside.bandHVN_Pct = value;
+                    Outside.NodesParams.bandHVN_Pct = value;
                     SetApplyVisibility();
                 }
             }
@@ -5385,9 +5332,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["LvnBandPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
             {
-                if (value != Outside.bandLVN_Pct)
+                if (value != Outside.NodesParams.bandLVN_Pct)
                 {
-                    Outside.bandLVN_Pct = value;
+                    Outside.NodesParams.bandLVN_Pct = value;
                     SetApplyVisibility();
                 }
             }
@@ -5396,9 +5343,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["StrongHvnPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
             {
-                if (value != Outside.strongHVN_Pct)
+                if (value != Outside.NodesParams.strongHVN_Pct)
                 {
-                    Outside.strongHVN_Pct = value;
+                    Outside.NodesParams.strongHVN_Pct = value;
                     SetApplyVisibility();
                 }
             }
@@ -5407,9 +5354,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["StrongLvnPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
             {
-                if (value != Outside.strongLVN_Pct)
+                if (value != Outside.NodesParams.strongLVN_Pct)
                 {
-                    Outside.strongLVN_Pct = value;
+                    Outside.NodesParams.strongLVN_Pct = value;
                     SetApplyVisibility();
                 }
             }
@@ -5417,27 +5364,27 @@ namespace cAlgo
         private void UpdateExtendNodesCount() 
         {
             int value = int.TryParse(textInputMap["ExtNodesCountKey"].Text, out var n) ? n : -1;
-            if (value > 0 && value != Outside.extendNodes_Count)
+            if (value > 0 && value != Outside.NodesParams.extendNodes_Count)
             {
-                Outside.extendNodes_Count = value;
+                Outside.NodesParams.extendNodes_Count = value;
                 RecalculateOutsideWithMsg(false);
             }
         }
         private void UpdateHVN_Pctile()
         {
             int value = int.TryParse(textInputMap["HvnPctileKey"].Text, out var n) ? n : -1;
-            if (value > 0 && value != Outside.pctileHVN_Value)
+            if (value > 0 && value != Outside.NodesParams.pctileHVN_Value)
             {
-                Outside.pctileHVN_Value = value;
+                Outside.NodesParams.pctileHVN_Value = value;
                 SetApplyVisibility();
             }
         }
         private void UpdateLVN_Pctile()
         {
             int value = int.TryParse(textInputMap["LvnPctileKey"].Text, out var n) ? n : -1;
-            if (value > 0 && value != Outside.pctileLVN_Value)
+            if (value > 0 && value != Outside.NodesParams.pctileLVN_Value)
             {
-                Outside.pctileLVN_Value = value;
+                Outside.NodesParams.pctileLVN_Value = value;
                 SetApplyVisibility();
             }
         }
@@ -5446,9 +5393,9 @@ namespace cAlgo
         private void UpdateVP()
         {
             var selected = comboBoxMap["UpdateVPKey"].SelectedItem;
-            if (Enum.TryParse(selected, out UpdateProfile_Data updateType) && updateType != Outside.UpdateProfile_Input)
+            if (Enum.TryParse(selected, out UpdateProfile_Data updateType) && updateType != Outside.ProfileParams.UpdateProfile_Input)
             {
-                Outside.UpdateProfile_Input = updateType;
+                Outside.ProfileParams.UpdateProfile_Input = updateType;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -5456,9 +5403,9 @@ namespace cAlgo
         {
             var selected = comboBoxMap["SourceVPKey"].SelectedItem;
             TimeFrame value = StringToTimeframe(selected);
-            if (value != Outside.VOL_Timeframe)
+            if (value != Outside.ProfileParams.Source_Timeframe)
             {
-                Outside.VOL_Timeframe = value;
+                Outside.ProfileParams.Source_Timeframe = value;
                 Outside.SetVPBars();
                 RecalculateOutsideWithMsg();
             }
@@ -5466,9 +5413,9 @@ namespace cAlgo
         private void UpdateDistribution()
         {
             var selected = comboBoxMap["DistributionKey"].SelectedItem;
-            if (Enum.TryParse(selected, out Distribution_Data distributionType) && distributionType != Outside.Distribution_Input)
+            if (Enum.TryParse(selected, out Distribution_Data distributionType) && distributionType != Outside.ProfileParams.Distribution_Input)
             {
-                Outside.Distribution_Input = distributionType;
+                Outside.ProfileParams.Distribution_Input = distributionType;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -5521,13 +5468,13 @@ namespace cAlgo
                 PopupNotificationState.InProgress
             );
 
-            Outside.VolumeMode_Input = Outside.VolumeMode_Input switch
+            Outside.GeneralParams.VolumeMode_Input = Outside.GeneralParams.VolumeMode_Input switch
             {
                 VolumeMode_Data.Normal => VolumeMode_Data.Buy_Sell,
                 VolumeMode_Data.Buy_Sell => VolumeMode_Data.Delta,
                 _ => VolumeMode_Data.Normal
             };
-            ModeBtn.Text = Outside.VolumeMode_Input.ToString();
+            ModeBtn.Text = Outside.GeneralParams.VolumeMode_Input.ToString();
             RefreshVisibility();
             RecalculateOutsideWithMsg();
 
@@ -5542,13 +5489,13 @@ namespace cAlgo
                 PopupNotificationState.InProgress
             );
 
-            Outside.VolumeMode_Input = Outside.VolumeMode_Input switch
+            Outside.GeneralParams.VolumeMode_Input = Outside.GeneralParams.VolumeMode_Input switch
             {
                 VolumeMode_Data.Delta => VolumeMode_Data.Buy_Sell,
                 VolumeMode_Data.Buy_Sell => VolumeMode_Data.Normal,
                 _ => VolumeMode_Data.Delta
             };
-            ModeBtn.Text = Outside.VolumeMode_Input.ToString();
+            ModeBtn.Text = Outside.GeneralParams.VolumeMode_Input.ToString();
             RefreshVisibility();
             RecalculateOutsideWithMsg();
 
@@ -5595,7 +5542,7 @@ namespace cAlgo
 
             // Manually hidden Apply Button
             ApplyBtn.IsVisible = false;
-            RangeBtn.IsVisible = Outside.EnableFixedRange;
+            RangeBtn.IsVisible = Outside.ProfileParams.EnableFixedRange;
         }
 
         private void RefreshHighlighting()
@@ -5709,7 +5656,7 @@ namespace cAlgo
             }
 
             // Save current volume mode to start from there later.
-            storageModel.Params["PanelMode"] = Outside.VolumeMode_Input;
+            storageModel.Params["PanelMode"] = Outside.GeneralParams.VolumeMode_Input;
 
             Outside.LocalStorage.SetObject(GetStorageKey(), storageModel, LocalStorageScope.Device);
             Outside.LocalStorage.Flush(LocalStorageScope.Device);
@@ -5769,7 +5716,7 @@ namespace cAlgo
             // Load the previously saved volume mode.
             string volModeText = storageModel.Params["PanelMode"].ToString();
             _ = Enum.TryParse(volModeText, out VolumeMode_Data volMode);
-            Outside.VolumeMode_Input = volMode;
+            Outside.GeneralParams.VolumeMode_Input = volMode;
             ModeBtn.Text = volModeText;
 
             // Use loaded params as _originalValues
@@ -5810,7 +5757,7 @@ namespace cAlgo
                     Text = (_isExpanded ? "▼ " : "► ") + text, // ▼ expanded / ► collapsed
                     Padding = 0,
                     // Width = 200,
-                    Width = 230, // ParamsPanel Width
+                    Width = 250, // ParamsPanel Width
                     Height = 25,
                     Margin = "0 10 0 0",
                     Style = Styles.CreateButtonStyle(),
