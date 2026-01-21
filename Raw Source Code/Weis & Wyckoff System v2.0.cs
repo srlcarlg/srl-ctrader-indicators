@@ -1,7 +1,7 @@
 /*
 --------------------------------------------------------------------------------------------------------------------------------
                     [Renko] Weis & Wyckoff System v2.0
-                                revision 1
+                                revision 2
 showcases the concepts of David H. Weis and Richard Wyckoff on Renko Chart
 
 It's just a way of visualizing the Waves and Volume numerically, it's not an original idea.
@@ -30,30 +30,25 @@ What's new in rev. 1? (after ODF_AGG)
     - High-performance GetWicks()
     - Asynchronous Tick Data Collection
 
-Last update => 04/01/2026
+Last update => 21/01/2026
 ===========================
 
 What's new in rev.2 (2026)?
 
-- New features for 'Wyckoff Bars' => 'Coloring':
-    - "L1Norm" to Strength Filter
-    - "Percentile" Ratio
-    - Independent Ratios on Params-Panel
-        - for [Fixed, Percentile] types
-        - and [Normalized_Emphasized] filter
-- Move '[Wyckoff] Show Strength?' debug parameter to Params-Panel
-- Fix (params-panel) => Normalized_Emphasized parameters (Period, Multiplier) doesn't set new values.
-- Fix (custom-mas) => StdDev was using the MA values instead of respective MA-Source values
-
-
-Final revision (2025)
-
-- Fix: Params Panel on MacOs
-    - Supposedly cut short/half the size (Can't reproduce it through VM)
-    - WrapPanel isn't fully supported (The button is hidden)
-    - MissingMethodException on cAlgo.API.Panel.get_Children() (...)
-        - At ToggleExpandCollapse event.
-- Tested on MacOS (12 Monterey / 13 Ventura) without 3D accelerated graphics
+New features for 'Wyckoff Bars' => 'Coloring':
+  - "L1Norm" to Strength Filter
+  - "Percentile" Ratio
+  - Independent Ratios on Params-Panel
+    - for [Fixed, Percentile] types
+    - and [Normalized_Emphasized] filter
+Params-Panel
+  - Move '[Wyckoff] Show Strength?' debug parameter to Params-Panel
+  - Move '[ZigZag] Show Turning Point Bar?' debug parameter to Params-Panel
+Fixes:
+  - (params-panel) => Normalized_Emphasized parameters (Period, Multiplier) doesn't set new values.
+  - (perf-drawing) => "Wyckoff Bars => Numbers" in live-market are always changed to '2' (Redraw_Fastest only)
+  - (perf-drawing) => "Weis Waves => "Show Current Wave?" often flickering in live-market (Redraw_Fastest only)
+    - It should/still flicks on the first developing wave after recalculating (switching parameters)
 
 ========================================================================
 
@@ -76,9 +71,9 @@ using static cAlgo.WeisWyckoffSystemV20;
 using System;
 using System.Linq;
 using System.Globalization;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace cAlgo
 {
@@ -130,7 +125,7 @@ namespace cAlgo
             Bottom_Center,
             Bottom_Right,
         }
-        [Parameter("Panel Position:", DefaultValue = PanelAlign_Data.Bottom_Right, Group = "==== Weis & Wyckoff System v2.0 ====")]
+        [Parameter("Panel Position:", DefaultValue = PanelAlign_Data.Bottom_Left, Group = "==== Weis & Wyckoff System v2.0 ====")]
         public PanelAlign_Data PanelAlign_Input { get; set; }
 
 
@@ -140,7 +135,7 @@ namespace cAlgo
         [Parameter("[Wyckoff] Use Custom MAs?", DefaultValue = true, Group = "==== Specific Parameters ====")]
         public bool UseCustomMAs { get; set; }
 
-        [Parameter("[Renko] Show Wicks?", DefaultValue = false, Group = "==== Specific Parameters ====")]
+        [Parameter("[Renko] Show Wicks?", DefaultValue = true, Group = "==== Specific Parameters ====")]
         public bool ShowWicks { get; set; }
 
         [Parameter("[Renko] Wicks Thickness:", DefaultValue = 1, MaxValue = 5, Group = "==== Specific Parameters ====")]
@@ -218,8 +213,6 @@ namespace cAlgo
         public Color DownLineColor { get; set; }
 
 
-        [Parameter("[ZigZag] Show Turning Point Bar?", DefaultValue = false, Group = "==== Debug ====")]
-        public bool ShowTurningPoint { get; set; }
         [Parameter("[ZigZag] Invert Turning Color?", DefaultValue = true, Group = "==== Debug ====")]
         public bool InvertTurningColor { get; set; }
         [Parameter("[Weis] Show Wave Ratio?", DefaultValue = false, Group = "==== Debug ====")]
@@ -277,7 +270,6 @@ namespace cAlgo
         public Template_Data Template_Input = Template_Data.Insider;
 
         // Wyckoff Bars
-        public bool EnableWyckoff = true;
         public enum Numbers_Data
         {
             Both,
@@ -285,41 +277,45 @@ namespace cAlgo
             Time,
             None
         }
-        public Numbers_Data Numbers_Input = Numbers_Data.Both;
-
         public enum NumbersPosition_Data
         {
             Inside,
             Outside,
         }
-        public NumbersPosition_Data NumbersPosition_Input = NumbersPosition_Data.Inside;
-
         public enum NumbersBothPosition_Data
         {
             Default,
             Invert,
         }
-        public NumbersBothPosition_Data NumbersBothPosition_Input = NumbersBothPosition_Data.Default;
-
         public enum NumbersColor_Data
         {
             Volume,
             Time,
             CustomColor
         }
-        public NumbersColor_Data NumbersColor_Input = NumbersColor_Data.Volume;
-
         public enum BarsColor_Data
         {
             Volume,
             Time,
         }
-        public BarsColor_Data BarsColor_Input = BarsColor_Data.Volume;
 
-        public bool FillBars = true;
-        public bool KeepOutline = false;
-        public bool ShowOnlyLargeNumbers = false;
+        public class WyckoffParams_Info {
+            public bool EnableWyckoff = true;
+            public Numbers_Data Numbers_Input = Numbers_Data.Both;
+            public NumbersPosition_Data NumbersPosition_Input = NumbersPosition_Data.Inside;
 
+            public NumbersBothPosition_Data NumbersBothPosition_Input = NumbersBothPosition_Data.Default;
+            public NumbersColor_Data NumbersColor_Input = NumbersColor_Data.Volume;
+
+            public BarsColor_Data BarsColor_Input = BarsColor_Data.Volume;
+
+            public bool FillBars = true;
+            public bool KeepOutline = false;
+            public bool ShowOnlyLargeNumbers = false;
+        }
+        public WyckoffParams_Info WyckoffParams = new();
+
+        // Coloring (Wyckoff filter/ratio)
         public enum StrengthFilter_Data
         {
             MA,
@@ -328,46 +324,47 @@ namespace cAlgo
             Normalized_Emphasized,
             L1Norm
         }
-        public StrengthFilter_Data StrengthFilter_Input = StrengthFilter_Data.MA;
-        
         public enum StrengthRatio_Data
         {
             Fixed,
             Percentile,
-        }        
-        public StrengthRatio_Data StrengthRatio_Input = StrengthRatio_Data.Percentile;
-        public MovingAverageType MAtype = MovingAverageType.Exponential;
-        public int MAperiod = 5;
-        public int Pctile_Period = 20;
-        public int NormalizePeriod = 5;
-        public int NormalizeMultiplier = 10;
-        public bool ShowStrengthValue = false;
+        }
 
-        // Fixed Ratio
-        public double Lowest_FixedValue = 0.5;
-        public double Low_FixedValue = 1;
-        public double Average_FixedValue = 1.5;
-        public double High_FixedValue = 2;
-        public double Ultra_FixedValue = 2.01;
+        public class ColoringParams_Info {
+            public StrengthFilter_Data StrengthFilter_Input = StrengthFilter_Data.MA;
+            public StrengthRatio_Data StrengthRatio_Input = StrengthRatio_Data.Percentile;
+            public MovingAverageType MAtype = MovingAverageType.Exponential;
+            public int MAperiod = 5;
+            public int Pctile_Period = 20;
+            public int NormalizePeriod = 5;
+            public int NormalizeMultiplier = 10;
+            public bool ShowStrengthValue = false;
 
-        // Percentile Ratio
-        public int Lowest_PctileValue = 40;
-        public int Low_PctileValue = 70;
-        public int Average_PctileValue = 90;
-        public int High_PctileValue = 97;
-        public int Ultra_PctileValue = 99;
+            // Fixed Ratio
+            public double Lowest_FixedValue = 0.5;
+            public double Low_FixedValue = 1;
+            public double Average_FixedValue = 1.5;
+            public double High_FixedValue = 2;
+            public double Ultra_FixedValue = 2.01;
 
-        // Normalized_Emphasized ratio
-        public double Lowest_PctValue = 23.6;
-        public double Low_PctValue = 38.2;
-        public double Average_PctValue = 61.8;
-        public double High_PctValue = 100;
-        public double Ultra_PctValue = 101;
+            // Percentile Ratio
+            public int Lowest_PctileValue = 40;
+            public int Low_PctileValue = 70;
+            public int Average_PctileValue = 90;
+            public int High_PctileValue = 97;
+            public int Ultra_PctileValue = 99;
+
+            // Normalized_Emphasized ratio
+            public double Lowest_PctValue = 23.6;
+            public double Low_PctValue = 38.2;
+            public double Average_PctValue = 61.8;
+            public double High_PctValue = 100;
+            public double Ultra_PctValue = 101;
+        }
+        public ColoringParams_Info ColoringParams = new();
 
 
         // Weis Waves
-        public bool ShowCurrentWave = true;
-
         public enum ShowWaves_Data
         {
             No,
@@ -375,8 +372,6 @@ namespace cAlgo
             Volume,
             EffortvsResult
         }
-        public ShowWaves_Data ShowWaves_Input = ShowWaves_Data.EffortvsResult;
-
         public enum ShowOtherWaves_Data
         {
             No,
@@ -384,8 +379,6 @@ namespace cAlgo
             Price,
             Time
         }
-        public ShowOtherWaves_Data ShowOtherWaves_Input = ShowOtherWaves_Data.Both;
-
         public enum ShowMarks_Data
         {
             No,
@@ -393,28 +386,34 @@ namespace cAlgo
             Left,
             Right
         }
-        public ShowMarks_Data ShowMarks_Input = ShowMarks_Data.No;
-
-        public double EvsR_Ratio = 1.5;
-        public double WW_Ratio = 1.7;
-
-        // ZigZag
         public enum WavesMode_Data
         {
             Reversal,
             ZigZag,
         }
-        public WavesMode_Data WavesMode_Input = WavesMode_Data.ZigZag;
-
         public enum YellowZigZag_Data
         {
             UsePrev_SameWave,
             UsePrev_InvertWave,
             UseCurrent
         }
-        public YellowZigZag_Data YellowZigZag_Input = YellowZigZag_Data.UseCurrent;
-        public bool YellowRenko_IgnoreRanging = false;
 
+        public class WavesParams_Info {
+            public WavesMode_Data WavesMode_Input = WavesMode_Data.ZigZag;
+            public bool ShowCurrentWave = true;
+            public bool YellowRenko_IgnoreRanging = false;
+
+            public ShowWaves_Data ShowWaves_Input = ShowWaves_Data.EffortvsResult;
+            public ShowOtherWaves_Data ShowOtherWaves_Input = ShowOtherWaves_Data.Both;
+            public ShowMarks_Data ShowMarks_Input = ShowMarks_Data.No;
+            public YellowZigZag_Data YellowZigZag_Input = YellowZigZag_Data.UseCurrent;
+
+            public double EvsR_Ratio = 1.5;
+            public double WW_Ratio = 1.7;
+        }
+        public WavesParams_Info WavesParams = new();
+
+        // ZigZag
         public enum ZigZagMode_Data
         {
             ATR,
@@ -422,90 +421,121 @@ namespace cAlgo
             Pips,
             NoLag_HighLow
         }
-        public ZigZagMode_Data ZigZagMode_Input = ZigZagMode_Data.NoLag_HighLow;
-
-        public double PercentageZZ = 0.01;
-        public double PipsZZ = 0.1;
-
         public enum Priority_Data {
             None,
             Auto,
             Skip
         }
-        public Priority_Data Priority_Input = Priority_Data.None;
-
         public enum ZigZagSource_Data {
             Current,
             MultiTF
         }
-        public ZigZagSource_Data ZigZagSource_Input = ZigZagSource_Data.Current;
-        public TimeFrame MTFSource_TimeFrame = TimeFrame.Minute30;
-        public MTF_Sources MTFSource_Panel = MTF_Sources.Standard;
+
+        public class ZigZagParams_Info {
+            public ZigZagMode_Data ZigZagMode_Input = ZigZagMode_Data.NoLag_HighLow;
+            public Priority_Data Priority_Input = Priority_Data.None;
+            public bool ShowTurningPoint = false;
+
+            public double PercentageZZ = 0.01;
+            public double PipsZZ = 0.1;
+
+            public ZigZagSource_Data ZigZagSource_Input = ZigZagSource_Data.Current;
+            public TimeFrame MTFSource_TimeFrame = TimeFrame.Minute30;
+            public MTF_Sources MTFSource_Panel = MTF_Sources.Standard;
+        }
+        public ZigZagParams_Info ZigZagParams = new();
 
 
-        // ==== Weis Wave & Wyckoff System ====
-        public readonly string NOTIFY_CAPTION = "Weis & Wyckoff System";
+        // ==== Weis Wave & Wyckoff System ====        
+        public readonly string NOTIFY_CAPTION = "Weis & Wyckoff System \n    v2.0";
+
         private IndicatorDataSeries TimeSeries;
-        private IndicatorDataSeries StrengthSeries_Vol;
+        private IndicatorDataSeries StrengthSeries_Volume;
         private IndicatorDataSeries StrengthSeries_Time;
         private MovingAverage MATime, MAVol;
         private StandardDeviation stdDev_Time, stdDev_Vol;
 
         double[] prevWave_Up = { 0, 0 };
         double[] prevWave_Down = { 0, 0 };
-        // Volume/Cumulative Renko = EvsR
+        // Volume/Cumulative (Renko or Price) = EvsR
         double[] prevWaves_EvsR = { 0, 0, 0, 0 };
         // onlyVolume = Large WW
         double[] prevWaves_Volume = { 0, 0, 0, 0 };
+        
+        public class BooleanUtils_Info {
+            public bool isRenkoChart = false;
+            public bool isTickChart = false;
+            public bool isPriceBased_Chart = false;
+            public bool isPriceBased_NewBar = false;
+        }
+        public BooleanUtils_Info BooleanUtils = new();
 
-        public bool isRenkoChart = false;
-        public bool isTickChart = false;
-        public bool isPriceBased_Chart = false;
-        public bool isPriceBased_NewBar = false;
         private bool isLargeWave_EvsR = false;
         private bool lockMTFNotify = false;
         private ChartTrendLine PrevWave_TrendLine;
 
+
         // Zig Zag
-        private enum Direction
+        public enum Direction
         {
             UP,
             DOWN
         }
-        private Direction direction = Direction.DOWN;
-        private double extremumPrice = 0.0;
-        private int extremumIndex = 0;
+
+        public class ZigZagObjs_Info {
+            public Direction direction = Direction.DOWN;
+            public double extremumPrice = 0.0;
+            public int extremumIndex = 0;
+        }
+        public ZigZagObjs_Info ZigZagObjs = new();
+
         private int trendStartIndex = 0;
-        private Bars _m1Bars;
         private Bars MTFSource_Bars;
+        private Bars _m1Bars;
         private AverageTrueRange _ATR;
 
         [Output("ZigZag", LineColor = "DeepSkyBlue", Thickness = 2, PlotType = PlotType.Line)]
         public IndicatorDataSeries ZigZagBuffer { get; set; }
 
-        // ==== VolumeRenkoRange (Tick Volume) ====
+
+        // High-Performance VP_Tick()
+        private class PerfTickIndex {
+            public int lastIdx_Bars = 0;
+            public int lastIdx_Wicks = 0;
+
+            public void ResetAll() {
+                lastIdx_Bars = 0;
+                lastIdx_Wicks = 0;
+            }
+        }
+        private readonly PerfTickIndex PerformanceTick = new();
+        
+
+        // Tick Volume
+        public class TickObjs_Info {
+            public DateTime firstTickTime;
+            public DateTime fromDateTime;
+            public ProgressBar syncProgressBar = null;
+            public PopupNotification asyncPopup = null;
+            public bool startAsyncLoading = false;
+            public bool isLoadingComplete = false;
+        }
+        private readonly TickObjs_Info TickObjs = new();
+
         private IndicatorDataSeries VolumeSeries;
-        private DateTime firstTickTime;
-        private DateTime fromDateTime;
         private Bars TicksOHLC;
-        private ProgressBar syncTickProgressBar = null;
-        PopupNotification asyncTickPopup = null;
-        private bool loadingAsyncTicks = false;
-        private bool loadingTicksComplete = false;
-
-        // ==== Renko Wicks ====
-        private Color UpWickColor;
-        private Color DownWickColor;
-
-        // High-Performance Tick
-        private int lastTick_Wicks = 0;
-        private int lastTick_Bars = 0;
 
         // Timer
         private class TimerHandler {
             public bool isAsyncLoading = false;
         }
         private readonly TimerHandler timerHandler = new();
+        
+
+        // ==== Renko Wicks ====
+        private Color UpWickColor;
+        private Color DownWickColor;
+
 
         // Custom MAs
         public enum MAType_Data
@@ -521,13 +551,34 @@ namespace cAlgo
         }
         public MAType_Data customMAtype = MAType_Data.Triangular;
 
-        private readonly Dictionary<int, double> _dynamicBuffer = new();
-        private readonly Dictionary<int, double> _maDynamic = new();
+        private enum SourceSwitch {
+            Volume,
+            Time
+        }
+        private class SourceBuffer {
+            public Dictionary<int, double> Volume = new();
+            public Dictionary<int, double> Time = new();
+
+            public Dictionary<int, double> MAVolume = new();
+            public Dictionary<int, double> MATime = new();
+
+            public void ClearAll()
+            {
+                Dictionary<int, double>[] _all = new[] {
+                    Volume, Time, MAVolume, MATime
+                };
+
+                foreach (var dict in _all)
+                    dict.Clear();
+            }
+        }
+        private readonly SourceBuffer _customBuffer = new();
+
 
         // Performance Drawing
         // Disable X2, Y2 and IconType "never assigned" warning
         #pragma warning disable CS0649
-        private class DrawInfo
+        public class DrawInfo
         {
             public int BarIndex;
             public DrawType Type;
@@ -543,114 +594,63 @@ namespace cAlgo
             public ChartIconType IconType;
             public Color Color;
         }
-        private enum DrawType
+        public enum DrawType
         {
             Text,
             Icon,
             Ellipse,
             Rectangle
         }
+        public class PerfDrawingObjs_Info {
+            /*
+              Redraw should use another dict as value,
+              to avoid creating previous Volume Modes objects
+              or previous objects from Static Update.
+              - intKey is the Bar index
+              - stringKey is the DrawInfo.Id (object name)
+              - DrawInfo is the current Bar object info.
+            */
+            public Dictionary<int, Dictionary<string, DrawInfo>> redrawInfos = new();
+            /*
+              For real-time market:
+              - intKey is always [0]
+              - stringKey is the DrawInfo.Id (object name)
+              - DrawInfo is the current Bar object info.
+            */
+            public Dictionary<int, Dictionary<string, DrawInfo>> currentToRedraw = new();
 
-        /*
-        Redraw should use another dict as value,
-        to avoid creating previous Volume Modes objects
-        or previous objects from Static Update.
-        - intKey is the Bar index
-        - stringKey is the DrawInfo.Id (object name)
-        - DrawInfo is the current Bar object info.
-        */
-        private readonly Dictionary<int, IDictionary<string, DrawInfo>> redrawInfos = new();
-        /*
-         For real-time market:
-        - intKey is always [0]
-        - stringKey is the DrawInfo.Id (object name)
-        - DrawInfo is the current Bar object info.
-        */
-        private readonly Dictionary<int, IDictionary<string, DrawInfo>> currentToRedraw = new();
+            // It's fine to just keep the objects name as keys,
+            // since hiddenInfos is populated/updated at each drawing.
+            public Dictionary<string, ChartObject> hiddenInfos = new();
+            /*
+              For real-time market:
+              - intKey is always [0]
+              - stringKey is the DrawInfo.Id (object name)
+              - DrawInfo is the current Bar object.
+            */
+            public Dictionary<int, Dictionary<string, ChartObject>> currentToHidden = new();
+            public ChartStaticText staticText_DebugPerfDraw;
 
-        // It's fine to just keep the objects name as keys,
-        // since hiddenInfos is populated/updated at each drawing.
-        private readonly IDictionary<string, ChartObject> hiddenInfos = new Dictionary<string, ChartObject>();
-        /*
-        For real-time market:
-        - intKey is always [0]
-        - stringKey is the DrawInfo.Id (object name)
-        - DrawInfo is the current Bar object.
-        */
-        private readonly Dictionary<int, IDictionary<string, ChartObject>> currentToHidden = new();
-        private ChartStaticText _StaticText_DebugPerfDraw;
+            public void ClearAll() {
+                hiddenInfos.Clear();
+                redrawInfos.Clear();
+                currentToHidden.Clear();
+                currentToRedraw.Clear();
+            }
+        }
+        private readonly PerfDrawingObjs_Info PerfDrawingObjs = new();
+        
 
-        private bool lockDrawRemove = false;
         // Params Panel
         private Border ParamBorder;
 
         public class IndicatorParams
         {
             public Template_Data Template { get; set; }
-
-            // Wyckoff Bars
-            public bool EnableWyckoff { get; set; }
-            public Numbers_Data ShowNumbers { get; set; }
-            public NumbersPosition_Data NumbersPosition { get; set; }
-            public NumbersBothPosition_Data NumbersBothPosition { get; set; }
-            public NumbersColor_Data NumbersColor { get; set; }
-            public BarsColor_Data BarsColor { get; set; }
-            public bool ShowOnlyLargeNumbers { get; set; }
-            public bool FillBars { get; set; }
-            public bool KeepOutline { get; set; }
-
-            public StrengthFilter_Data StrengthFilter { get; set; }
-            public MovingAverageType MAtype { get; set; }
-            public int MAperiod { get; set; }
-            public int NormalizePeriod { get; set; }
-            public int NormalizeMultiplier { get; set; }
-
-            public int PctilePeriod { get; set; }
-            public StrengthRatio_Data StrengthRatio { get; set; }
-            public bool ShowStrength { get; set; }
-            
-            public double Lowest_Pctile { get; set; }
-            public double Low_Pctile { get; set; }
-            public double Average_Pctile { get; set; }
-            public double High_Pctile { get; set; }
-            public double Ultra_Pctile { get; set; }
-
-            
-            public double Lowest_Pct { get; set; }
-            public double Low_Pct { get; set; }
-            public double Average_Pct { get; set; }
-            public double High_Pct { get; set; }
-            public double Ultra_Pct { get; set; }
-
-            
-            public double Lowest_Fixed { get; set; }
-            public double Low_Fixed { get; set; }
-            public double Average_Fixed { get; set; }
-            public double High_Fixed { get; set; }
-            public double Ultra_Fixed { get; set; }
-
-            // Weis Waves
-            public bool ShowCurrentWave { get; set; }
-            public ShowWaves_Data ShowWaves { get; set; }
-            public ShowOtherWaves_Data ShowOtherWaves { get; set; }
-            public ShowMarks_Data ShowMarks { get; set; }
-            public WavesMode_Data WavesMode { get; set; }
-
-            public double EvsR_Ratio { get; set; }
-            public double WW_Ratio { get; set; }
-
-            public YellowZigZag_Data YellowZigZag { get; set; }
-            public bool YellowRenko_IgnoreRanging { get; set; }
-
-            // ZigZag
-            public ZigZagMode_Data ZigZagMode { get; set; }
-            public double PercentageZZ { get; set; }
-            public double PipsZZ { get; set; }
-            public Priority_Data Priority { get; set; }
-            public ZigZagSource_Data ZigZagSource { get; set; }
-            public TimeFrame MTFSource_TimeFrame { get; set; }
-
-            public MTF_Sources MTFSource_Panel  { get; set; }
+            public WyckoffParams_Info WyckoffParams { get; set; }
+            public ColoringParams_Info ColoringParams { get; set; }
+            public WavesParams_Info WavesParams { get; set; }
+            public ZigZagParams_Info ZigZagParams { get; set; }
         }
         private void AddHiddenButton(Panel panel, Color btnColor)
         {
@@ -677,14 +677,11 @@ namespace cAlgo
         protected override void Initialize()
         {
             string currentTimeframe = Chart.TimeFrame.ToString();
-            isRenkoChart = currentTimeframe.Contains("Renko");
-            isTickChart = currentTimeframe.Contains("Tick");
-            isPriceBased_Chart = currentTimeframe.Contains("Renko") || currentTimeframe.Contains("Range") || currentTimeframe.Contains("Tick");
-            if (isPriceBased_Chart) {
-                Bars.BarOpened += (_) => {
-                    isPriceBased_NewBar = true;
-                    lockDrawRemove = false;
-                };
+            BooleanUtils.isRenkoChart = currentTimeframe.Contains("Renko");
+            BooleanUtils.isTickChart = currentTimeframe.Contains("Tick");
+            BooleanUtils.isPriceBased_Chart = currentTimeframe.Contains("Renko") || currentTimeframe.Contains("Range") || currentTimeframe.Contains("Tick");
+            if (BooleanUtils.isPriceBased_Chart) {
+                Bars.BarOpened += (_) => BooleanUtils.isPriceBased_NewBar = true;
             }
             // Performance Drawing
             Chart.ZoomChanged += PerformanceDrawing;
@@ -698,9 +695,8 @@ namespace cAlgo
 
             // VolumeRenkoRange / Renko Wicks
             TicksOHLC = MarketData.GetBars(TimeFrame.Tick);
-            VolumeSeries = CreateDataSeries();
 
-            if (!UseTimeBasedVolume && !isPriceBased_Chart || isPriceBased_Chart) {
+            if (!UseTimeBasedVolume && !BooleanUtils.isPriceBased_Chart || BooleanUtils.isPriceBased_Chart) {
                 if (LoadTickStrategy_Input != LoadTickStrategy_Data.At_Startup_Sync)
                 {
                     if (LoadTickStrategy_Input == LoadTickStrategy_Data.On_ChartStart_Sync) {
@@ -709,8 +705,8 @@ namespace cAlgo
                             Orientation = Orientation.Vertical,
                             VerticalAlignment = VerticalAlignment.Center
                         };
-                        syncTickProgressBar = new ProgressBar { IsIndeterminate = true, Height = 12 };
-                        panel.AddChild(syncTickProgressBar);
+                        TickObjs.syncProgressBar = new ProgressBar { IsIndeterminate = true, Height = 12 };
+                        panel.AddChild(TickObjs.syncProgressBar);
                         Chart.AddControl(panel);
                     } else
                         Timer.Start(TimeSpan.FromSeconds(0.5));
@@ -726,21 +722,22 @@ namespace cAlgo
             DownWickColor = Chart.ColorSettings.BearOutlineColor;
 
             // WyckoffAnalysis()
+            VolumeSeries = CreateDataSeries();
             TimeSeries = CreateDataSeries();
-            StrengthSeries_Vol = CreateDataSeries();
+            StrengthSeries_Volume = CreateDataSeries();
             StrengthSeries_Time = CreateDataSeries();
 
             if (!UseCustomMAs) {
-                MATime = Indicators.MovingAverage(TimeSeries, MAperiod, MAtype);
-                MAVol = Indicators.MovingAverage(VolumeSeries, MAperiod, MAtype);
-                stdDev_Vol = Indicators.StandardDeviation(VolumeSeries, MAperiod, MAtype);
-                stdDev_Time = Indicators.StandardDeviation(TimeSeries, MAperiod, MAtype);
+                MATime = Indicators.MovingAverage(TimeSeries, ColoringParams.MAperiod, ColoringParams.MAtype);
+                MAVol = Indicators.MovingAverage(VolumeSeries, ColoringParams.MAperiod, ColoringParams.MAtype);
+                stdDev_Vol = Indicators.StandardDeviation(VolumeSeries, ColoringParams.MAperiod, ColoringParams.MAtype);
+                stdDev_Time = Indicators.StandardDeviation(TimeSeries, ColoringParams.MAperiod, ColoringParams.MAtype);
             }
 
             // WeisWaveAnalysis()
             _ATR = Indicators.AverageTrueRange(ATR_Period, MovingAverageType.Weighted);
             _m1Bars = MarketData.GetBars(TimeFrame.Minute);
-            MTFSource_Bars = MarketData.GetBars(MTFSource_TimeFrame);
+            MTFSource_Bars = MarketData.GetBars(ZigZagParams.MTFSource_TimeFrame);
 
             // PARAMS PANEL
             VerticalAlignment vAlign = VerticalAlignment.Bottom;
@@ -779,81 +776,24 @@ namespace cAlgo
             IndicatorParams DefaultParams = new()
             {
                 Template = Template_Input,
-
-                // Wyckoff Bars
-                EnableWyckoff = EnableWyckoff,
-                ShowNumbers = Numbers_Input,
-                NumbersPosition = NumbersPosition_Input,
-                NumbersBothPosition = NumbersBothPosition_Input,
-                NumbersColor = NumbersColor_Input,
-                BarsColor = BarsColor_Input,
-                FillBars = FillBars,
-                KeepOutline = KeepOutline,
-                ShowOnlyLargeNumbers = ShowOnlyLargeNumbers,
-
-                // Coloring
-                StrengthFilter = StrengthFilter_Input,
-                MAtype = MAtype,
-                MAperiod = MAperiod,
-                NormalizePeriod = NormalizePeriod,
-                NormalizeMultiplier = NormalizeMultiplier,
-                PctilePeriod = Pctile_Period,
-                StrengthRatio = StrengthRatio_Input,
-                ShowStrength = ShowStrengthValue,
-                
-                Lowest_Pctile = Lowest_PctileValue,
-                Low_Pctile = Low_PctileValue,
-                Average_Pctile = Average_PctileValue,
-                High_Pctile = High_PctileValue,
-                Ultra_Pctile = Ultra_PctileValue,
-                
-                Lowest_Pct = Lowest_PctValue,
-                Low_Pct = Low_PctValue,
-                Average_Pct = Average_PctValue,
-                High_Pct = High_PctValue,
-                Ultra_Pct = Ultra_PctValue,
-
-                Lowest_Fixed = Lowest_FixedValue,
-                Low_Fixed = Low_FixedValue,
-                Average_Fixed = Average_FixedValue,
-                High_Fixed = High_FixedValue,
-                Ultra_Fixed = Ultra_FixedValue,
-                
-                // Weis Waves
-                ShowCurrentWave = ShowCurrentWave,
-                ShowWaves = ShowWaves_Input,
-                ShowOtherWaves = ShowOtherWaves_Input,
-                ShowMarks = ShowMarks_Input,
-                WavesMode = WavesMode_Input,
-                EvsR_Ratio = EvsR_Ratio,
-                WW_Ratio = WW_Ratio,
-                YellowZigZag = YellowZigZag_Input,
-                YellowRenko_IgnoreRanging = YellowRenko_IgnoreRanging,
-
-                // ZigZag
-                ZigZagMode = ZigZagMode_Input,
-                PercentageZZ = PercentageZZ,
-                PipsZZ = PipsZZ,
-                Priority = Priority_Input,
-                ZigZagSource = ZigZagSource_Input,
-
-                MTFSource_TimeFrame = MTFSource_TimeFrame,
-                MTFSource_Panel = MTFSource_Panel
+                WyckoffParams = WyckoffParams,
+                ColoringParams = ColoringParams,
+                WavesParams = WavesParams,
+                ZigZagParams = ZigZagParams,
             };
 
             ParamsPanel ParamPanel = new(this, DefaultParams);
-            Border borderParam = new()
+            ParamBorder = new()
             {
                 VerticalAlignment = vAlign,
                 HorizontalAlignment = hAlign,
                 Style = Styles.CreatePanelBackgroundStyle(),
                 Margin = "20 40 20 20",
                 // ParamsPanel - Lock Width
-                Width = 262,
+                Width = 290,
                 Child = ParamPanel
             };
-            Chart.AddControl(borderParam);
-            ParamBorder = borderParam;
+            Chart.AddControl(ParamBorder);
 
             var stackPanel = new StackPanel
             {
@@ -866,14 +806,14 @@ namespace cAlgo
 
         public override void Calculate(int index)
         {
-            if (!UseTimeBasedVolume && !isPriceBased_Chart || isPriceBased_Chart) {
+            if (!UseTimeBasedVolume && !BooleanUtils.isPriceBased_Chart || BooleanUtils.isPriceBased_Chart) {
                 // Tick Data Collection on chart
                 bool isOnChart = LoadTickStrategy_Input != LoadTickStrategy_Data.At_Startup_Sync;
-                if (isOnChart && !loadingTicksComplete)
+                if (isOnChart && !TickObjs.isLoadingComplete)
                     LoadMoreTicksOnChart();
 
                 bool isOnChartAsync = LoadTickStrategy_Input == LoadTickStrategy_Data.On_ChartEnd_Async;
-                if (isOnChartAsync && !loadingTicksComplete)
+                if (isOnChartAsync && !TickObjs.isLoadingComplete)
                     return;
 
                 if (index < Bars.OpenTimes.GetIndexByTime(TicksOHLC.OpenTimes.FirstOrDefault())) {
@@ -887,21 +827,21 @@ namespace cAlgo
                 DrawOnScreen("");
 
             // VolumeRR
-            if (UseTimeBasedVolume && !isPriceBased_Chart)
+            if (UseTimeBasedVolume && !BooleanUtils.isPriceBased_Chart)
                 VolumeSeries[index] = Bars.TickVolumes[index];
             else
                 VolumeSeries[index] = Get_Volume_or_Wicks(index, true)[2];
 
             // ==== Wyckoff ====
-            if (EnableWyckoff)
+            if (WyckoffParams.EnableWyckoff)
                 WyckoffAnalysis(index);
 
             // ==== Weis Wave ====
             try { WeisWaveAnalysis(index); } catch {
-                if (ZigZagSource_Input == ZigZagSource_Data.MultiTF && !lockMTFNotify) {
+                if (ZigZagParams.ZigZagSource_Input == ZigZagSource_Data.MultiTF && !lockMTFNotify) {
                     Notifications.ShowPopup(
                         NOTIFY_CAPTION,
-                        $"ERROR => ZigZag MTF(source): \nCannot use {MTFSource_TimeFrame.ShortName} interval for {Chart.TimeFrame.ShortName} chart \nThe interval is probably too short?",
+                        $"ERROR => ZigZag MTF(source): \nCannot use {ZigZagParams.MTFSource_TimeFrame.ShortName} interval for {Chart.TimeFrame.ShortName} chart \nThe interval is probably too short?",
                         PopupNotificationState.Error
                     );
                     lockMTFNotify = true;
@@ -909,77 +849,75 @@ namespace cAlgo
             }
 
             // ==== Renko Wicks ====
-            if (ShowWicks && isRenkoChart)
+            if (ShowWicks && BooleanUtils.isRenkoChart)
                 RenkoWicks(index);
-
-            isPriceBased_NewBar = false;
         }
 
         private void Design_Templates() {
             switch (Template_Input)
             {
                 case Template_Data.Insider:
-                    Numbers_Input = Numbers_Data.Both;
-                    NumbersColor_Input = NumbersColor_Data.Volume;
-                    NumbersPosition_Input = NumbersPosition_Data.Inside;
-                    BarsColor_Input = BarsColor_Data.Volume;
+                    WyckoffParams.Numbers_Input = Numbers_Data.Both;
+                    WyckoffParams.NumbersColor_Input = NumbersColor_Data.Volume;
+                    WyckoffParams.NumbersPosition_Input = NumbersPosition_Data.Inside;
+                    WyckoffParams.BarsColor_Input = BarsColor_Data.Volume;
 
-                    ShowWaves_Input = ShowWaves_Data.EffortvsResult;
-                    ShowOtherWaves_Input = ShowOtherWaves_Data.Both;
-                    ShowMarks_Input = ShowMarks_Data.No;
+                    WavesParams.ShowWaves_Input = ShowWaves_Data.EffortvsResult;
+                    WavesParams.ShowOtherWaves_Input = ShowOtherWaves_Data.Both;
+                    WavesParams.ShowMarks_Input = ShowMarks_Data.No;
 
-                    EnableWyckoff = true;
-                    ShowCurrentWave = true;
-                    FillBars = true;
-                    KeepOutline = false;
+                    WyckoffParams.EnableWyckoff = true;
+                    WavesParams.ShowCurrentWave = true;
+                    WyckoffParams.FillBars = true;
+                    WyckoffParams.KeepOutline = false;
                     Chart.ChartType = ChartType.Candlesticks;
                     break;
                 case Template_Data.Volume:
-                    Numbers_Input = Numbers_Data.Volume;
-                    NumbersColor_Input = NumbersColor_Data.Volume;
-                    NumbersPosition_Input = NumbersPosition_Data.Inside;
-                    BarsColor_Input = BarsColor_Data.Volume;
+                    WyckoffParams.Numbers_Input = Numbers_Data.Volume;
+                    WyckoffParams.NumbersColor_Input = NumbersColor_Data.Volume;
+                    WyckoffParams.NumbersPosition_Input = NumbersPosition_Data.Inside;
+                    WyckoffParams.BarsColor_Input = BarsColor_Data.Volume;
 
-                    ShowWaves_Input = ShowWaves_Data.Volume;
-                    ShowOtherWaves_Input = ShowOtherWaves_Data.Price;
-                    ShowMarks_Input = ShowMarks_Data.No;
+                    WavesParams.ShowWaves_Input = ShowWaves_Data.Volume;
+                    WavesParams.ShowOtherWaves_Input = ShowOtherWaves_Data.Price;
+                    WavesParams.ShowMarks_Input = ShowMarks_Data.No;
 
-                    EnableWyckoff = true;
-                    ShowCurrentWave = true;
-                    FillBars = true;
-                    KeepOutline = false;
+                    WyckoffParams.EnableWyckoff = true;
+                    WavesParams.ShowCurrentWave = true;
+                    WyckoffParams.FillBars = true;
+                    WyckoffParams.KeepOutline = false;
                     Chart.ChartType = ChartType.Candlesticks;
                     break;
                 case Template_Data.Time:
-                    Numbers_Input = Numbers_Data.Time;
-                    NumbersColor_Input = NumbersColor_Data.Time;
-                    NumbersPosition_Input = NumbersPosition_Data.Inside;
-                    BarsColor_Input = BarsColor_Data.Time;
+                    WyckoffParams.Numbers_Input = Numbers_Data.Time;
+                    WyckoffParams.NumbersColor_Input = NumbersColor_Data.Time;
+                    WyckoffParams.NumbersPosition_Input = NumbersPosition_Data.Inside;
+                    WyckoffParams.BarsColor_Input = BarsColor_Data.Time;
 
-                    ShowWaves_Input = ShowWaves_Data.EffortvsResult;
-                    ShowOtherWaves_Input = ShowOtherWaves_Data.Time;
-                    ShowMarks_Input = ShowMarks_Data.No;
+                    WavesParams.ShowWaves_Input = ShowWaves_Data.EffortvsResult;
+                    WavesParams.ShowOtherWaves_Input = ShowOtherWaves_Data.Time;
+                    WavesParams.ShowMarks_Input = ShowMarks_Data.No;
 
-                    EnableWyckoff = true;
-                    ShowCurrentWave = true;
-                    FillBars = true;
-                    KeepOutline = false;
+                    WyckoffParams.EnableWyckoff = true;
+                    WavesParams.ShowCurrentWave = true;
+                    WyckoffParams.FillBars = true;
+                    WyckoffParams.KeepOutline = false;
                     Chart.ChartType = ChartType.Candlesticks;
                     break;
                 case Template_Data.BigBrain:
-                    Numbers_Input = Numbers_Data.Both;
-                    NumbersColor_Input = NumbersColor_Data.Volume;
-                    NumbersPosition_Input = NumbersPosition_Data.Inside;
-                    BarsColor_Input = BarsColor_Data.Time;
+                    WyckoffParams.Numbers_Input = Numbers_Data.Both;
+                    WyckoffParams.NumbersColor_Input = NumbersColor_Data.Volume;
+                    WyckoffParams.NumbersPosition_Input = NumbersPosition_Data.Inside;
+                    WyckoffParams.BarsColor_Input = BarsColor_Data.Time;
 
-                    ShowWaves_Input = ShowWaves_Data.Both;
-                    ShowOtherWaves_Input = ShowOtherWaves_Data.Both;
-                    ShowMarks_Input = ShowMarks_Data.Both;
+                    WavesParams.ShowWaves_Input = ShowWaves_Data.Both;
+                    WavesParams.ShowOtherWaves_Input = ShowOtherWaves_Data.Both;
+                    WavesParams.ShowMarks_Input = ShowMarks_Data.Both;
 
-                    EnableWyckoff = true;
-                    ShowCurrentWave = true;
-                    FillBars = true;
-                    KeepOutline = false;
+                    WyckoffParams.EnableWyckoff = true;
+                    WavesParams.ShowCurrentWave = true;
+                    WyckoffParams.FillBars = true;
+                    WyckoffParams.KeepOutline = false;
                     Chart.ChartType = ChartType.Hlc;
                     break;
                 default: break;
@@ -989,66 +927,66 @@ namespace cAlgo
             if (Template_Input == Template_Data.Custom)
                 return;
             // Tick / Time-Based Chart (Standard Candles/Heikin-Ash)
-            if (isTickChart || !isPriceBased_Chart) {
-                if (isTickChart) {
-                    if (isInit) Numbers_Input = Numbers_Data.Time;
-                    MTFSource_TimeFrame = TimeFrame.Tick100;
-                    MTFSource_Panel = MTF_Sources.Tick;
+            if (BooleanUtils.isTickChart || !BooleanUtils.isPriceBased_Chart) {
+                if (BooleanUtils.isTickChart) {
+                    if (isInit) WyckoffParams.Numbers_Input = Numbers_Data.Time;
+                    ZigZagParams.MTFSource_TimeFrame = TimeFrame.Tick100;
+                    ZigZagParams.MTFSource_Panel = MTF_Sources.Tick;
                 } else {
-                    if (isInit) Numbers_Input = Numbers_Data.Volume;
-                    MTFSource_TimeFrame = TimeFrame.Minute30;
-                    MTFSource_Panel = MTF_Sources.Standard;
+                    if (isInit) WyckoffParams.Numbers_Input = Numbers_Data.Volume;
+                    ZigZagParams.MTFSource_TimeFrame = TimeFrame.Minute30;
+                    ZigZagParams.MTFSource_Panel = MTF_Sources.Standard;
                 }
             }
             // Range
-            if (isPriceBased_Chart && !isRenkoChart && !isTickChart) {
-                if (isInit) Numbers_Input = Numbers_Data.Volume;
-                StrengthFilter_Input = StrengthFilter_Data.MA;
-                MAperiod = 20;
-                MAtype = MovingAverageType.Triangular;
-                Lowest_FixedValue = 0.5;
-                Low_FixedValue = 1.2;
-                Average_FixedValue = 2.5;
-                High_FixedValue = 3.5;
-                Ultra_FixedValue = 3.51;
+            if (BooleanUtils.isPriceBased_Chart && !BooleanUtils.isRenkoChart && !BooleanUtils.isTickChart) {
+                if (isInit) WyckoffParams.Numbers_Input = Numbers_Data.Volume;
+                ColoringParams.StrengthFilter_Input = StrengthFilter_Data.MA;
+                ColoringParams.MAperiod = 20;
+                ColoringParams.MAtype = MovingAverageType.Triangular;
+                ColoringParams.Lowest_FixedValue = 0.5;
+                ColoringParams.Low_FixedValue = 1.2;
+                ColoringParams.Average_FixedValue = 2.5;
+                ColoringParams.High_FixedValue = 3.5;
+                ColoringParams.Ultra_FixedValue = 3.51;
 
-                MTFSource_TimeFrame = TimeFrame.Range10;
-                MTFSource_Panel = MTF_Sources.Range;
+                ZigZagParams.MTFSource_TimeFrame = TimeFrame.Range10;
+                ZigZagParams.MTFSource_Panel = MTF_Sources.Range;
             }
-            if (isRenkoChart) {
-                MTFSource_TimeFrame = TimeFrame.Renko5;
-                MTFSource_Panel = MTF_Sources.Renko;
+            if (BooleanUtils.isRenkoChart) {
+                ZigZagParams.MTFSource_TimeFrame = TimeFrame.Renko5;
+                ZigZagParams.MTFSource_Panel = MTF_Sources.Renko;
             }
         }
         private void DrawingConflict() {
-            if (NumbersPosition_Input == NumbersPosition_Data.Outside)
+            if (WyckoffParams.NumbersPosition_Input == NumbersPosition_Data.Outside)
             {
                 /* It's a combination that won't be used,
                    and btw drawing this combination is a little tiring,
                    I left it out. */
-                if (Numbers_Input == Numbers_Data.Both && (ShowWaves_Input == ShowWaves_Data.Both || ShowWaves_Input == ShowWaves_Data.Volume || ShowWaves_Input == ShowWaves_Data.EffortvsResult))
+                if (WyckoffParams.Numbers_Input == Numbers_Data.Both && (WavesParams.ShowWaves_Input == ShowWaves_Data.Both || WavesParams.ShowWaves_Input == ShowWaves_Data.Volume || WavesParams.ShowWaves_Input == ShowWaves_Data.EffortvsResult))
                 {
                     Notifications.ShowPopup(
                         NOTIFY_CAPTION,
                         "WAVES POSITIONS are not optimized for BOTH/OUTSIDE NUMBERS, setting to VOLUME/OUTSIDE NUMBERS instead",
                         PopupNotificationState.Error
                     );
-                    Numbers_Input = Numbers_Data.Volume;
+                    WyckoffParams.Numbers_Input = Numbers_Data.Volume;
                 }
-                else if (Numbers_Input == Numbers_Data.Both && (ShowOtherWaves_Input == ShowOtherWaves_Data.Both || ShowOtherWaves_Input == ShowOtherWaves_Data.Price || ShowOtherWaves_Input == ShowOtherWaves_Data.Time))
+                else if (WyckoffParams.Numbers_Input == Numbers_Data.Both && (WavesParams.ShowOtherWaves_Input == ShowOtherWaves_Data.Both || WavesParams.ShowOtherWaves_Input == ShowOtherWaves_Data.Price || WavesParams.ShowOtherWaves_Input == ShowOtherWaves_Data.Time))
                 {
                     Notifications.ShowPopup(
                         NOTIFY_CAPTION,
                         "WAVES POSITIONS are not optimized for BOTH/OUTSIDE NUMBERS, setting to VOLUME/OUTSIDE NUMBERS instead",
                         PopupNotificationState.Error
                     );
-                    Numbers_Input = Numbers_Data.Volume;
+                    WyckoffParams.Numbers_Input = Numbers_Data.Volume;
                 }
             }
         }
-        private void WyckoffAnalysis(int rawindex)
+        
+        private void WyckoffAnalysis(int index)
         {
-            int index = rawindex;
             if (index < 2)
                 return;
 
@@ -1056,7 +994,7 @@ namespace cAlgo
             DateTime openTime = Bars.OpenTimes[index];
             DateTime closeTime = Bars.OpenTimes[index + 1];
             if (IsLastBar)
-                closeTime = UseTimeBasedVolume && !isPriceBased_Chart ? Server.Time : TicksOHLC.OpenTimes.LastValue;
+                closeTime = UseTimeBasedVolume && !BooleanUtils.isPriceBased_Chart ? Server.Time : TicksOHLC.OpenTimes.LastValue;
             TimeSpan interval = closeTime.Subtract(openTime);
             double interval_ms = interval.TotalMilliseconds;
 
@@ -1066,38 +1004,38 @@ namespace cAlgo
             string timelapse_Suffix = interval_timelapse[1];
 
             TimeSeries[index] = timelapse_Value;
-            
+
             // ==== Strength Filter ====
             double volume = VolumeSeries[index];
             double time = TimeSeries[index];
             double volumeStrength = 0;
             double timeStrength = 0;
-            switch (StrengthFilter_Input) 
+            switch (ColoringParams.StrengthFilter_Input)
             {
                 case StrengthFilter_Data.MA: {
-                    double maValue = UseCustomMAs ? CustomMAs(volume, index, MAperiod, customMAtype) : MAVol.Result[index];
+                    double maValue = UseCustomMAs ? CustomMAs(volume, index, ColoringParams.MAperiod, customMAtype, SourceSwitch.Volume) : MAVol.Result[index];
                     volumeStrength = volume / maValue;
                     // ========
-                    maValue = UseCustomMAs ? CustomMAs(time, index, MAperiod, customMAtype) : MATime.Result[index];
+                    maValue = UseCustomMAs ? CustomMAs(time, index, ColoringParams.MAperiod, customMAtype, SourceSwitch.Time) : MATime.Result[index];
                     timeStrength = time / maValue;
                     break;
                 }
                 case StrengthFilter_Data.Standard_Deviation: {
-                    double  stddevValue = UseCustomMAs ? CustomMAs(volume, index, MAperiod, customMAtype, true, VolumeSeries) : stdDev_Vol.Result[index];
-                    volumeStrength = volume / stddevValue; 
+                    double  stddevValue = UseCustomMAs ? CustomMAs(volume, index, ColoringParams.MAperiod, customMAtype, SourceSwitch.Volume, true) : stdDev_Vol.Result[index];
+                    volumeStrength = volume / stddevValue;
                     // ========
-                    stddevValue = UseCustomMAs ? CustomMAs(time, index, MAperiod, customMAtype, true, TimeSeries) : stdDev_Time.Result[index];
+                    stddevValue = UseCustomMAs ? CustomMAs(time, index, ColoringParams.MAperiod, customMAtype, SourceSwitch.Time, true) : stdDev_Time.Result[index];
                     timeStrength = time / stddevValue;
                     break;
                 }
                 case StrengthFilter_Data.Both: {
-                    double maValue = UseCustomMAs ? CustomMAs(volume, index, MAperiod, customMAtype) : MAVol.Result[index];
-                    double stddevValue = UseCustomMAs ? CustomMAs(volume, index, MAperiod, customMAtype, true, VolumeSeries) : stdDev_Vol.Result[index];
-                    volumeStrength = (volume - maValue) / stddevValue; 
+                    double maValue = UseCustomMAs ? CustomMAs(volume, index, ColoringParams.MAperiod, customMAtype, SourceSwitch.Volume) : MAVol.Result[index];
+                    double stddevValue = UseCustomMAs ? CustomMAs(volume, index, ColoringParams.MAperiod, customMAtype, SourceSwitch.Volume, true) : stdDev_Vol.Result[index];
+                    volumeStrength = (volume - maValue) / stddevValue;
                     // ========
-                    maValue = UseCustomMAs ? CustomMAs(time, index, MAperiod, customMAtype) : MATime.Result[index];
-                    stddevValue = UseCustomMAs ? CustomMAs(time, index, MAperiod, customMAtype, true, TimeSeries) : stdDev_Time.Result[index];
-                    timeStrength = (time - maValue) / stddevValue; 
+                    maValue = UseCustomMAs ? CustomMAs(time, index, ColoringParams.MAperiod, customMAtype, SourceSwitch.Time) : MATime.Result[index];
+                    stddevValue = UseCustomMAs ? CustomMAs(time, index, ColoringParams.MAperiod, customMAtype, SourceSwitch.Time, true) : stdDev_Time.Result[index];
+                    timeStrength = (time - maValue) / stddevValue;
                     break;
                 }
                 case StrengthFilter_Data.Normalized_Emphasized:
@@ -1113,22 +1051,22 @@ namespace cAlgo
                         Since CFD's Volume can be very flat at higher Tick activity,
                         - the slightest value change will be highlighted... as in ODF_Ticks/AGG.
                         */
-                        if (index < NormalizePeriod)
+                        if (index < ColoringParams.NormalizePeriod)
                             return 0;
 
                         double avg = 0;
-                        for (int j = index; j > index - NormalizePeriod; j--) {
+                        for (int j = index; j > index - ColoringParams.NormalizePeriod; j--) {
                             if (isTime)
                                 avg += TimeSeries[j];
                             else
                                 avg += VolumeSeries[j];
                         }
 
-                        avg /= NormalizePeriod;
+                        avg /= ColoringParams.NormalizePeriod;
 
                         double normalizedValue = isTime ? (time / avg) : (volume / avg);
                         double normalizedPercentage = (normalizedValue * 100) - 100;
-                        normalizedPercentage *= NormalizeMultiplier; // I've added this to get "less but meaningful" coloring
+                        normalizedPercentage *= ColoringParams.NormalizeMultiplier; // I've added this to get "less but meaningful" coloring
 
                         return normalizedPercentage;
                     }
@@ -1136,42 +1074,46 @@ namespace cAlgo
                     timeStrength = Normalization(true);
                     break;
                 case StrengthFilter_Data.L1Norm:
-                    double[] window = new double[MAperiod];
+                    double[] windowVolume = new double[ColoringParams.MAperiod];
+                    double[] windowTime = new double[ColoringParams.MAperiod];
 
-                    for (int i = 0; i < MAperiod; i++)
-                        window[i] = VolumeSeries[index - MAperiod + 1 + i];
+                    for (int i = 0; i < ColoringParams.MAperiod; i++) {
+                        windowVolume[i] = VolumeSeries[index - ColoringParams.MAperiod + 1 + i];
+                        windowTime[i] = TimeSeries[index - ColoringParams.MAperiod + 1 + i];
+                    }
 
-                    volumeStrength = L1NormStrength(window);
-                    timeStrength = L1NormStrength(window);
+                    volumeStrength = Filters.L1NormStrength(windowVolume);
+                    timeStrength = Filters.L1NormStrength(windowTime);
                     break;
             }
-            
+
             // Keep negative values of Normalized_Emphasized
-            if (StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized) {
+            if (ColoringParams.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized) {
                 volumeStrength = Math.Abs(volumeStrength);
                 timeStrength = Math.Abs(timeStrength);
             }
-            
+
             volumeStrength = Math.Round(volumeStrength, 2);
             timeStrength = Math.Round(timeStrength, 2);
 
-            if (StrengthRatio_Input == StrengthRatio_Data.Percentile && StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized) 
-            {        
-                StrengthSeries_Vol[index] = volumeStrength;
+            if (ColoringParams.StrengthRatio_Input == StrengthRatio_Data.Percentile &&
+                ColoringParams.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized)
+            {
+                StrengthSeries_Volume[index] = volumeStrength;
                 StrengthSeries_Time[index] = timeStrength;
-                
-                double[] windowVol = new double[Pctile_Period];
-                double[] windowTime = new double[Pctile_Period];
-                
-                for (int i = 0; i < Pctile_Period; i++) {
-                    windowVol[i] = StrengthSeries_Vol[index - Pctile_Period + 1 + i];
-                    windowTime[i] = StrengthSeries_Time[index - Pctile_Period + 1 + i];
+
+                double[] windowVolume = new double[ColoringParams.Pctile_Period];
+                double[] windowTime = new double[ColoringParams.Pctile_Period];
+
+                for (int i = 0; i < ColoringParams.Pctile_Period; i++) {
+                    windowVolume[i] = StrengthSeries_Volume[index - ColoringParams.Pctile_Period + 1 + i];
+                    windowTime[i] = StrengthSeries_Time[index - ColoringParams.Pctile_Period + 1 + i];
                 }
 
-                volumeStrength = RollingPercentile(windowVol);
+                volumeStrength = Filters.RollingPercentile(windowVolume);
                 volumeStrength = Math.Round(volumeStrength, 1);
                 // ========
-                timeStrength = RollingPercentile(windowTime);
+                timeStrength = Filters.RollingPercentile(windowTime);
                 timeStrength = Math.Round(timeStrength, 1);
             }
 
@@ -1182,9 +1124,9 @@ namespace cAlgo
             double y_Open = Bars.OpenPrices[index];
 
             // Coloring
-            double colorTypeNumbers = NumbersColor_Input == NumbersColor_Data.Time ? timeStrength : volumeStrength;
-            double colorTypeBars = BarsColor_Input== BarsColor_Data.Time ? timeStrength : volumeStrength;
-            bool isNumbersOutside = NumbersPosition_Input == NumbersPosition_Data.Outside || Numbers_Input == Numbers_Data.None;
+            double colorTypeNumbers = WyckoffParams.NumbersColor_Input == NumbersColor_Data.Time ? timeStrength : volumeStrength;
+            double colorTypeBars = WyckoffParams.BarsColor_Input== BarsColor_Data.Time ? timeStrength : volumeStrength;
+            bool isNumbersOutside = WyckoffParams.NumbersPosition_Input == NumbersPosition_Data.Outside || WyckoffParams.Numbers_Input == Numbers_Data.None;
 
             int alpha = (int)(2.55 * HeatmapBars_Opacity);
             Color lowestColor = isNumbersOutside ? HeatmapLowest_Color : Color.FromArgb(alpha, HeatmapLowest_Color);
@@ -1199,27 +1141,27 @@ namespace cAlgo
             Color ultraColorDown = isNumbersOutside ? HeatmapUltraDown_Color : Color.FromArgb(alpha, HeatmapUltraDown_Color);
             Color ultraColor = isBullish ? ultraColorUp : ultraColorDown;
 
-            if (StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized) {
+            if (ColoringParams.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized) {
                 // if negative, just to be sure.
                 colorTypeBars = colorTypeBars < 0 ? 0 : colorTypeBars;
                 colorTypeNumbers = colorTypeNumbers < 0 ? 0 : colorTypeNumbers;
             }
 
             // Ratio
-            bool isFixed = StrengthRatio_Input == StrengthRatio_Data.Fixed;
+            bool isFixed = ColoringParams.StrengthRatio_Input == StrengthRatio_Data.Fixed;
 
-            double lowest = isFixed ? Lowest_FixedValue : Lowest_PctileValue;
-            double low = isFixed ? Low_FixedValue : Low_PctileValue;
-            double average = isFixed ? Average_FixedValue : Average_PctileValue;
-            double high = isFixed ? High_FixedValue : High_PctileValue;
-            double ultra = isFixed ? Ultra_FixedValue : Ultra_PctileValue;
+            double lowest = isFixed ? ColoringParams.Lowest_FixedValue : ColoringParams.Lowest_PctileValue;
+            double low = isFixed ? ColoringParams.Low_FixedValue : ColoringParams.Low_PctileValue;
+            double average = isFixed ? ColoringParams.Average_FixedValue : ColoringParams.Average_PctileValue;
+            double high = isFixed ? ColoringParams.High_FixedValue : ColoringParams.High_PctileValue;
+            double ultra = isFixed ? ColoringParams.Ultra_FixedValue : ColoringParams.Ultra_PctileValue;
 
-            if (StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized) {
-                lowest = Lowest_PctValue;
-                low = Low_PctValue;
-                average = Average_PctValue;
-                high = High_PctValue;
-                ultra = Ultra_PctValue;
+            if (ColoringParams.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized) {
+                lowest = ColoringParams.Lowest_PctValue;
+                low = ColoringParams.Low_PctValue;
+                average = ColoringParams.Average_PctValue;
+                high = ColoringParams.High_PctValue;
+                ultra = ColoringParams.Ultra_PctValue;
             }
 
             Color barColor = colorTypeBars < lowest ? lowestColor :
@@ -1238,20 +1180,24 @@ namespace cAlgo
 
             // Numbers
             timelapse_Value = Math.Round(timelapse_Value);
-            string onlyTime = ShowOnlyLargeNumbers ?
+            string onlyTime = WyckoffParams.ShowOnlyLargeNumbers ?
                               (timeStrength > low ? timelapse_Value + timelapse_Suffix : "") :
                               timelapse_Value + timelapse_Suffix;
 
-            string onlyVol = ShowOnlyLargeNumbers ?
+            string onlyVol = WyckoffParams.ShowOnlyLargeNumbers ?
                              (volumeStrength > low ? FormatBigNumber(volume) : "") :
                              FormatBigNumber(volume);
 
-            string bothVolTime = NumbersBothPosition_Input == NumbersBothPosition_Data.Default ? $"{onlyTime}\n{onlyVol}" : $"{onlyVol}\n{onlyTime}";
+            string bothVolTime = WyckoffParams.NumbersBothPosition_Input == NumbersBothPosition_Data.Default ?
+                                 $"{onlyTime}\n{onlyVol}" : $"{onlyVol}\n{onlyTime}";
 
-            string numbersFmtd = Numbers_Input == Numbers_Data.Time ? onlyTime :
-                                 Numbers_Input == Numbers_Data.Volume ? onlyVol :
-                                 Numbers_Input == Numbers_Data.Both ? bothVolTime : "";
-
+            string numbersFmtd = WyckoffParams.Numbers_Input switch {
+                Numbers_Data.Time => onlyTime,
+                Numbers_Data.Volume => onlyVol,
+                Numbers_Data.Both => bothVolTime,
+                _ => ""
+            };
+            
             if (numbersFmtd != "")
             {
                 double y1 = isBullish ? y_Close : y_Open;
@@ -1260,12 +1206,12 @@ namespace cAlgo
 
                 if (Chart.ChartType != ChartType.Bars && Chart.ChartType != ChartType.Hlc)
                 {
-                    if (NumbersPosition_Input == NumbersPosition_Data.Outside && isBullish)
+                    if (WyckoffParams.NumbersPosition_Input == NumbersPosition_Data.Outside && isBullish)
                         v_align = VerticalAlignment.Top;
 
                     if (!isBullish) {
                         v_align = VerticalAlignment.Bottom;
-                        if (NumbersPosition_Input == NumbersPosition_Data.Outside)
+                        if (WyckoffParams.NumbersPosition_Input == NumbersPosition_Data.Outside)
                             y1 = y_Close;
                     }
 
@@ -1290,23 +1236,23 @@ namespace cAlgo
                     horizontalAlignment = h_align,
                     verticalAlignment = v_align,
                     FontSize = FontSizeNumbers,
-                    Color = NumbersColor_Input == NumbersColor_Data.CustomColor ? CustomNumbersColor : numberColor
+                    Color = WyckoffParams.NumbersColor_Input == NumbersColor_Data.CustomColor ? CustomNumbersColor : numberColor
                 });
             }
 
             // Fill + Outline Settings
-            if (!FillBars && !KeepOutline) {
+            if (!WyckoffParams.FillBars && !WyckoffParams.KeepOutline) {
                 Chart.SetBarFillColor(index, Color.Transparent);
                 Chart.SetBarOutlineColor(index, barColor);
                 if (isBullish) UpWickColor = barColor;
                 else DownWickColor = barColor;
             }
-            else if (FillBars && KeepOutline) {
+            else if (WyckoffParams.FillBars && WyckoffParams.KeepOutline) {
                 Chart.SetBarFillColor(index, barColor);
                 if (isBullish) UpWickColor = Chart.ColorSettings.BullOutlineColor;
                 else DownWickColor = Chart.ColorSettings.BullOutlineColor;
             }
-            else if (!FillBars && KeepOutline) {
+            else if (!WyckoffParams.FillBars && WyckoffParams.KeepOutline) {
                 Chart.SetBarFillColor(index, Color.Transparent);
                 if (isBullish) UpWickColor = Chart.ColorSettings.BullOutlineColor;
                 else DownWickColor = Chart.ColorSettings.BullOutlineColor;
@@ -1317,8 +1263,8 @@ namespace cAlgo
                 else DownWickColor = barColor;
             }
 
-            if (ShowStrengthValue) {
-                if (Numbers_Input == Numbers_Data.Volume || Numbers_Input == Numbers_Data.Both) {
+            if (ColoringParams.ShowStrengthValue) {
+                if (WyckoffParams.Numbers_Input == Numbers_Data.Volume || WyckoffParams.Numbers_Input == Numbers_Data.Both) {
                     DrawOrCache(new DrawInfo
                     {
                         BarIndex = index,
@@ -1333,7 +1279,7 @@ namespace cAlgo
                         Color = CustomNumbersColor
                     });
                 }
-                if (Numbers_Input == Numbers_Data.Time || Numbers_Input == Numbers_Data.Both) {
+                if (WyckoffParams.Numbers_Input == Numbers_Data.Time || WyckoffParams.Numbers_Input == Numbers_Data.Both) {
                     DrawOrCache(new DrawInfo
                     {
                         BarIndex = index,
@@ -1348,521 +1294,42 @@ namespace cAlgo
                         Color = CustomNumbersColor
                     });
                 }
-                
+
                 DrawOnScreen("v => volume \n ts => time");
             }
 
         }
 
-        private static double RollingPercentile(double[] window)
+        private double CustomMAs(double seriesValue, int index, int maPeriod, MAType_Data maType, SourceSwitch sourceSwitch, bool isStdDev = false) 
         {
-            // generated/converted by LLM
-            if (window == null || window.Length == 0)
-                return 0.0;
+            Dictionary<int, double> buffer = sourceSwitch switch {
+                SourceSwitch.Time => _customBuffer.Time,
+                _ => _customBuffer.Volume
+            };
+            Dictionary<int, double> prevMA_Dict = sourceSwitch switch {
+                SourceSwitch.Time => _customBuffer.MATime,
+                _ => _customBuffer.MAVolume
+            };
 
-            double last = window[window.Length - 1];
-            int count = 0;
-
-            for (int i = 0; i < window.Length; i++)
-            {
-                if (window[i] <= last)
-                    count++;
-            }
-
-            return 100.0 * count / window.Length;
-        }
-        
-        private static double L1NormStrength(double[] window)
-        {
-            // generated/converted by LLM
-            if (window == null || window.Length == 0)
-                return 0.0;
-
-            double denom = 0.0;
-
-            for (int i = 0; i < window.Length; i++)
-                denom += Math.Abs(window[i]);
-
-            return denom != 0.0
-                ? window[window.Length - 1] / denom
-                : 1.0;
-        }
-
-        private double CustomMAs(double seriesValue, int index,
-                                 int maPeriod, MAType_Data maType, bool isStdDev = false,
-                                 IndicatorDataSeries stddev_buffer = null) {
-            if (!_dynamicBuffer.ContainsKey(index))
-                _dynamicBuffer.Add(index, seriesValue);
+            if (!buffer.ContainsKey(index))
+                buffer.Add(index, seriesValue);
             else
-                _dynamicBuffer[index] = seriesValue;
-
-            Dictionary<int, double> buffer = _dynamicBuffer;
-            Dictionary<int, double> prevMA_Dict = _maDynamic;
+                buffer[index] = seriesValue;
 
             double maValue = maType switch
             {
-                MAType_Data.Simple => SMA(index, maPeriod, buffer),
-                MAType_Data.Exponential => EMA(index, maPeriod, buffer, prevMA_Dict),
-                MAType_Data.Weighted => WMA(index, maPeriod, buffer),
-                MAType_Data.Triangular => TMA(index, maPeriod, buffer),
-                MAType_Data.Hull => Hull(index, maPeriod, buffer),
-                MAType_Data.VIDYA => VIDYA(index, maPeriod, buffer, prevMA_Dict),
-                MAType_Data.WilderSmoothing => Wilder(index, maPeriod, buffer, prevMA_Dict),
-                MAType_Data.KaufmanAdaptive => KAMA(index, maPeriod, 2, 30, buffer, prevMA_Dict),
+                MAType_Data.Simple => CustomMA.SMA(index, maPeriod, buffer),
+                MAType_Data.Exponential => CustomMA.EMA(index, maPeriod, buffer, prevMA_Dict),
+                MAType_Data.Weighted => CustomMA.WMA(index, maPeriod, buffer),
+                MAType_Data.Triangular => CustomMA.TMA(index, maPeriod, buffer),
+                MAType_Data.Hull => CustomMA.Hull(index, maPeriod, buffer),
+                MAType_Data.VIDYA => CustomMA.VIDYA(index, maPeriod, buffer, prevMA_Dict),
+                MAType_Data.WilderSmoothing => CustomMA.Wilder(index, maPeriod, buffer, prevMA_Dict),
+                MAType_Data.KaufmanAdaptive => CustomMA.KAMA(index, maPeriod, 2, 30, buffer, prevMA_Dict),
                 _ => double.NaN
             };
 
-            return isStdDev ? StdDev(index, maPeriod, maValue, stddev_buffer) : maValue;
-        }
-        //  ===== CUSTOM MAS ====
-        // MAs logic generated by LLM
-        // Modified to handle multiples sources
-        // as well as specific OrderFlow() needs.
-        private static double StdDev(int index, int Period, double maValue, IndicatorDataSeries buffer)
-        {
-            double mean = maValue;
-            double sumSq = 0.0;
-            for (int i = index - Period + 1; i <= index; i++)
-            {
-                try {
-                    double diff = buffer[i] - mean;
-                    sumSq += diff * diff;
-                } catch {}
-            }
-            
-            // Sample => (Period - 1) / Population => Period
-            return (Period > 1) ? Math.Sqrt(sumSq / (Period - 1)) : 0.0;
-        }
-
-        private static double SMA(int index, int period, Dictionary<int, double> buffer)
-        {
-            if (buffer.Count < period)
-                return double.NaN;
-
-            double sum = 0;
-            for (int i = index; i > index - period; i--) {
-                // The index may jump on Sunday Bars
-                try { sum += buffer[i]; } catch { }
-            }
-            return sum / period;
-        }
-        private static double EMA(int index, int period, Dictionary<int, double> buffer, Dictionary<int, double> emaDict)
-        {
-            if (emaDict.Count == 0) {
-                emaDict[0] = buffer[index];
-                emaDict[1] = buffer[index];
-                emaDict[index] = buffer[index];
-                return buffer[index];
-            }
-            double k = 2.0 / (period + 1);
-            double value = buffer[index] * k + emaDict[0] * (1 - k);
-
-            if (index != emaDict.Keys.LastOrDefault()) {
-                // Always 3
-                double prev = emaDict[1];
-                emaDict.Clear();
-                emaDict[0] = prev;
-                emaDict[1] = value;
-                emaDict[index] = value; // just to be identified
-            } else {
-                emaDict[1] = value;
-                emaDict[index] = value;
-            }
-            return value;
-        }
-        private static double WMA(int index, int period, Dictionary<int, double> buffer, double? overrideLast = null)
-        {
-            if (buffer.Count < period)
-            {
-                // not enough values -> average available
-                /*
-                double sumA = 0;
-                for (int i = 0; i <= index; i++) {
-                    try { sumA += buffer[i]; } catch { }
-                }
-                return sumA / available;
-                */
-                return double.NaN;
-            }
-
-            double numerator = 0;
-            double denominator = 0;
-            int w = 1;
-            int start = index - period + 1;
-            for (int i = start; i <= index; i++, w++)
-            {
-                double v = 0;
-                try { v = (i == index && overrideLast.HasValue) ? overrideLast.Value : buffer[i]; } catch { }
-                numerator += v * w;
-                denominator += w;
-            }
-            return numerator / denominator;
-        }
-        private static double TMA(int index, int period, Dictionary<int, double> buffer)
-        {
-            if (period <= 1)
-                return buffer[index];
-
-            // need at least 2*period - 1 samples to compute full triangular, otherwise fallback
-            if (buffer.Count < 2 * period - 2)
-                return double.NaN; // return SMA(index, period, buffer);
-
-            double sumSma = 0.0;
-            for (int k = index - period + 1; k <= index; k++)
-            {
-                double smaK = SMA(k, period, buffer);
-                sumSma += smaK;
-            }
-            return sumSma / period;
-        }
-        private static double Hull(int index, int period, Dictionary<int, double> buffer)
-        {
-            if (period < 2) return buffer[index];
-
-            int half = Math.Max(1, period / 2);
-            int sqrt = Math.Max(1, (int)Math.Round(Math.Sqrt(period)));
-
-            double wmaHalf = WMA(index, half, buffer);
-            double wmaFull = WMA(index, period, buffer);
-
-            double raw = 2 * wmaHalf - wmaFull;
-            return WMA(index, sqrt, buffer, raw);
-        }
-        private static double Wilder(int index, int period, Dictionary<int, double> buffer, Dictionary<int, double> wilderDict)
-        {
-            if (wilderDict.Count == 0) {
-                wilderDict[0] = buffer[index];
-                wilderDict[1] = buffer[index];
-                wilderDict[index] = buffer[index];
-                return buffer[index];
-            }
-            double value =  (wilderDict[0] * (period - 1) + buffer[index]) / period;
-
-            if (index != wilderDict.Keys.LastOrDefault()) {
-                // Always 3
-                double prev = wilderDict[1];
-                wilderDict.Clear();
-                wilderDict[0] = prev;
-                wilderDict[1] = value;
-                wilderDict[index] = value; // just to be identified
-            } else {
-                wilderDict[1] = value;
-                wilderDict[index] = value;
-            }
-            return value;
-        }
-        private static double KAMA(int index, int period, int fast, int slow, Dictionary<int, double> buffer, Dictionary<int, double> kamaDict)
-        {
-            if (kamaDict.Count == 0) {
-                kamaDict[0] = buffer[index];
-                kamaDict[1] = buffer[index];
-                kamaDict[index] = buffer[index];
-                return buffer[index];
-            }
-            if (buffer.Count < period) return SMA(index, period, buffer);
-
-            double change;
-            try { change = Math.Abs(buffer[index] - buffer[index - period]); }
-            catch {
-                int idxValue = index - period;
-                for (int i = idxValue; i < index; i++) {
-                    idxValue = i;
-                    if (buffer.ContainsKey(i)) break;
-                }
-                change = Math.Abs(buffer[index] - buffer[idxValue]);
-            }
-
-            double volatility = 0.0;
-            for (int i = index - period + 1; i <= index; i++) {
-                try { volatility += Math.Abs(buffer[i] - buffer[i - 1]); } catch { }
-            }
-
-            double er = volatility == 0 ? 0 : change / volatility;
-            double fastSC = 2.0 / (fast + 1);
-            double slowSC = 2.0 / (slow + 1);
-            double sc = Math.Pow(er * (fastSC - slowSC) + slowSC, 2);
-
-            double value = kamaDict[0] + sc * (buffer[index] - kamaDict[0]);
-
-            if (index != kamaDict.Keys.LastOrDefault()) {
-                // Always 3
-                double prev = kamaDict[1];
-                kamaDict.Clear();
-                kamaDict[0] = prev;
-                kamaDict[1] = value;
-                kamaDict[index] = value; // just to be identified
-            } else {
-                kamaDict[1] = value;
-                kamaDict[index] = value;
-            }
-            return value;
-        }
-        private static double VIDYA(int index, int period, Dictionary<int, double> buffer, Dictionary<int, double> vidyaDict)
-        {
-            if (vidyaDict.Count == 0) {
-                vidyaDict[0] = buffer[index];
-                vidyaDict[1] = buffer[index];
-                vidyaDict[index] = buffer[index];
-                return buffer[index];
-            }
-
-            double cmo = CMO(index, period, buffer);
-            // scale factor, tuneable; using 0.2 base as example
-            // cTrader uses 0.65 as default
-            double alphaBase = 0.65;
-            double k = alphaBase * Math.Abs(cmo / 100.0);
-            double value = k * buffer[index] + (1 - k) * vidyaDict[0];
-
-            if (index != vidyaDict.Keys.LastOrDefault()) {
-                // Always 3
-                double prev = vidyaDict[1];
-                vidyaDict.Clear();
-                vidyaDict[0] = prev;
-                vidyaDict[1] = value;
-                vidyaDict[index] = value; // just to be identified
-            } else {
-                vidyaDict[1] = value;
-                vidyaDict[index] = value;
-            }
-            return value;
-        }
-        private static double CMO(int index, int length, Dictionary<int, double> buffer)
-        {
-            if (index < 1 || length < 1) return 0.0;
-            int start = Math.Max(1, index - length + 1);
-            double up = 0, down = 0;
-            for (int i = start; i <= index; i++)
-            {
-                try {
-                    double diff = buffer[i] - buffer[i - 1];
-                    if (diff > 0) up += diff;
-                    else down += -diff;
-                } catch { }
-            }
-            double denom = up + down;
-            return denom == 0 ? 0.0 : 100.0 * (up - down) / denom;
-        }
-
-
-        // *********** PERFORMANCE DRAWING ***********
-        /*
-            An simple idea that came up during the development of ODF_AGG.
-            LLM code generating was used to quickly test the idea concepts.
-
-            - Re-draw => Objects are deleted and recreated each time,
-                - Fastest approach
-                - Removes only objects outside the visible chart range
-                - when cleaning up the chart with Chart.RemoveAllObjects()
-                    it takes only 1/0.5 seconds.
-
-            - Hidden => Objects are never deleted, just .IsHidden = True.
-                - Slowest approach
-                - IsHidden = false, only in visibles objects.
-                - when cleaning up the chart with Chart.RemoveAllObjects()
-                    it lags/freezes the chart/panel UI,
-                    the waiting time scales with the drawings count.
-                - Lags at scrolling at MASSIVE hidden drawings count.
-        */
-        private void PerformanceDrawing(object obj)
-        {
-            int first = Chart.FirstVisibleBarIndex;
-            int last = Chart.LastVisibleBarIndex;
-            int visible = 0;
-
-            // ==== Drawing at Zoom ====
-            int Zoom = Chart.ZoomLevel;
-            // Keep rectangles from Filters or VPs
-            if (Zoom < DrawAtZoom_Value) {
-                HiddenOrRemove(true);
-                return;
-            }
-
-            void HiddenOrRemove(bool hiddenAll)
-            {
-                if (DrawingStrategy_Input == DrawingStrategy_Data.Hidden_Slowest && hiddenAll)
-                {
-                    foreach (var kvp in hiddenInfos)
-                    {
-                        string drawName = kvp.Key;
-                        ChartObject drawObj = kvp.Value;
-
-                        // Extract index from name
-                        string[] parts = drawName.Split('_');
-                        if (parts.Length < 2) continue;
-                        if (!int.TryParse(parts.FirstOrDefault(), out _)) continue;
-
-                        drawObj.IsHidden = hiddenAll;
-                    }
-                }
-                else if (DrawingStrategy_Input == DrawingStrategy_Data.Redraw_Fastest && hiddenAll) {
-                    // Remove everything
-                    foreach (var kvp in redrawInfos.Values)
-                    {
-                        var drawInfoList = kvp.Values;
-                        foreach (DrawInfo drawInfo in drawInfoList)
-                            Chart.RemoveObject(drawInfo.Id);
-                    }
-                }
-
-                DebugPerfDraw();
-            }
-
-            // ==== Drawing at scroll ====
-            if (DrawingStrategy_Input == DrawingStrategy_Data.Hidden_Slowest) {
-                // Display the hidden ones
-                foreach (var kvp in hiddenInfos)
-                {
-                    string drawName = kvp.Key;
-                    ChartObject drawObj = kvp.Value;
-
-                    // Extract index from name
-                    string[] parts = drawName.Split('_');
-                    if (parts.Length < 2) continue;
-                    if (!int.TryParse(parts.FirstOrDefault(), out int idx)) continue;
-
-                    bool isVis = idx >= first && idx <= last;
-                    drawObj.IsHidden = !isVis;
-
-                    if (ShowDrawingInfo) {
-                        if (isVis) visible++;
-                    }
-                }
-            }
-            else {
-                // Clean up
-                foreach (var kvp in redrawInfos)
-                {
-                    var drawInfoList = kvp.Value.Values;
-                    foreach (DrawInfo drawInfo in drawInfoList)
-                    {
-                        // The actual lazy cleanup.
-                        if (kvp.Key < first || kvp.Key > last)
-                            Chart.RemoveObject(drawInfo.Id);
-                    }
-                }
-
-                // Draw visible
-                for (int i = first; i <= last; i++)
-                {
-                    if (!redrawInfos.ContainsKey(i))
-                        continue;
-
-                    var drawInfoList = redrawInfos[i].Values;
-                    foreach (DrawInfo info in drawInfoList)
-                    {
-                        CreateDraw(info);
-                        if (ShowDrawingInfo)
-                            visible++;
-                    }
-                }
-            }
-
-            DebugPerfDraw();
-
-            void DebugPerfDraw() {
-                if (ShowDrawingInfo) {
-                    _StaticText_DebugPerfDraw ??= Chart.DrawStaticText("Debug_Perf_Draw", "", VerticalAlignment.Top, HorizontalAlignment.Left, Color.Lime);
-                    bool IsHidden = DrawingStrategy_Input == DrawingStrategy_Data.Hidden_Slowest;
-                    int cached = 0;
-                    if (!IsHidden) {
-                        foreach (var list in redrawInfos.Values) {
-                            cached += list.Count;
-                        }
-                    }
-                    _StaticText_DebugPerfDraw.Text = IsHidden ?
-                        $"Hidden Mode\n Total Objects: {FormatBigNumber(hiddenInfos.Values.Count)}\n Visible: {FormatBigNumber(visible)}" :
-                        $"Redraw Mode\n Cached: {FormatBigNumber(redrawInfos.Count)} bars\n Cached: {FormatBigNumber(cached)} objects\n Drawn: {FormatBigNumber(visible)}";
-                }
-            }
-        }
-        private ChartObject CreateDraw(DrawInfo info)
-        {
-            switch (info.Type)
-            {
-                case DrawType.Text:
-                    ChartText text = Chart.DrawText(info.Id, info.Text, info.X1, info.Y1, info.Color);
-                    text.HorizontalAlignment = info.horizontalAlignment;
-                    text.VerticalAlignment = info.verticalAlignment;
-                    text.FontSize = info.FontSize;
-                    return text;
-                case DrawType.Icon:
-                    return Chart.DrawIcon(info.Id, info.IconType, info.X1, info.Y1, info.Color);
-
-                case DrawType.Ellipse:
-                    ChartEllipse ellipse = Chart.DrawEllipse(info.Id, info.X1, info.Y1, info.X2, info.Y2, info.Color);
-                    ellipse.IsFilled = true;
-                    return ellipse;
-
-                case DrawType.Rectangle:
-                    ChartRectangle rectangle = Chart.DrawRectangle(info.Id, info.X1, info.Y1, info.X2, info.Y2, info.Color);
-                    return rectangle;
-
-                default:
-                    return null;
-            }
-        }
-        private void DrawOrCache(DrawInfo info) {
-            if (DrawingStrategy_Input == DrawingStrategy_Data.Hidden_Slowest)
-            {
-                if (!IsLastBar || isPriceBased_NewBar) {
-                    ChartObject obj = CreateDraw(info);
-                    obj.IsHidden = true;
-                    hiddenInfos[info.Id] = obj;
-                } else {
-                    ChartObject obj = CreateDraw(info);
-                    // Replace current obj
-                    if (!currentToHidden.ContainsKey(0))
-                        currentToHidden[0] = new Dictionary<string, ChartObject>();
-                    else
-                        currentToHidden[0][info.Id] = obj;
-                }
-            }
-            else
-            {
-                // Add Keys if not present
-                if (!redrawInfos.ContainsKey(info.BarIndex)) {
-                    redrawInfos[info.BarIndex] = new Dictionary<string, DrawInfo> { { info.Id, info } };
-                }
-                else {
-                    // Add/Replace drawing
-                    if (!IsLastBar || isPriceBased_NewBar)
-                        redrawInfos[info.BarIndex][info.Id] = info;
-                    else {
-                        if (redrawInfos.ContainsKey(info.BarIndex) && !lockDrawRemove) {
-                            redrawInfos[info.BarIndex].Remove($"{trendStartIndex}_WavesMisc");
-                            redrawInfos[info.BarIndex].Remove($"{trendStartIndex}_WavesVolume");
-                            redrawInfos[info.BarIndex].Remove($"{trendStartIndex}_WavesEvsR");
-                            lockDrawRemove = true;
-                        }
-                        // Create drawing and replace current infos
-                        CreateDraw(info);
-                        if (!currentToRedraw.ContainsKey(0))
-                            currentToRedraw[0] = new Dictionary<string, DrawInfo>();
-                        else
-                            currentToRedraw[0][info.Id] = info;
-                    }
-                }
-            }
-        }
-        private void LiveDrawing(BarOpenedEventArgs obj) {
-            // Working with Lists in Calculate() is painful.
-
-            if (DrawingStrategy_Input == DrawingStrategy_Data.Hidden_Slowest) {
-                List<ChartObject> objList = currentToHidden[0].Values.ToList();
-
-                foreach (var drawObj in objList)
-                    hiddenInfos[drawObj.Name] = drawObj;
-
-                currentToHidden.Clear();
-            }
-            else {
-                List<DrawInfo> drawList = currentToRedraw[0].Values.ToList();
-                foreach (DrawInfo info in drawList) {
-                    redrawInfos[drawList.FirstOrDefault().BarIndex][info.Id] = info;
-                }
-
-                currentToRedraw.Clear();
-            }
+            return isStdDev ? CustomMA.StdDev(index, maPeriod, maValue, buffer) : maValue;
         }
 
         private string FormatBigNumber(double num)
@@ -1903,6 +1370,41 @@ namespace cAlgo
             return num.ToString("#,0");
         }
 
+        private static string[] GetTimeLapse(double interval_ms)
+        {
+            // Dynamic TimeLapse Format
+            TimeSpan ts = TimeSpan.FromMilliseconds(interval_ms);
+
+            string timelapse_Suffix = "";
+            double timelapse_Value = 0;
+
+            double[] dividedTimestamp = { ts.Days, ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds };
+            for (int i = 0; i < dividedTimestamp.Length; i++)
+            {
+                if (dividedTimestamp[i] != 0)
+                {
+                    string suffix = i switch {
+                        4 => "ms",
+                        3 => "s",
+                        2 => "m",
+                        1 => "h",
+                        _ => "d"
+                    };
+                    timelapse_Value = suffix switch {
+                        "ms" => ts.TotalMilliseconds,
+                        "s" => ts.TotalSeconds,
+                        "m" => ts.TotalMinutes,
+                        "h" => ts.TotalHours,
+                        _ => ts.TotalDays
+                    };
+                    timelapse_Suffix = suffix;
+                    break;
+                }
+            }
+            string[] interval_timelapse = { $"{Math.Round(timelapse_Value, 1)}", timelapse_Suffix };
+            return interval_timelapse;
+        }
+
         // *********** VOLUME RENKO/RANGE ***********
         /*
             Original source code by srlcarlg (me) (https://ctrader.com/algos/indicators/show/3045)
@@ -1917,26 +1419,26 @@ namespace cAlgo
 
             if (LoadTickFrom_Input == LoadTickFrom_Data.Custom) {
                 // ==== Get datetime to load from: dd/mm/yyyy ====
-                if (DateTime.TryParseExact(StringDate, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out fromDateTime)) {
-                    if (fromDateTime > lastBarDate) {
-                        fromDateTime = lastBarDate;
+                if (DateTime.TryParseExact(StringDate, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out TickObjs.fromDateTime)) {
+                    if (TickObjs.fromDateTime > lastBarDate) {
+                        TickObjs.fromDateTime = lastBarDate;
                         Notifications.ShowPopup(
                             NOTIFY_CAPTION,
-                            $"Invalid DateTime '{StringDate}'. \nUsing '{fromDateTime.ToShortDateString()}",
+                            $"Invalid DateTime '{StringDate}'. \nUsing '{TickObjs.fromDateTime.ToShortDateString()}",
                             PopupNotificationState.Error
                         );
                     }
                 } else {
-                    fromDateTime = lastBarDate;
+                    TickObjs.fromDateTime = lastBarDate;
                     Notifications.ShowPopup(
                         NOTIFY_CAPTION,
-                        $"Invalid DateTime '{StringDate}'. \nUsing '{fromDateTime.ToShortDateString()}",
+                        $"Invalid DateTime '{StringDate}'. \nUsing '{TickObjs.fromDateTime.ToShortDateString()}",
                         PopupNotificationState.Error
                     );
                 }
             }
             else {
-                fromDateTime = LoadTickFrom_Input switch {
+                TickObjs.fromDateTime = LoadTickFrom_Input switch {
                     LoadTickFrom_Data.Yesterday => MarketData.GetBars(TimeFrame.Daily).LastBar.OpenTime.Date,
                     LoadTickFrom_Data.Before_Yesterday => MarketData.GetBars(TimeFrame.Daily).Last(1).OpenTime.Date,
                     LoadTickFrom_Data.One_Week => MarketData.GetBars(TimeFrame.Weekly).LastBar.OpenTime.Date,
@@ -1952,8 +1454,8 @@ namespace cAlgo
             }
 
             // ==== Check if existing ticks data on the chart really needs more data ====
-            firstTickTime = TicksOHLC.OpenTimes.FirstOrDefault();
-            if (firstTickTime >= fromDateTime) {
+            TickObjs.firstTickTime = TicksOHLC.OpenTimes.FirstOrDefault();
+            if (TickObjs.firstTickTime >= TickObjs.fromDateTime) {
 
                 PopupNotification progressPopup = null;
                 bool notifyIsMinimal = LoadTickNotify_Input == LoadTickNotify_Data.Minimal;
@@ -1964,7 +1466,7 @@ namespace cAlgo
                         PopupNotificationState.InProgress
                     );
 
-                while (TicksOHLC.OpenTimes.FirstOrDefault() > fromDateTime)
+                while (TicksOHLC.OpenTimes.FirstOrDefault() > TickObjs.fromDateTime)
                 {
                     int loadedCount = TicksOHLC.LoadMoreHistory();
                     if (LoadTickNotify_Input == LoadTickNotify_Data.Detailed) {
@@ -2005,9 +1507,9 @@ namespace cAlgo
         }
         private void DrawFromDateLine() {
             try {
-                ChartVerticalLine lineInfo = Chart.DrawVerticalLine("FromDate", fromDateTime, Color.Yellow);
+                ChartVerticalLine lineInfo = Chart.DrawVerticalLine("FromDate", TickObjs.fromDateTime, Color.Yellow);
                 lineInfo.LineStyle = LineStyle.Lines;
-                ChartText textInfo = Chart.DrawText("FromDateText", "Target Tick Data", fromDateTime, Bars.HighPrices[Bars.OpenTimes.GetIndexByTime(fromDateTime)], Color.Yellow);
+                ChartText textInfo = Chart.DrawText("FromDateText", "Target Tick Data", TickObjs.fromDateTime, Bars.HighPrices[Bars.OpenTimes.GetIndexByTime(TickObjs.fromDateTime)], Color.Yellow);
                 textInfo.HorizontalAlignment = HorizontalAlignment.Left;
                 textInfo.VerticalAlignment = VerticalAlignment.Center;
                 textInfo.FontSize = 8;
@@ -2026,8 +1528,8 @@ namespace cAlgo
                     - Asynchronous Tick Data loading has been added.
             */
 
-            firstTickTime = TicksOHLC.OpenTimes.FirstOrDefault();
-            if (firstTickTime > fromDateTime)
+            TickObjs.firstTickTime = TicksOHLC.OpenTimes.FirstOrDefault();
+            if (TickObjs.firstTickTime > TickObjs.fromDateTime)
             {
                 bool notifyIsMinimal = LoadTickNotify_Input == LoadTickNotify_Data.Minimal;
                 PopupNotification progressPopup = null;
@@ -2042,7 +1544,7 @@ namespace cAlgo
                         );
 
                     // "Freeze" the Chart at the beginning of Calculate()
-                    while (TicksOHLC.OpenTimes.FirstOrDefault() > fromDateTime)
+                    while (TicksOHLC.OpenTimes.FirstOrDefault() > TickObjs.fromDateTime)
                     {
                         int loadedCount = TicksOHLC.LoadMoreHistory();
                         if (LoadTickNotify_Input == LoadTickNotify_Data.Detailed) {
@@ -2069,7 +1571,7 @@ namespace cAlgo
                     unlockChart();
                 }
                 else {
-                    if (IsLastBar && !loadingAsyncTicks)
+                    if (IsLastBar && !TickObjs.startAsyncLoading)
                         timerHandler.isAsyncLoading = true;
                 }
             }
@@ -2078,12 +1580,12 @@ namespace cAlgo
 
 
             void unlockChart() {
-                if (syncTickProgressBar != null) {
-                    syncTickProgressBar.IsIndeterminate = false;
-                    syncTickProgressBar.IsVisible = false;
+                if (TickObjs.syncProgressBar != null) {
+                    TickObjs.syncProgressBar.IsIndeterminate = false;
+                    TickObjs.syncProgressBar.IsVisible = false;
                 }
-                syncTickProgressBar = null;
-                loadingTicksComplete = true;
+                TickObjs.syncProgressBar = null;
+                TickObjs.isLoadingComplete = true;
                 DrawStartVolumeLine();
             }
         }
@@ -2092,9 +1594,9 @@ namespace cAlgo
         {
             if (timerHandler.isAsyncLoading)
             {
-                if (!loadingAsyncTicks) {
+                if (!TickObjs.startAsyncLoading) {
                     string volumeLineInfo = "=> Zoom out and follow the Vertical Line";
-                    asyncTickPopup = Notifications.ShowPopup(
+                    TickObjs.asyncPopup = Notifications.ShowPopup(
                         NOTIFY_CAPTION,
                         $"[{Symbol.Name}] Loading Tick Data Asynchronously every 0.5 second...\n{volumeLineInfo}",
                         PopupNotificationState.InProgress
@@ -2103,16 +1605,16 @@ namespace cAlgo
                     DrawFromDateLine();
                 }
 
-                if (!loadingTicksComplete) {
+                if (!TickObjs.isLoadingComplete) {
                     TicksOHLC.LoadMoreHistoryAsync((_) => {
                         DateTime currentDate = _.Bars.FirstOrDefault().OpenTime;
 
                         DrawStartVolumeLine();
 
-                        if (currentDate <= fromDateTime) {
+                        if (currentDate <= TickObjs.fromDateTime) {
 
-                            if (asyncTickPopup.State != PopupNotificationState.Success)
-                                asyncTickPopup.Complete(PopupNotificationState.Success);
+                            if (TickObjs.asyncPopup.State != PopupNotificationState.Success)
+                                TickObjs.asyncPopup.Complete(PopupNotificationState.Success);
 
                             if (LoadTickNotify_Input == LoadTickNotify_Data.Detailed) {
                                 Notifications.ShowPopup(
@@ -2122,11 +1624,11 @@ namespace cAlgo
                                 );
                             }
 
-                            loadingTicksComplete = true;
+                            TickObjs.isLoadingComplete = true;
                         }
                     });
 
-                    loadingAsyncTicks = true;
+                    TickObjs.startAsyncLoading = true;
                 }
                 else {
                     DrawOnScreen("");
@@ -2149,14 +1651,14 @@ namespace cAlgo
             double min = Int32.MaxValue;
             double max = 0;
 
-            int startIndex = isVolume ? lastTick_Bars : lastTick_Wicks;
+            int startIndex = isVolume ? PerformanceTick.lastIdx_Bars : PerformanceTick.lastIdx_Wicks;
             if (IsLastBar) {
                 while (TicksOHLC.OpenTimes[startIndex] < startTime)
                     startIndex++;
                 if (isVolume)
-                    lastTick_Bars = startIndex;
+                    PerformanceTick.lastIdx_Bars = startIndex;
                 else
-                    lastTick_Wicks = startIndex;
+                    PerformanceTick.lastIdx_Wicks = startIndex;
             }
 
             for (int tickIndex = startIndex; tickIndex < TicksOHLC.Count; tickIndex++)
@@ -2165,8 +1667,8 @@ namespace cAlgo
 
                 if (tickBar.OpenTime < startTime || tickBar.OpenTime > endTime) {
                     if (tickBar.OpenTime > endTime) {
-                        lastTick_Bars = isVolume ? tickIndex : lastTick_Bars;
-                        lastTick_Wicks = !isVolume ? tickIndex : lastTick_Wicks;
+                        PerformanceTick.lastIdx_Bars = isVolume ? tickIndex : PerformanceTick.lastIdx_Bars;
+                        PerformanceTick.lastIdx_Wicks = !isVolume ? tickIndex : PerformanceTick.lastIdx_Wicks;
                         break;
                     }
                     else
@@ -2241,6 +1743,246 @@ namespace cAlgo
             Chart.DrawStaticText("txt", $"{msg}", VerticalAlignment.Top, HorizontalAlignment.Center, Color.LightBlue);
         }
 
+        // *********** PERFORMANCE DRAWING ***********
+        /*
+            An simple idea that came up during the development of ODF_AGG.
+            LLM code generating was used to quickly test the idea concepts.
+
+            - Re-draw => Objects are deleted and recreated each time,
+                - Fastest approach
+                - Removes only objects outside the visible chart range
+                - when cleaning up the chart with Chart.RemoveAllObjects()
+                    it takes only 1/0.5 seconds.
+
+            - Hidden => Objects are never deleted, just .IsHidden = True.
+                - Slowest approach
+                - IsHidden = false, only in visibles objects.
+                - when cleaning up the chart with Chart.RemoveAllObjects()
+                    it lags/freezes the chart/panel UI,
+                    the waiting time scales with the drawings count.
+                - Lags at scrolling at MASSIVE hidden drawings count.
+        */
+        private void PerformanceDrawing(object obj)
+        {
+            int first = Chart.FirstVisibleBarIndex;
+            int last = Chart.LastVisibleBarIndex;
+            int visible = 0;
+
+            // ==== Drawing at Zoom ====
+            int Zoom = Chart.ZoomLevel;
+            // Keep rectangles from Filters or VPs
+            if (Zoom < DrawAtZoom_Value) {
+                HiddenOrRemove(true);
+                return;
+            }
+
+            void HiddenOrRemove(bool hiddenAll)
+            {
+                if (DrawingStrategy_Input == DrawingStrategy_Data.Hidden_Slowest && hiddenAll)
+                {
+                    foreach (var kvp in PerfDrawingObjs.hiddenInfos)
+                    {
+                        string drawName = kvp.Key;
+                        ChartObject drawObj = kvp.Value;
+
+                        // Extract index from name
+                        string[] parts = drawName.Split('_');
+                        if (parts.Length < 2) continue;
+                        if (!int.TryParse(parts.FirstOrDefault(), out _)) continue;
+
+                        drawObj.IsHidden = hiddenAll;
+                    }
+                }
+                else if (DrawingStrategy_Input == DrawingStrategy_Data.Redraw_Fastest && hiddenAll) {
+                    // Remove everything
+                    foreach (var kvp in PerfDrawingObjs.redrawInfos.Values)
+                    {
+                        var drawInfoList = kvp.Values;
+                        foreach (DrawInfo drawInfo in drawInfoList)
+                            Chart.RemoveObject(drawInfo.Id);
+                    }
+                }
+
+                DebugPerfDraw();
+            }
+
+            // ==== Drawing at scroll ====
+            if (DrawingStrategy_Input == DrawingStrategy_Data.Hidden_Slowest) {
+                // Display the hidden ones
+                foreach (var kvp in PerfDrawingObjs.hiddenInfos)
+                {
+                    string drawName = kvp.Key;
+                    ChartObject drawObj = kvp.Value;
+
+                    // Extract index from name
+                    string[] parts = drawName.Split('_');
+                    if (parts.Length < 2) continue;
+                    if (!int.TryParse(parts.FirstOrDefault(), out int idx)) continue;
+
+                    bool isVis = idx >= first && idx <= last;
+                    drawObj.IsHidden = !isVis;
+
+                    if (ShowDrawingInfo) {
+                        if (isVis) visible++;
+                    }
+                }
+            }
+            else {
+                // Clean up
+                foreach (var kvp in PerfDrawingObjs.redrawInfos)
+                {
+                    var drawInfoList = kvp.Value.Values;
+                    foreach (DrawInfo drawInfo in drawInfoList)
+                    {
+                        // The actual lazy cleanup.
+                        if (kvp.Key < first || kvp.Key > last)
+                            Chart.RemoveObject(drawInfo.Id);
+                    }
+                }
+
+                // Draw visible
+                for (int i = first; i <= last; i++)
+                {
+                    if (!PerfDrawingObjs.redrawInfos.ContainsKey(i))
+                        continue;
+
+                    var drawInfoList = PerfDrawingObjs.redrawInfos[i].Values;
+                    foreach (DrawInfo info in drawInfoList)
+                    {
+                        CreateDraw(info);
+                        if (ShowDrawingInfo)
+                            visible++;
+                    }
+                }
+            }
+
+            DebugPerfDraw();
+
+            void DebugPerfDraw() {
+                if (ShowDrawingInfo) {
+                    PerfDrawingObjs.staticText_DebugPerfDraw ??= Chart.DrawStaticText("Debug_Perf_Draw", "", VerticalAlignment.Top, HorizontalAlignment.Left, Color.Lime);
+                    bool IsHidden = DrawingStrategy_Input == DrawingStrategy_Data.Hidden_Slowest;
+                    int cached = 0;
+                    if (!IsHidden) {
+                        foreach (var list in PerfDrawingObjs.redrawInfos.Values) {
+                            cached += list.Count;
+                        }
+                    }
+                    PerfDrawingObjs.staticText_DebugPerfDraw.Text = IsHidden ?
+                        $"Hidden Mode\n Total Objects: {FormatBigNumber(PerfDrawingObjs.hiddenInfos.Values.Count)}\n Visible: {FormatBigNumber(visible)}" :
+                        $"Redraw Mode\n Cached: {FormatBigNumber(PerfDrawingObjs.redrawInfos.Count)} bars\n Cached: {FormatBigNumber(cached)} objects\n Drawn: {FormatBigNumber(visible)}";
+                }
+            }
+        }
+        private ChartObject CreateDraw(DrawInfo info)
+        {
+            switch (info.Type)
+            {
+                case DrawType.Text:
+                    ChartText text = Chart.DrawText(info.Id, info.Text, info.X1, info.Y1, info.Color);
+                    text.HorizontalAlignment = info.horizontalAlignment;
+                    text.VerticalAlignment = info.verticalAlignment;
+                    text.FontSize = info.FontSize;
+                    return text;
+                case DrawType.Icon:
+                    return Chart.DrawIcon(info.Id, info.IconType, info.X1, info.Y1, info.Color);
+
+                case DrawType.Ellipse:
+                    ChartEllipse ellipse = Chart.DrawEllipse(info.Id, info.X1, info.Y1, info.X2, info.Y2, info.Color);
+                    ellipse.IsFilled = true;
+                    return ellipse;
+
+                case DrawType.Rectangle:
+                    ChartRectangle rectangle = Chart.DrawRectangle(info.Id, info.X1, info.Y1, info.X2, info.Y2, info.Color);
+                    return rectangle;
+
+                default:
+                    return null;
+            }
+        }
+        private void DrawOrCache(DrawInfo info) {
+            if (DrawingStrategy_Input == DrawingStrategy_Data.Hidden_Slowest)
+            {
+                if (!IsLastBar || BooleanUtils.isPriceBased_NewBar) {
+                    ChartObject obj = CreateDraw(info);
+                    obj.IsHidden = true;
+                    PerfDrawingObjs.hiddenInfos[info.Id] = obj;
+                } else {
+                    ChartObject obj = CreateDraw(info);
+                    // Replace current obj
+                    if (!PerfDrawingObjs.currentToHidden.ContainsKey(0))
+                        PerfDrawingObjs.currentToHidden[0] = new Dictionary<string, ChartObject>();
+                    else
+                        PerfDrawingObjs.currentToHidden[0][info.Id] = obj;
+                }
+            }
+            else
+            {
+                // Add Keys if not present
+                if (!PerfDrawingObjs.redrawInfos.ContainsKey(info.BarIndex)) {
+                    PerfDrawingObjs.redrawInfos[info.BarIndex] = new Dictionary<string, DrawInfo> { { info.Id, info } };
+                }
+                else {
+                    // Add/Replace drawing
+                    if (!IsLastBar || BooleanUtils.isPriceBased_NewBar)
+                        PerfDrawingObjs.redrawInfos[info.BarIndex][info.Id] = info;
+                    else 
+                    {
+                        // Fix PerfDrawing => "Weis Waves => "Show Current Wave?" often flickering in live-market (Redraw_Fastest only)
+                        if (WavesParams.ShowCurrentWave) 
+                        {
+                            string[] toReplace = {
+                                $"{trendStartIndex}_WavesMisc",
+                                $"{trendStartIndex}_WavesVolume",
+                                $"{trendStartIndex}_WavesEvsR"
+                            };
+                            if (toReplace.Contains(info.Id)) {
+                                int lastKey = info.BarIndex - 1;
+                                foreach (string id in toReplace)
+                                {
+                                    if (PerfDrawingObjs.redrawInfos[lastKey].ContainsKey(id)) {
+                                        if (info.Id == id)
+                                            PerfDrawingObjs.redrawInfos[lastKey][id] = info;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Create drawing and replace current infos
+                        CreateDraw(info);
+                        if (!PerfDrawingObjs.currentToRedraw.ContainsKey(0))
+                            PerfDrawingObjs.currentToRedraw[0] = new Dictionary<string, DrawInfo>();
+                        else
+                            PerfDrawingObjs.currentToRedraw[0][info.Id] = info;
+                    }
+                }
+            }
+
+            // IMPORTANT! => set isPriceBased_NewBar to 'false' after using it
+            BooleanUtils.isPriceBased_NewBar = false;
+        }
+        private void LiveDrawing(BarOpenedEventArgs obj) {
+            // Working with Lists in Calculate() is painful.
+            if (DrawingStrategy_Input == DrawingStrategy_Data.Hidden_Slowest) {
+                List<ChartObject> objList = PerfDrawingObjs.currentToHidden[0].Values.ToList();
+
+                foreach (var drawObj in objList)
+                    PerfDrawingObjs.hiddenInfos[drawObj.Name] = drawObj;
+
+                PerfDrawingObjs.currentToHidden.Clear();
+            }
+            else {
+                List<DrawInfo> drawList = PerfDrawingObjs.currentToRedraw[0].Values.ToList();
+                foreach (DrawInfo info in drawList) {
+                    // Fix PerfDrawing => Wyckoff Bars => Numbers in live-market are always changed to '2'
+                    PerfDrawingObjs.redrawInfos[info.BarIndex][info.Id] = info;
+                    // previous  => The redrawInfos[drawList.FirstOrDefault().BarIndex] 
+                }
+
+                PerfDrawingObjs.currentToRedraw.Clear();
+            }
+        }
+
         // ************************ WEIS WAVE SYSTEM **************************
         /*
                                    Improved Weis Waves
@@ -2280,12 +2022,12 @@ namespace cAlgo
             if (index < 2)
                 return;
 
-            if (WavesMode_Input == WavesMode_Data.Reversal && isRenkoChart) {
+            if (WavesParams.WavesMode_Input == WavesMode_Data.Reversal && BooleanUtils.isRenkoChart) {
                 if (IsLastBar) // IsLastBar=false at each new BarOpened
                     return;
                 bool isUp = Bars.ClosePrices[index] > Bars.OpenPrices[index];
 
-                if (ShowCurrentWave)
+                if (WavesParams.ShowCurrentWave)
                     CalculateWaves(isUp ? Direction.UP : Direction.DOWN, trendStartIndex, index, false);
 
                 if (ShowTrendLines) {
@@ -2327,27 +2069,27 @@ namespace cAlgo
 
         private bool ZigZag_DirectionChanged(int index, double low, double high, double prevLow, double prevHigh)
         {
-            switch (ZigZagMode_Input)
+            switch (ZigZagParams.ZigZagMode_Input)
             {
                 case ZigZagMode_Data.Percentage:
-                    if (direction == Direction.DOWN)
-                        return high >= extremumPrice * (1.0 + PercentageZZ * 0.01);
+                    if (ZigZagObjs.direction == Direction.DOWN)
+                        return high >= ZigZagObjs.extremumPrice * (1.0 + ZigZagParams.PercentageZZ * 0.01);
                     else
-                        return low <= extremumPrice * (1.0 - PercentageZZ * 0.01);
+                        return low <= ZigZagObjs.extremumPrice * (1.0 - ZigZagParams.PercentageZZ * 0.01);
                 case ZigZagMode_Data.NoLag_HighLow:
                     bool bothIsPivot = high > prevHigh && low < prevLow;
                     bool highIsPivot = high > prevHigh && low >= prevLow;
                     bool lowIsPivot = low < prevLow && high <= prevHigh;
                     if (bothIsPivot)
                         return false;
-                    return direction == Direction.UP ? lowIsPivot : highIsPivot;
+                    return ZigZagObjs.direction == Direction.UP ? lowIsPivot : highIsPivot;
                 default:
-                    bool isATR = ZigZagMode_Input == ZigZagMode_Data.ATR;
-                    double value = isATR ? (_ATR.Result[index] * ATR_Multiplier) : (PipsZZ * Symbol.PipSize);
-                    if (direction == Direction.DOWN)
-                        return Math.Abs(extremumPrice - high) >= value;
+                    bool isATR = ZigZagParams.ZigZagMode_Input == ZigZagMode_Data.ATR;
+                    double value = isATR ? (_ATR.Result[index] * ATR_Multiplier) : (ZigZagParams.PipsZZ * Symbol.PipSize);
+                    if (ZigZagObjs.direction == Direction.DOWN)
+                        return Math.Abs(ZigZagObjs.extremumPrice - high) >= value;
                     else
-                        return Math.Abs(low - extremumPrice) >= value;
+                        return Math.Abs(low - ZigZagObjs.extremumPrice) >= value;
             }
         }
         private void ZigZag(int index) {
@@ -2355,7 +2097,7 @@ namespace cAlgo
             double prevLow = Bars.LowPrices[index - 1];
             double high = Bars.HighPrices[index];
             double low = Bars.LowPrices[index];
-            if (ZigZagSource_Input == ZigZagSource_Data.MultiTF) {
+            if (ZigZagParams.ZigZagSource_Input == ZigZagSource_Data.MultiTF) {
                 DateTime prevBarDate = Bars.OpenTimes[index - 1];
                 DateTime barDate = Bars.OpenTimes[index];
 
@@ -2368,69 +2110,69 @@ namespace cAlgo
                 low = MTFSource_Bars.LowPrices[TF_idx];
             }
 
-            if (extremumPrice == 0) {
-                extremumPrice = high;
-                extremumIndex = index;
+            if (ZigZagObjs.extremumPrice == 0) {
+                ZigZagObjs.extremumPrice = high;
+                ZigZagObjs.extremumIndex = index;
             }
 
-            if (ZigZagMode_Input == ZigZagMode_Data.NoLag_HighLow && Priority_Input != Priority_Data.None && !isPriceBased_Chart) {
-                if (NoLag_BothIsPivot(index, low, high, prevLow, prevHigh) || Priority_Input == Priority_Data.Skip)
+            if (ZigZagParams.ZigZagMode_Input == ZigZagMode_Data.NoLag_HighLow && ZigZagParams.Priority_Input != Priority_Data.None && !BooleanUtils.isPriceBased_Chart) {
+                if (NoLag_BothIsPivot(index, low, high, prevLow, prevHigh) || ZigZagParams.Priority_Input == Priority_Data.Skip)
                     return;
             }
             bool directionChanged = ZigZag_DirectionChanged(index, low, high, prevLow, prevHigh);
-            if (direction == Direction.DOWN)
+            if (ZigZagObjs.direction == Direction.DOWN)
             {
-                if (low <= extremumPrice)
+                if (low <= ZigZagObjs.extremumPrice)
                     MoveExtremum(index, low);
                 else if (directionChanged) {
                     SetExtremum(index, high, false);
-                    direction = Direction.UP;
+                    ZigZagObjs.direction = Direction.UP;
                 }
             }
             else
             {
-                if (high >= extremumPrice)
+                if (high >= ZigZagObjs.extremumPrice)
                     MoveExtremum(index, high);
                 else if (directionChanged) {
                     SetExtremum(index, low, false);
-                    direction = Direction.DOWN;
+                    ZigZagObjs.direction = Direction.DOWN;
                 }
             }
         }
         private void MoveExtremum(int index, double price)
         {
             if (!ShowTrendLines)
-                ZigZagBuffer[extremumIndex] = double.NaN;
+                ZigZagBuffer[ZigZagObjs.extremumIndex] = double.NaN;
             SetExtremum(index, price, true);
         }
         private void SetExtremum(int index, double price, bool isMove)
         {
             if (!isMove) {
                 // End of direction
-                CalculateWaves(direction, trendStartIndex, extremumIndex, true);
-                trendStartIndex = extremumIndex + 1;
+                CalculateWaves(ZigZagObjs.direction, trendStartIndex, ZigZagObjs.extremumIndex, true);
+                trendStartIndex = ZigZagObjs.extremumIndex + 1;
 
-                DateTime extremeDate = Bars[extremumIndex].OpenTime;
-                double extremePrice = direction == Direction.UP ? Bars[extremumIndex].High : Bars[extremumIndex].Low;
-                if (ZigZagSource_Input == ZigZagSource_Data.MultiTF) {
+                DateTime extremeDate = Bars[ZigZagObjs.extremumIndex].OpenTime;
+                double extremePrice = ZigZagObjs.direction == Direction.UP ? Bars[ZigZagObjs.extremumIndex].High : Bars[ZigZagObjs.extremumIndex].Low;
+                if (ZigZagParams.ZigZagSource_Input == ZigZagSource_Data.MultiTF) {
                     int TF_idx = MTFSource_Bars.OpenTimes.GetIndexByTime(extremeDate);
-                    extremePrice = direction == Direction.UP ? MTFSource_Bars[TF_idx].High : MTFSource_Bars[TF_idx].Low;
+                    extremePrice = ZigZagObjs.direction == Direction.UP ? MTFSource_Bars[TF_idx].High : MTFSource_Bars[TF_idx].Low;
                 }
-                if (ShowTurningPoint) {
+                if (ZigZagParams.ShowTurningPoint) {
                     Color turningColor = InvertTurningColor ?
-                                        (direction == Direction.UP ? DownLineColor : UpLineColor) :
-                                        (direction == Direction.UP ? UpLineColor : DownLineColor);
+                                        (ZigZagObjs.direction == Direction.UP ? DownLineColor : UpLineColor) :
+                                        (ZigZagObjs.direction == Direction.UP ? UpLineColor : DownLineColor);
 
-                    Chart.DrawTrendLine($"{extremumIndex}_horizontal",
+                    Chart.DrawTrendLine($"{ZigZagObjs.extremumIndex}_horizontal",
                                         extremeDate,
                                         extremePrice,
                                         Bars[index].OpenTime,
                                         extremePrice, turningColor);
-                    Chart.DrawTrendLine($"{extremumIndex}_vertical",
+                    Chart.DrawTrendLine($"{ZigZagObjs.extremumIndex}_vertical",
                                         Bars[index].OpenTime,
                                         extremePrice,
                                         Bars[index].OpenTime,
-                                        direction == Direction.UP ? Bars[index].High : Bars[index].Low, turningColor);
+                                        ZigZagObjs.direction == Direction.UP ? Bars[index].High : Bars[index].Low, turningColor);
                 }
 
                 if (ShowTrendLines) {
@@ -2439,9 +2181,9 @@ namespace cAlgo
                         PrevWave_TrendLine.Color = LargeWaveColor;
 
                     Color lineColor = ColorfulTrendLines ?
-                                      (direction == Direction.UP ? DownLineColor : UpLineColor) :
+                                      (ZigZagObjs.direction == Direction.UP ? DownLineColor : UpLineColor) :
                                       NoTrendColor;
-                    double trendEndPrice = direction == Direction.UP ? Bars[index].Low : Bars[index].High;
+                    double trendEndPrice = ZigZagObjs.direction == Direction.UP ? Bars[index].Low : Bars[index].High;
                     PrevWave_TrendLine = Chart.DrawTrendLine($"TrendLine_{trendStartIndex}",
                                                             extremeDate,
                                                             extremePrice,
@@ -2450,26 +2192,26 @@ namespace cAlgo
                     PrevWave_TrendLine.Thickness = TrendThickness;
                 }
             }
-            else if (isMove && ShowCurrentWave)
-                CalculateWaves(direction, trendStartIndex, extremumIndex, false);
+            else if (isMove && WavesParams.ShowCurrentWave)
+                CalculateWaves(ZigZagObjs.direction, trendStartIndex, ZigZagObjs.extremumIndex, false);
 
-            if (ZigZagSource_Input == ZigZagSource_Data.MultiTF && isMove) {
+            if (ZigZagParams.ZigZagSource_Input == ZigZagSource_Data.MultiTF && isMove) {
                 // Workaround to remove the behavior of shift(nº) when moving the extremum at custom timeframe price source
-                double extremePrice = direction == Direction.UP ? Bars[extremumIndex].High : Bars[extremumIndex].Low;
-                double currentPrice = direction == Direction.UP ? Bars[index].High : Bars[index].Low;
-                bool condition = direction == Direction.UP ? currentPrice <= extremePrice : currentPrice >= extremePrice;
-                extremumIndex = condition ? extremumIndex : index;
+                double extremePrice = ZigZagObjs.direction == Direction.UP ? Bars[ZigZagObjs.extremumIndex].High : Bars[ZigZagObjs.extremumIndex].Low;
+                double currentPrice = ZigZagObjs.direction == Direction.UP ? Bars[index].High : Bars[index].Low;
+                bool condition = ZigZagObjs.direction == Direction.UP ? currentPrice <= extremePrice : currentPrice >= extremePrice;
+                ZigZagObjs.extremumIndex = condition ? ZigZagObjs.extremumIndex : index;
             }
             else
-                extremumIndex = index;
+                ZigZagObjs.extremumIndex = index;
 
-            extremumPrice = price;
+            ZigZagObjs.extremumPrice = price;
 
             if (!ShowTrendLines)
-                ZigZagBuffer[extremumIndex] = extremumPrice;
+                ZigZagBuffer[ZigZagObjs.extremumIndex] = ZigZagObjs.extremumPrice;
 
             if (isMove)
-                MovingTrendLine(Bars[extremumIndex].OpenTime, price);
+                MovingTrendLine(Bars[ZigZagObjs.extremumIndex].OpenTime, price);
         }
 
         private void MovingTrendLine(DateTime endDate, double endPrice)
@@ -2481,9 +2223,9 @@ namespace cAlgo
                 try { _ = Bars[startIndex].OpenTime; } catch { startIndex = trendStartIndex; }
 
                 DateTime startDate = Bars[startIndex].OpenTime;
-                double startPrice = direction == Direction.UP ? Bars[startIndex].Low : Bars[startIndex].High;
+                double startPrice = ZigZagObjs.direction == Direction.UP ? Bars[startIndex].Low : Bars[startIndex].High;
 
-                Color lineColor = ColorfulTrendLines ? (direction == Direction.UP ? DownLineColor : UpLineColor) : NoTrendColor;
+                Color lineColor = ColorfulTrendLines ? (ZigZagObjs.direction == Direction.UP ? DownLineColor : UpLineColor) : NoTrendColor;
                 PrevWave_TrendLine = Chart.DrawTrendLine($"TrendLine_{trendStartIndex}",
                                      startDate,
                                      startPrice,
@@ -2495,7 +2237,7 @@ namespace cAlgo
         }
         private bool NoLag_BothIsPivot(int  index, double low, double high, double prevLow, double prevHigh) {
             bool bothIsPivot = high > prevHigh && low < prevLow;
-            if (!bothIsPivot || Priority_Input != Priority_Data.Auto)
+            if (!bothIsPivot || ZigZagParams.Priority_Input != Priority_Data.Auto)
                 return false;
 
             bool HighIsFirst = AutoPriority(index, prevLow, prevHigh, low, high);
@@ -2503,26 +2245,27 @@ namespace cAlgo
                 // Chart.DrawText($"{index}_First", "First(High)", Bars[index].OpenTime, high, Color.White);
                 // Chart.DrawText($"{index}_Last", "Last(Low)", Bars[index].OpenTime, low, Color.White);
                 // Chart.DrawText($"{index}_DIRECTION", direction.ToString(), Bars[index].OpenTime, Bars.OpenPrices[index], Color.White);
-                if (direction == Direction.UP)
+                if (ZigZagObjs.direction == Direction.UP)
                 {
-                    if (high > extremumPrice && !ShowTrendLines)
-                        ZigZagBuffer[extremumIndex] = high;
+                    // Fix => C# version was using ZigZagBuffer['extremumIndex'] instead of ZigZagBuffer['index'],
+                    if (high > ZigZagObjs.extremumPrice && !ShowTrendLines)
+                        ZigZagBuffer[index] = high;
 
                     SetExtremum(index, low, true);
-                    direction = Direction.DOWN;
+                    ZigZagObjs.direction = Direction.DOWN;
                 }
             }
             else {
                 // Chart.DrawText($"{index}_First", "First(Low)", Bars[index].OpenTime, low, Color.White);
                 // Chart.DrawText($"{index}_Last", "Last(High)", Bars[index].OpenTime, high, Color.White);
                 // Chart.DrawText($"{index}_DIRECTION", direction.ToString(), Bars[index].OpenTime, Bars.OpenPrices[index], Color.White);
-                if (direction == Direction.DOWN)
+                if (ZigZagObjs.direction == Direction.DOWN)
                 {
-                    if (low < extremumPrice && !ShowTrendLines)
+                    if (low < ZigZagObjs.extremumPrice && !ShowTrendLines)
                         ZigZagBuffer[index] = low;
 
                     SetExtremum(index, high, true);
-                    direction = Direction.UP;
+                    ZigZagObjs.direction = Direction.UP;
                 }
             }
 
@@ -2533,7 +2276,7 @@ namespace cAlgo
         {
             DateTime barStart = Bars.OpenTimes[index];
             DateTime barEnd = Bars.OpenTimes[index + 1];
-            if (ZigZagSource_Input == ZigZagSource_Data.MultiTF) {
+            if (ZigZagParams.ZigZagSource_Input == ZigZagSource_Data.MultiTF) {
                 int TF_idxStart = MTFSource_Bars.OpenTimes.GetIndexByTime(barStart);
                 int TF_idxEnd = MTFSource_Bars.OpenTimes.GetIndexByTime(barEnd);
 
@@ -2557,8 +2300,9 @@ namespace cAlgo
                     atLeastOne = true;
                     break;
                 }
+                // Fix => C# version sets True for first_is_high
                 if (_m1Bars.LowPrices[i] < prevLow) {
-                    firstIsHigh = true;
+                    firstIsHigh = false;
                     atLeastOne = true;
                     break;
                 }
@@ -2574,14 +2318,14 @@ namespace cAlgo
         }
 
         private double GetY1_Waves(int extremeIndex) {
-            if (WavesMode_Input == WavesMode_Data.Reversal && isRenkoChart)
+            if (WavesParams.WavesMode_Input == WavesMode_Data.Reversal && BooleanUtils.isRenkoChart)
                 return Bars.ClosePrices[extremeIndex];
 
             DateTime extremeDate = Bars[extremeIndex].OpenTime;
-            double extremePrice = direction == Direction.UP ? Bars[extremeIndex].High : Bars[extremeIndex].Low;
-            if (ZigZagSource_Input == ZigZagSource_Data.MultiTF) {
+            double extremePrice = ZigZagObjs.direction == Direction.UP ? Bars[extremeIndex].High : Bars[extremeIndex].Low;
+            if (ZigZagParams.ZigZagSource_Input == ZigZagSource_Data.MultiTF) {
                 int TF_idx = MTFSource_Bars.OpenTimes.GetIndexByTime(extremeDate);
-                extremePrice = direction == Direction.UP ? MTFSource_Bars[TF_idx].High : MTFSource_Bars[TF_idx].Low;
+                extremePrice = ZigZagObjs.direction == Direction.UP ? MTFSource_Bars[TF_idx].High : MTFSource_Bars[TF_idx].Low;
             }
             return extremePrice;
         }
@@ -2612,7 +2356,7 @@ namespace cAlgo
                 else
                     price = Bars.HighPrices[firstCandleIdx] - Bars.LowPrices[lastCandleIdx];
 
-                if (ZigZagSource_Input == ZigZagSource_Data.MultiTF && WavesMode_Input == WavesMode_Data.ZigZag) {
+                if (ZigZagParams.ZigZagSource_Input == ZigZagSource_Data.MultiTF && WavesParams.WavesMode_Input == WavesMode_Data.ZigZag) {
                     int TF_idxLast = MTFSource_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[lastCandleIdx]);
                     int TF_idxFirst = MTFSource_Bars.OpenTimes.GetIndexByTime(Bars.OpenTimes[firstCandleIdx]);
                     if (isUp)
@@ -2633,27 +2377,25 @@ namespace cAlgo
                 return interval_ms;
             }
             bool directionIsUp = direction == Direction.UP;
-            if (ShowWaves_Input == ShowWaves_Data.No)
+            if (WavesParams.ShowWaves_Input == ShowWaves_Data.No)
             {
                 // Other Waves
-                if (!ShowCurrentWave && directionChanged || ShowCurrentWave)
+                if (!WavesParams.ShowCurrentWave && directionChanged || WavesParams.ShowCurrentWave)
                     OthersWaves(directionIsUp);
                 return;
             }
 
             double cumlVolume = cumulVolume();
-            double cumlRenkoOrPrice = cumulRenko();
-            if (!isRenkoChart)
-                cumlRenkoOrPrice = cumulativePrice(directionIsUp);
+            double cumlRenkoOrPrice = BooleanUtils.isRenkoChart ? cumulRenko() : cumulativePrice(directionIsUp);
             double cumlVolPrice = Math.Round(cumlVolume / cumlRenkoOrPrice, 1);
 
             // Standard Waves
-            if (!ShowCurrentWave && directionChanged || ShowCurrentWave) {
+            if (!WavesParams.ShowCurrentWave && directionChanged || WavesParams.ShowCurrentWave) {
                 EvsR_Analysis(cumlVolPrice, directionChanged, directionIsUp);
                 WW_Analysis(cumlVolume, directionChanged, directionIsUp);
             }
             // Other Waves
-            if (!ShowCurrentWave && directionChanged || ShowCurrentWave)
+            if (!WavesParams.ShowCurrentWave && directionChanged || WavesParams.ShowCurrentWave)
                 OthersWaves(directionIsUp);
 
             // Prev Waves Analysis
@@ -2671,7 +2413,7 @@ namespace cAlgo
 
             void OthersWaves(bool isUp)
             {
-                if (ShowOtherWaves_Input == ShowOtherWaves_Data.No)
+                if (WavesParams.ShowOtherWaves_Input == ShowOtherWaves_Data.No)
                     return;
 
                 double cumulPrice = cumulativePrice(isUp);
@@ -2683,48 +2425,53 @@ namespace cAlgo
 
                 string[] interval_timelapse = GetTimeLapse(cumlTime);
 
-                ShowWaves_Data selectedWave = ShowWaves_Input;
+                ShowWaves_Data selectedWave = WavesParams.ShowWaves_Input;
                 double timelapse_Value = Convert.ToDouble(interval_timelapse[0]);
                 string timelapseString = Math.Round(timelapse_Value) + interval_timelapse[1];
 
                 string waveInfo;
                 if (isUp)
                 {
-                    if (ShowOtherWaves_Input == ShowOtherWaves_Data.Both)
-                    {
-                        if (NumbersPosition_Input == NumbersPosition_Data.Outside)
-                            waveInfo = selectedWave == ShowWaves_Data.No ? $"{timelapseString} ⎪ {cumulPriceFmtd}p\n\n" : selectedWave == ShowWaves_Data.Both ? $"{timelapseString} ⎪ {cumulPriceFmtd}p\n\n\n\n" : $"{timelapseString} ⎪ {cumulPriceFmtd}p\n\n\n";
-                        else
-                            waveInfo = selectedWave == ShowWaves_Data.No ? $"{timelapseString} ⎪ {cumulPriceFmtd}p" : selectedWave == ShowWaves_Data.Both ? $"{timelapseString} ⎪ {cumulPriceFmtd}p\n\n\n" : $"{timelapseString} ⎪ {cumulPriceFmtd}p\n\n";
-                    }
-                    else {
-                        string sourceWave = ShowOtherWaves_Input == ShowOtherWaves_Data.Price ? cumulPriceFmtd : timelapseString;
-                        string suffixWave = ShowOtherWaves_Input == ShowOtherWaves_Data.Price ? "p" : "";
-
-                        if (NumbersPosition_Input == NumbersPosition_Data.Outside)
-                            waveInfo = selectedWave == ShowWaves_Data.No ? $"{sourceWave}{suffixWave}\n\n" : selectedWave == ShowWaves_Data.Both ? $"{sourceWave}{suffixWave}\n\n\n\n" : $"{sourceWave}{suffixWave}\n\n\n";
-                        else
-                            waveInfo = selectedWave == ShowWaves_Data.No ? $"{sourceWave}{suffixWave}" : selectedWave == ShowWaves_Data.Both ? $"{sourceWave}{suffixWave}\n\n\n" : $"{sourceWave}{suffixWave}\n\n";
-                    }
+                    string spacingUp = WyckoffParams.NumbersPosition_Input switch {
+                        NumbersPosition_Data.Outside => selectedWave switch {
+                            ShowWaves_Data.No => "\n\n",
+                            ShowWaves_Data.Both => "\n\n\n\n",
+                            _ => "\n\n\n"
+                        },
+                        _ => selectedWave switch {
+                            ShowWaves_Data.No => "",
+                            ShowWaves_Data.Both => "\n\n\n",
+                            _ => "\n\n"
+                        },
+                    };
+                    string sourceWave = WavesParams.ShowOtherWaves_Input == ShowOtherWaves_Data.Price ? cumulPriceFmtd : timelapseString;
+                    string suffixWave = WavesParams.ShowOtherWaves_Input == ShowOtherWaves_Data.Price ? "p" : "";
+                    
+                    waveInfo = WavesParams.ShowOtherWaves_Input == ShowOtherWaves_Data.Both ?
+                                $"{timelapseString} ⎪ {cumulPriceFmtd}p{spacingUp}" :
+                                $"{sourceWave}{suffixWave}{spacingUp}";
                 }
                 else
                 {
-                    if (ShowOtherWaves_Input == ShowOtherWaves_Data.Both)
-                    {
-                        if (NumbersPosition_Input == NumbersPosition_Data.Outside)
-                            waveInfo = selectedWave == ShowWaves_Data.No ? $"\n{timelapseString} ⎪ {cumulPriceFmtd}p" : selectedWave == ShowWaves_Data.Both ? $"\n\n\n{timelapseString} ⎪ {cumulPriceFmtd}p" : $"\n\n{timelapseString} ⎪ {cumulPriceFmtd}p";
-                        else
-                            waveInfo = selectedWave == ShowWaves_Data.No ? $"{timelapseString} ⎪ {cumulPriceFmtd}p" : selectedWave == ShowWaves_Data.Both ? $"\n\n{timelapseString} ⎪ {cumulPriceFmtd}p" : $"\n{timelapseString} ⎪ {cumulPriceFmtd}p";
-                    }
-                    else {
-                        string sourceWave = ShowOtherWaves_Input == ShowOtherWaves_Data.Price ? cumulPriceFmtd : timelapseString;
-                        string suffixWave = ShowOtherWaves_Input == ShowOtherWaves_Data.Price ? "p" : "";
+                    string spacingDown = WyckoffParams.NumbersPosition_Input switch {
+                        NumbersPosition_Data.Outside => selectedWave switch {
+                            ShowWaves_Data.No => "\n",
+                            ShowWaves_Data.Both => "\n\n\n",
+                            _ => "\n\n"
+                        },
+                        _ => selectedWave switch {
+                            ShowWaves_Data.No => "",
+                            ShowWaves_Data.Both => "\n\n",
+                            _ => "\n"
+                        },
+                    };
 
-                        if (NumbersPosition_Input == NumbersPosition_Data.Outside)
-                            waveInfo = selectedWave == ShowWaves_Data.No ? $"\n{sourceWave}{suffixWave}" : selectedWave == ShowWaves_Data.Both ? $"\n\n\n{sourceWave}{suffixWave}" : $"\n\n{sourceWave}{suffixWave}";
-                        else
-                            waveInfo = selectedWave == ShowWaves_Data.No ? $"{sourceWave}{suffixWave}" : selectedWave == ShowWaves_Data.Both ? $"\n\n{sourceWave}{suffixWave}" : $"\n{sourceWave}{suffixWave}";
-                    }
+                    string sourceWave = WavesParams.ShowOtherWaves_Input == ShowOtherWaves_Data.Price ? cumulPriceFmtd : timelapseString;
+                    string suffixWave = WavesParams.ShowOtherWaves_Input == ShowOtherWaves_Data.Price ? "p" : "";
+
+                    waveInfo = WavesParams.ShowOtherWaves_Input == ShowOtherWaves_Data.Both ?
+                                $"{spacingDown}{timelapseString} ⎪ {cumulPriceFmtd}p" :
+                                $"{spacingDown}{sourceWave}{suffixWave}";
                 }
 
                 double y1 = GetY1_Waves(lastCandleIdx);
@@ -2745,47 +2492,49 @@ namespace cAlgo
 
             void WW_Analysis(double cumlVolume, bool endWave, bool isUp)
             {
-                if (ShowWaves_Input == ShowWaves_Data.No || ShowWaves_Input == ShowWaves_Data.EffortvsResult)
+                if (WavesParams.ShowWaves_Input == ShowWaves_Data.No || WavesParams.ShowWaves_Input == ShowWaves_Data.EffortvsResult)
                     return;
                 string leftMark = "";
                 string rightMark = "";
-                string waveInfo;
+                string volFmtd = FormatBigNumber(cumlVolume);
 
+                string waveInfo;
                 if (isUp)
                 {
-                    if (ShowMarks_Input == ShowMarks_Data.Left)
-                        leftMark = cumlVolume > prevWave_Up[0] ? "⮝" : "⮟";
-                    else if (ShowMarks_Input == ShowMarks_Data.Right)
-                        rightMark = cumlVolume > prevWave_Down[0] ? "🡩" : "🡫";
-                    else if (ShowMarks_Input == ShowMarks_Data.Both)
-                    {
-                        leftMark = cumlVolume > prevWave_Up[0] ? "⮝" : "⮟";
-                        rightMark = cumlVolume > prevWave_Down[0] ? "" : leftMark == "⮟" ? "" : "🡫";
+                    switch (WavesParams.ShowMarks_Input) {
+                        case ShowMarks_Data.Left:
+                            leftMark = cumlVolume > prevWave_Up[0] ? "⮝" : "⮟"; break;
+                        case ShowMarks_Data.Right:
+                            rightMark = cumlVolume > prevWave_Down[0] ? "🡩" : "🡫"; break;
+                        case ShowMarks_Data.Both:
+                            leftMark = cumlVolume > prevWave_Up[0] ? "⮝" : "⮟";
+                            rightMark = cumlVolume > prevWave_Down[0] ? "" : leftMark == "⮟" ? "" : "🡫";
+                            break;
+                        default: break;
                     }
-
-                    string defaultStr = $"({leftMark}{FormatBigNumber(cumlVolume)}{rightMark})";
-                    waveInfo = (ShowWaves_Input == ShowWaves_Data.Volume || ShowWaves_Input == ShowWaves_Data.Both) ? defaultStr : "";
-
-                    if (NumbersPosition_Input == NumbersPosition_Data.Outside)
-                        waveInfo = (ShowWaves_Input == ShowWaves_Data.Volume || ShowWaves_Input == ShowWaves_Data.Both) ? $"{defaultStr}\n\n" : "";
+                    string spacing = WyckoffParams.NumbersPosition_Input == NumbersPosition_Data.Outside ?
+                                     "\n\n" :
+                                     "";
+                    
+                    waveInfo = $"({leftMark}{volFmtd}{rightMark}){spacing}";
                 }
                 else
                 {
-                    if (ShowMarks_Input == ShowMarks_Data.Left)
-                        leftMark = cumlVolume > prevWave_Down[0] ? "⮟" : "⮝";
-                    else if (ShowMarks_Input == ShowMarks_Data.Right)
-                        rightMark = cumlVolume > prevWave_Up[0] ? "🡫" : "🡩";
-                    else if (ShowMarks_Input == ShowMarks_Data.Both)
-                    {
-                        leftMark = cumlVolume > prevWave_Down[0] ? "⮟" : "⮝";
-                        rightMark = cumlVolume > prevWave_Up[0] ? "" : leftMark == "⮝" ? "" : "🡩";
+                    switch (WavesParams.ShowMarks_Input) {
+                        case ShowMarks_Data.Left:
+                            leftMark = cumlVolume > prevWave_Down[0] ? "⮟" : "⮝"; break;
+                        case ShowMarks_Data.Right:
+                            rightMark = cumlVolume > prevWave_Up[0] ? "🡫" : "🡩"; break;
+                        case ShowMarks_Data.Both:
+                            leftMark = cumlVolume > prevWave_Down[0] ? "⮟" : "⮝";
+                            rightMark = cumlVolume > prevWave_Up[0] ? "" : leftMark == "⮝" ? "" : "🡩";
+                            break;
+                        default: break;
                     }
-
-                    string defaultStr = $"({leftMark}{FormatBigNumber(cumlVolume)}{rightMark})";
-                    waveInfo = (ShowWaves_Input == ShowWaves_Data.Volume || ShowWaves_Input == ShowWaves_Data.Both) ? defaultStr : "";
-
-                    if (NumbersPosition_Input == NumbersPosition_Data.Outside)
-                        waveInfo = (ShowWaves_Input == ShowWaves_Data.Volume || ShowWaves_Input == ShowWaves_Data.Both) ? $"\n{defaultStr}" : "";
+                    string spacing = WyckoffParams.NumbersPosition_Input == NumbersPosition_Data.Outside ?
+                                     "\n" :
+                                     "";
+                    waveInfo = $"{spacing}({leftMark}{volFmtd}{rightMark})";
                 }
 
                 double y1 = GetY1_Waves(lastCandleIdx);
@@ -2793,7 +2542,7 @@ namespace cAlgo
                 Color waveColor = largeVol ? LargeWaveColor : (isUp ? UpWaveColor : DownWaveColor);
 
                 if (ShowRatioValue) {
-                    double ratio = (cumlVolume + prevWaves_Volume[0] + prevWaves_Volume[1] + prevWaves_Volume[2] + prevWaves_Volume[3]) / 5 * WW_Ratio;
+                    double ratio = (cumlVolume + prevWaves_Volume[0] + prevWaves_Volume[1] + prevWaves_Volume[2] + prevWaves_Volume[3]) / 5 * WavesParams.WW_Ratio;
                     ratio = Math.Round(ratio, 2);
                     waveInfo = $"{waveInfo} > {ratio}? {cumlVolume > ratio} ";
                 }
@@ -2825,54 +2574,60 @@ namespace cAlgo
                     if (haveZero)
                         return false;
 
-                    return (cumlVolume + prevWaves_Volume[0] + prevWaves_Volume[1] + prevWaves_Volume[2] + prevWaves_Volume[3]) / 5 * WW_Ratio < cumlVolume;
+                    return (cumlVolume + prevWaves_Volume[0] + prevWaves_Volume[1] + prevWaves_Volume[2] + prevWaves_Volume[3]) / 5 * WavesParams.WW_Ratio < cumlVolume;
                 }
             }
 
             void EvsR_Analysis(double cumlVolPrice, bool endWave, bool isUp)
             {
-                if (ShowWaves_Input == ShowWaves_Data.No || ShowWaves_Input == ShowWaves_Data.Volume)
+                if (WavesParams.ShowWaves_Input == ShowWaves_Data.No || WavesParams.ShowWaves_Input == ShowWaves_Data.Volume)
                     return;
 
                 string leftMark = "";
                 string rightMark = "";
+                string effortFmtd = FormatBigNumber(cumlVolPrice);
+                
                 string waveInfo;
-
                 if (isUp)
                 {
-                    if (ShowMarks_Input == ShowMarks_Data.Left)
-                        leftMark = cumlVolPrice > prevWave_Up[1] ? "⮝" : "⮟";
-                    else if (ShowMarks_Input == ShowMarks_Data.Right)
-                        rightMark = cumlVolPrice > prevWave_Down[1] ? "🡩" : "🡫";
-                    else if (ShowMarks_Input == ShowMarks_Data.Both)
-                    {
-                        leftMark = cumlVolPrice > prevWave_Up[1] ? "⮝" : "⮟";
-                        rightMark = cumlVolPrice > prevWave_Down[1] ? "" : leftMark == "⮟" ? "" : "🡫";
+                    switch (WavesParams.ShowMarks_Input) {
+                        case ShowMarks_Data.Left:
+                            leftMark = cumlVolPrice > prevWave_Up[1] ? "⮝" : "⮟"; break;
+                        case ShowMarks_Data.Right:
+                            rightMark = cumlVolPrice > prevWave_Down[1] ? "🡩" : "🡫"; break;
+                        case ShowMarks_Data.Both:
+                            leftMark = cumlVolPrice > prevWave_Up[1] ? "⮝" : "⮟";
+                            rightMark = cumlVolPrice > prevWave_Down[1] ? "" : leftMark == "⮟" ? "" : "🡫";
+                            break;
+                        default: break;
                     }
-
-                    string defaultStr = $"[{leftMark}{FormatBigNumber(cumlVolPrice)}{rightMark}]";
-
-                    waveInfo = ShowWaves_Input == ShowWaves_Data.EffortvsResult ? defaultStr : ShowWaves_Input == ShowWaves_Data.Both ? $"{defaultStr}\n\n" : "";
-                    if (NumbersPosition_Input == NumbersPosition_Data.Outside)
-                        waveInfo = ShowWaves_Input == ShowWaves_Data.EffortvsResult ? $"{defaultStr}\n\n" : ShowWaves_Input == ShowWaves_Data.Both ? $"{defaultStr}\n\n\n" : "";
+                    bool isBoth =  WavesParams.ShowWaves_Input == ShowWaves_Data.Both;
+                    string spacing = WyckoffParams.NumbersPosition_Input == NumbersPosition_Data.Outside ?
+                                    (isBoth ? "\n\n\n" : "\n\n") :
+                                    (isBoth ? "\n\n" : "");
+                    
+                    waveInfo = $"[{leftMark}{effortFmtd}{rightMark}]{spacing}";
                 }
                 else
                 {
-                    if (ShowMarks_Input == ShowMarks_Data.Left)
-                        leftMark = cumlVolPrice > prevWave_Down[1] ? "⮟" : "⮝";
-                    else if (ShowMarks_Input == ShowMarks_Data.Right)
-                        rightMark = cumlVolPrice > prevWave_Up[1] ? "🡫" : "🡩";
-                    else if (ShowMarks_Input == ShowMarks_Data.Both)
-                    {
-                        leftMark = cumlVolPrice > prevWave_Down[1] ? "⮟" : "⮝";
-                        rightMark = cumlVolPrice > prevWave_Up[1] ? "" : leftMark == "⮝" ? "" : "🡩";
+                    switch (WavesParams.ShowMarks_Input) {
+                        case ShowMarks_Data.Left:
+                            leftMark = cumlVolPrice > prevWave_Down[1] ? "⮟" : "⮝"; break;
+                        case ShowMarks_Data.Right:
+                            rightMark = cumlVolPrice > prevWave_Up[1] ? "🡫" : "🡩"; break;
+                        case ShowMarks_Data.Both:
+                            leftMark = cumlVolPrice > prevWave_Down[1] ? "⮟" : "⮝";
+                            rightMark = cumlVolPrice > prevWave_Up[1] ? "" : leftMark == "⮝" ? "" : "🡩";
+                            break;
+                        default: break;
                     }
-
-                    string defaultStr = $"[{leftMark}{FormatBigNumber(cumlVolPrice)}{rightMark}]";
-
-                    waveInfo = ShowWaves_Input == ShowWaves_Data.EffortvsResult ? defaultStr : ShowWaves_Input == ShowWaves_Data.Both ? $"\n{defaultStr}" : "";
-                    if (NumbersPosition_Input == NumbersPosition_Data.Outside)
-                        waveInfo = ShowWaves_Input == ShowWaves_Data.EffortvsResult ? $"\n{defaultStr}" : ShowWaves_Input == ShowWaves_Data.Both ? $"\n\n{defaultStr}" : "";
+                    
+                    bool isBoth =  WavesParams.ShowWaves_Input == ShowWaves_Data.Both;
+                    string spacing = WyckoffParams.NumbersPosition_Input == NumbersPosition_Data.Outside ?
+                                    (isBoth ? "\n\n" : "\n") :
+                                    (isBoth ? "\n" : "");
+                    
+                    waveInfo = $"{spacing}[{leftMark}{effortFmtd}{rightMark}]";
                 }
 
                 double y1 = GetY1_Waves(lastCandleIdx);
@@ -2880,7 +2635,7 @@ namespace cAlgo
                 Color waveColor = largeEffort ? LargeWaveColor : (isUp ? UpWaveColor : DownWaveColor);
 
                 if (ShowRatioValue) {
-                    double ratio = (cumlVolPrice + prevWaves_EvsR[0] + prevWaves_EvsR[1] + prevWaves_EvsR[2] + prevWaves_EvsR[3]) / 5 * EvsR_Ratio;
+                    double ratio = (cumlVolPrice + prevWaves_EvsR[0] + prevWaves_EvsR[1] + prevWaves_EvsR[2] + prevWaves_EvsR[3]) / 5 * WavesParams.EvsR_Ratio;
                     ratio = Math.Round(ratio, 2);
                     waveInfo = $"{waveInfo} > {ratio}? {cumlVolPrice > ratio}";
                 }
@@ -2904,15 +2659,15 @@ namespace cAlgo
                     return;
                 isLargeWave_EvsR = true;
 
-                if (!FillBars && !KeepOutline) {
+                if (!WyckoffParams.FillBars && !WyckoffParams.KeepOutline) {
                     Chart.SetBarFillColor(lastCandleIdx, Color.Transparent);
                     Chart.SetBarOutlineColor(lastCandleIdx, LargeWaveColor);
                 }
-                else if (FillBars && KeepOutline)
+                else if (WyckoffParams.FillBars && WyckoffParams.KeepOutline)
                     Chart.SetBarFillColor(lastCandleIdx, LargeWaveColor);
-                else if (!FillBars && KeepOutline)
+                else if (!WyckoffParams.FillBars && WyckoffParams.KeepOutline)
                     Chart.SetBarFillColor(lastCandleIdx, Color.Transparent);
-                else if (FillBars && !KeepOutline)
+                else if (WyckoffParams.FillBars && !WyckoffParams.KeepOutline)
                     Chart.SetBarColor(lastCandleIdx, LargeWaveColor);
 
                 // Large EvsR [Yellow]
@@ -2929,7 +2684,7 @@ namespace cAlgo
                     if (haveZero)
                         return false;
 
-                    return (cumlVolPrice + prevWaves_EvsR[0] + prevWaves_EvsR[1] + prevWaves_EvsR[2] + prevWaves_EvsR[3]) / 5 * EvsR_Ratio < cumlVolPrice;
+                    return (cumlVolPrice + prevWaves_EvsR[0] + prevWaves_EvsR[1] + prevWaves_EvsR[2] + prevWaves_EvsR[3]) / 5 * WavesParams.EvsR_Ratio < cumlVolPrice;
                 }
             }
         }
@@ -2944,7 +2699,7 @@ namespace cAlgo
             */
             double[] cumul = { cumlVolume, cumlVolPrice };
 
-            if (WavesMode_Input == WavesMode_Data.ZigZag) {
+            if (WavesParams.WavesMode_Input == WavesMode_Data.ZigZag) {
                 if (!directionChanged) return;
                 setTrend();
                 return;
@@ -2979,7 +2734,7 @@ namespace cAlgo
                 double[] newWave_EvsR = { prevWaves_EvsR[1], prevWaves_EvsR[2], prevWaves_EvsR[3], cumlVolPrice };
                 prevWaves_EvsR = newWave_EvsR;
 
-                if (!YellowRenko_IgnoreRanging) {
+                if (!WavesParams.YellowRenko_IgnoreRanging) {
                     if (isUp) prevWave_Up = cumul;
                     else prevWave_Down = cumul;
                 }
@@ -2987,14 +2742,21 @@ namespace cAlgo
             void setTrend() {
                 if (isUp) {
                     // Volume Wave Analysis
-                    double volumeValue = YellowZigZag_Input == YellowZigZag_Data.UseCurrent ? cumlVolume :
-                                         YellowZigZag_Input == YellowZigZag_Data.UsePrev_SameWave ? prevWave_Down[0] : prevWave_Up[0];
+                    // Fix => C# version is using _prev_wave_down for UsePrev_SameWave condition
+                    double volumeValue = WavesParams.YellowZigZag_Input switch {
+                        YellowZigZag_Data.UseCurrent => cumlVolume,
+                        YellowZigZag_Data.UsePrev_SameWave => prevWave_Up[0],
+                        _ => prevWave_Down[0]
+                    };
                     double[] newWave_Vol = { prevWaves_Volume[1], prevWaves_Volume[2], prevWaves_Volume[3], volumeValue };
                     prevWaves_Volume = newWave_Vol;
 
                     // Effort vs Result Analysis
-                    double evsrValue = YellowZigZag_Input == YellowZigZag_Data.UseCurrent ? cumlVolPrice :
-                                       YellowZigZag_Input == YellowZigZag_Data.UsePrev_SameWave ? prevWave_Up[1] : prevWave_Down[1];
+                    double evsrValue = WavesParams.YellowZigZag_Input switch {
+                        YellowZigZag_Data.UseCurrent => cumlVolPrice,
+                        YellowZigZag_Data.UsePrev_SameWave => prevWave_Up[1],
+                        _ => prevWave_Down[1]
+                    };
                     double[] newWave_EvsR = { prevWaves_EvsR[1], prevWaves_EvsR[2], prevWaves_EvsR[3], evsrValue };
                     prevWaves_EvsR = newWave_EvsR;
 
@@ -3003,14 +2765,20 @@ namespace cAlgo
                 }
                 else {
                     // Volume Wave Analysis
-                    double volumeValue = YellowZigZag_Input == YellowZigZag_Data.UseCurrent ? cumlVolume :
-                                         YellowZigZag_Input == YellowZigZag_Data.UsePrev_SameWave ? prevWave_Down[0] : prevWave_Up[0];
+                    double volumeValue = WavesParams.YellowZigZag_Input switch {
+                        YellowZigZag_Data.UseCurrent => cumlVolume,
+                        YellowZigZag_Data.UsePrev_SameWave => prevWave_Down[0],
+                        _ => prevWave_Up[0]
+                    };
                     double[] newWave_Vol = { prevWaves_Volume[1], prevWaves_Volume[2], prevWaves_Volume[3], volumeValue };
                     prevWaves_Volume = newWave_Vol;
 
                     // Effort vs Result Analysis
-                    double evsrValue = YellowZigZag_Input == YellowZigZag_Data.UseCurrent ? cumlVolPrice :
-                                       YellowZigZag_Input == YellowZigZag_Data.UsePrev_SameWave ? prevWave_Down[1] : prevWave_Up[1];
+                    double evsrValue = WavesParams.YellowZigZag_Input switch {
+                        YellowZigZag_Data.UseCurrent => cumlVolPrice,
+                        YellowZigZag_Data.UsePrev_SameWave => prevWave_Down[1],
+                        _ => prevWave_Up[1]
+                    };
                     double[] newWave_EvsR = { prevWaves_EvsR[1], prevWaves_EvsR[2], prevWaves_EvsR[3], evsrValue };
                     prevWaves_EvsR = newWave_EvsR;
 
@@ -3018,53 +2786,6 @@ namespace cAlgo
                     prevWave_Down = cumul;
                 }
             }
-        }
-
-        private static string[] GetTimeLapse(double interval_ms)
-        {
-            // Dynamic TimeLapse Format
-            TimeSpan ts = TimeSpan.FromMilliseconds(interval_ms);
-
-            string timelapse_Suffix = "";
-            double timelapse_Value = 0;
-
-            double[] dividedTimestamp = { ts.Days, ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds };
-            for (int i = 0; i < dividedTimestamp.Length; i++)
-            {
-                if (dividedTimestamp[i] != 0)
-                {
-                    string suffix = i == 4 ? "ms" : i == 3 ? "s" : i == 2 ? "m" : i == 1 ? "h" : "d";
-
-                    if (suffix == "ms")
-                    {
-                        timelapse_Value = ts.TotalMilliseconds;
-                        timelapse_Suffix = suffix;
-                    }
-                    else if (suffix == "s")
-                    {
-                        timelapse_Value = ts.TotalSeconds;
-                        timelapse_Suffix = suffix;
-                    }
-                    else if (suffix == "m")
-                    {
-                        timelapse_Value = ts.TotalMinutes;
-                        timelapse_Suffix = suffix;
-                    }
-                    else if (suffix == "h")
-                    {
-                        timelapse_Value = ts.TotalHours;
-                        timelapse_Suffix = suffix;
-                    }
-                    else if (suffix == "d")
-                    {
-                        timelapse_Value = ts.TotalDays;
-                        timelapse_Suffix = suffix;
-                    }
-                    break;
-                }
-            }
-            string[] interval_timelapse = { $"{timelapse_Value}", timelapse_Suffix };
-            return interval_timelapse;
         }
 
         public void ClearAndRecalculate()
@@ -3083,63 +2804,56 @@ namespace cAlgo
                 }
             }
             // Reset Zigzag.
-            extremumPrice = 0;
+            ZigZagObjs.extremumPrice = 0;
             lockMTFNotify = false;
-
             // Reset Tick Index.
-            lastTick_Bars = 0;
-            lastTick_Wicks = 0;
-
+            PerformanceTick.ResetAll();
             // Reset Drawings
-            redrawInfos.Clear();
-            hiddenInfos.Clear();
-            currentToHidden.Clear();
-            currentToRedraw.Clear();
+            PerfDrawingObjs.ClearAll();
 
             int firstLoadedTick = Bars.OpenTimes.GetIndexByTime(TicksOHLC.OpenTimes.FirstOrDefault());
-            int startIndex = UseTimeBasedVolume && !isPriceBased_Chart ? 0 : firstLoadedTick;
+            int startIndex = UseTimeBasedVolume && !BooleanUtils.isPriceBased_Chart ? 0 : firstLoadedTick;
             int endIndex = Bars.Count;
             for (int index = startIndex; index < endIndex; index++)
             {
-                if (!UseTimeBasedVolume && !isPriceBased_Chart || isPriceBased_Chart) {
+                if (!UseTimeBasedVolume && !BooleanUtils.isPriceBased_Chart || BooleanUtils.isPriceBased_Chart) {
                     if (index < firstLoadedTick) {
                         Chart.SetBarColor(index, HeatmapLowest_Color);
                         continue;
                     }
                 }
 
-                if (UseTimeBasedVolume && !isPriceBased_Chart)
+                if (UseTimeBasedVolume && !BooleanUtils.isPriceBased_Chart)
                     VolumeSeries[index] = Bars.TickVolumes[index];
                 else
                     VolumeSeries[index] = Get_Volume_or_Wicks(index, true)[2];
 
-                if (EnableWyckoff)
+                if (WyckoffParams.EnableWyckoff)
                     WyckoffAnalysis(index);
 
                 // Catch MTF ZigZag < Current timeframe (ArgumentOutOfRangeException, index)
                 try { WeisWaveAnalysis(index); } catch {
-                    if (ZigZagSource_Input == ZigZagSource_Data.MultiTF && !lockMTFNotify) {
+                    if (ZigZagParams.ZigZagSource_Input == ZigZagSource_Data.MultiTF && !lockMTFNotify) {
                         Notifications.ShowPopup(
                             NOTIFY_CAPTION,
-                            $"ERROR => ZigZag MTF(source): \nCannot use {MTFSource_TimeFrame.ShortName} interval for {Chart.TimeFrame.ShortName} chart \nThe interval is probably too short?",
+                            $"ERROR => ZigZag MTF(source): \nCannot use {ZigZagParams.MTFSource_TimeFrame.ShortName} interval for {Chart.TimeFrame.ShortName} chart \nThe interval is probably too short?",
                             PopupNotificationState.Error
                         );
                         lockMTFNotify = true;
                     }
                 }
 
-                if (ShowWicks && isRenkoChart)
+                if (ShowWicks && BooleanUtils.isRenkoChart)
                     RenkoWicks(index);
             }
 
-
-            if (!UseTimeBasedVolume && !isPriceBased_Chart || isPriceBased_Chart)
+            if (!UseTimeBasedVolume && !BooleanUtils.isPriceBased_Chart || BooleanUtils.isPriceBased_Chart)
                 DrawStartVolumeLine();
             try { PerformanceDrawing(true); } catch { } // Draw without scroll or zoom
         }
 
         public void SetMTFSource_TimeFrame(TimeFrame timeFrame) {
-            MTFSource_TimeFrame = timeFrame;
+            ZigZagParams.MTFSource_TimeFrame = timeFrame;
             MTFSource_Bars = MarketData.GetBars(timeFrame);
         }
 
@@ -3221,6 +2935,13 @@ namespace cAlgo
 
         private List<ParamDefinition> DefineParams()
         {
+            bool isPctile() => Outside.ColoringParams.StrengthRatio_Input == StrengthRatio_Data.Percentile && Outside.ColoringParams.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized;
+            bool isFixed() => Outside.ColoringParams.StrengthRatio_Input == StrengthRatio_Data.Fixed && Outside.ColoringParams.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized;
+            bool isPct() => Outside.ColoringParams.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized;
+
+            bool isNot_NmlzPct() => Outside.ColoringParams.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized;
+            bool isMTF() => Outside.ZigZagParams.ZigZagSource_Input == ZigZagSource_Data.MultiTF;
+
             return new List<ParamDefinition>
             {
                 new()
@@ -3230,8 +2951,8 @@ namespace cAlgo
                     Key = "EnableWyckoffKey",
                     Label = "Enable?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.EnableWyckoff,
-                    OnChanged = _ => UpdateCheckbox("EnableWyckoffKey", val => Outside.EnableWyckoff = val),
+                    GetDefault = p => p.WyckoffParams.EnableWyckoff,
+                    OnChanged = _ => UpdateCheckbox("EnableWyckoffKey", val => Outside.WyckoffParams.EnableWyckoff = val),
                 },
                 new()
                 {
@@ -3240,7 +2961,7 @@ namespace cAlgo
                     Key = "ShowNumbersKey",
                     Label = "Numbers",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.ShowNumbers.ToString(),
+                    GetDefault = p => p.WyckoffParams.Numbers_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(Numbers_Data)),
                     OnChanged = _ => UpdateNumbers(),
                 },
@@ -3251,21 +2972,9 @@ namespace cAlgo
                     Key = "NumbersPositionKey",
                     Label = "Position",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.NumbersPosition.ToString(),
+                    GetDefault = p => p.WyckoffParams.NumbersPosition_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(NumbersPosition_Data)),
                     OnChanged = _ => UpdateNumbersPosition(),
-                },
-                new()
-                {
-                    Region = "Wyckoff Bars",
-                    RegionOrder = 0,
-                    Key = "BothPositionKey",
-                    Label = "Position[Both]",
-                    InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.NumbersBothPosition.ToString(),
-                    EnumOptions = () => Enum.GetNames(typeof(NumbersBothPosition_Data)),
-                    OnChanged = _ => UpdateNumbersBothPosition(),
-                    IsVisible = () => Outside.Numbers_Input == Numbers_Data.Both
                 },
                 new()
                 {
@@ -3274,7 +2983,7 @@ namespace cAlgo
                     Key = "NumbersColorKey",
                     Label = "Coloring[nº]",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.NumbersColor.ToString(),
+                    GetDefault = p => p.WyckoffParams.NumbersColor_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(NumbersColor_Data)),
                     OnChanged = _ => UpdateNumbersColoring(),
                 },
@@ -3285,9 +2994,21 @@ namespace cAlgo
                     Key = "BarsColorKey",
                     Label = "Coloring[bars]",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.BarsColor.ToString(),
+                    GetDefault = p => p.WyckoffParams.BarsColor_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(BarsColor_Data)),
                     OnChanged = _ => UpdateBarsColoring(),
+                },
+                new()
+                {
+                    Region = "Wyckoff Bars",
+                    RegionOrder = 0,
+                    Key = "BothPositionKey",
+                    Label = "Position[Both]",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.WyckoffParams.NumbersBothPosition_Input.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(NumbersBothPosition_Data)),
+                    OnChanged = _ => UpdateNumbersBothPosition(),
+                    IsVisible = () => Outside.WyckoffParams.Numbers_Input == Numbers_Data.Both
                 },
                 new()
                 {
@@ -3296,8 +3017,8 @@ namespace cAlgo
                     Key = "FillBarsKey",
                     Label = "Fill?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.FillBars,
-                    OnChanged = _ => UpdateCheckbox("FillBarsKey", val => Outside.FillBars = val),
+                    GetDefault = p => p.WyckoffParams.FillBars,
+                    OnChanged = _ => UpdateCheckbox("FillBarsKey", val => Outside.WyckoffParams.FillBars = val),
                 },
                 new()
                 {
@@ -3306,8 +3027,8 @@ namespace cAlgo
                     Key = "OutlineKey",
                     Label = "Outline?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.KeepOutline,
-                    OnChanged = _ => UpdateCheckbox("OutlineKey", val => Outside.KeepOutline = val),
+                    GetDefault = p => p.WyckoffParams.KeepOutline,
+                    OnChanged = _ => UpdateCheckbox("OutlineKey", val => Outside.WyckoffParams.KeepOutline = val),
                 },
                 new()
                 {
@@ -3316,8 +3037,8 @@ namespace cAlgo
                     Key = "NumbersLargeKey",
                     Label = "Only Avg[nº]?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ShowOnlyLargeNumbers,
-                    OnChanged = _ => UpdateCheckbox("NumbersLargeKey", val => Outside.ShowOnlyLargeNumbers = val),
+                    GetDefault = p => p.WyckoffParams.ShowOnlyLargeNumbers,
+                    OnChanged = _ => UpdateCheckbox("NumbersLargeKey", val => Outside.WyckoffParams.ShowOnlyLargeNumbers = val),
                 },
 
                 new()
@@ -3327,21 +3048,9 @@ namespace cAlgo
                     Key = "StrengthFilterKey",
                     Label = "Filter",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.StrengthFilter.ToString(),
+                    GetDefault = p => p.ColoringParams.StrengthFilter_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(StrengthFilter_Data)),
                     OnChanged = _ => UpdateStrengthFilter(),
-                },
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "MATypeKey",
-                    Label = "MA Type",
-                    InputType = ParamInputType.ComboBox,
-                    GetDefault = p => Outside.UseCustomMAs ? Outside.customMAtype.ToString() : p.MAtype.ToString(),
-                    EnumOptions = () => Outside.UseCustomMAs ? Enum.GetNames(typeof(MAType_Data)) : Enum.GetNames(typeof(MovingAverageType)),
-                    OnChanged = _ => UpdateMAType(),
-                    IsVisible = () => Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized && Outside.StrengthFilter_Input != StrengthFilter_Data.L1Norm
                 },
                 new()
                 {
@@ -3350,31 +3059,21 @@ namespace cAlgo
                     Key = "MAPeriodKey",
                     Label = "Period",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.MAperiod.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.ColoringParams.MAperiod.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateMAPeriod(),
-                    IsVisible = () => Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                    IsVisible = () => isNot_NmlzPct()
                 },
                 new()
                 {
                     Region = "Coloring",
                     RegionOrder = 1,
-                    Key = "NmlzPeriodKey",
-                    Label = "Period",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.NormalizePeriod.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateNormalizePeriod(),
-                    IsVisible = () => Outside.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized
-                },
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "NmlzMultipKey",
-                    Label = "Multiplier",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.NormalizeMultiplier.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateNormalizeMultiplier(),
-                    IsVisible = () => Outside.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized
+                    Key = "MATypeKey",
+                    Label = "MA Type",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => Outside.UseCustomMAs ? Outside.customMAtype.ToString() : p.ColoringParams.MAtype.ToString(),
+                    EnumOptions = () => Outside.UseCustomMAs ? Enum.GetNames(typeof(MAType_Data)) : Enum.GetNames(typeof(MovingAverageType)),
+                    OnChanged = _ => UpdateMAType(),
+                    IsVisible = () => Outside.ColoringParams.StrengthFilter_Input != StrengthFilter_Data.L1Norm && isNot_NmlzPct()
                 },
                 
                 // Ratio
@@ -3385,71 +3084,12 @@ namespace cAlgo
                     Key = "StrengthRatioKey",
                     Label = "Ratio",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.StrengthRatio.ToString(),
+                    GetDefault = p => p.ColoringParams.StrengthRatio_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(StrengthRatio_Data)),
                     OnChanged = _ => UpdateStrengthRatio(),
-                    IsVisible = () => Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                    IsVisible = () => isNot_NmlzPct()
                 },
-                
-
-                // Percentile 
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "LowestPctileKey",
-                    Label = "Lowest(<)",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.Lowest_Pctile.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateLowest_Pctile(),
-                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Percentile && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
-                },
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "LowPctileKey",
-                    Label = "Low",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.Low_Pctile.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateLow_Pctile(),
-                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Percentile && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
-                },
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "AveragePctileKey",
-                    Label = "Average",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.Average_Pctile.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateAverage_Pctile(),
-                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Percentile && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
-                },
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "HighPctileKey",
-                    Label = "High",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.High_Pctile.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateHigh_Pctile(),
-                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Percentile && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
-                },
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "UltraPctileKey",
-                    Label = "Ultra(>=)",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.Ultra_Pctile.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateUltra_Pctile(),
-                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Percentile && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
-                },
-                
-                // Percentile => Period
+                // Ratio => Percentile => Period
                 new()
                 {
                     Region = "Coloring",
@@ -3457,69 +3097,10 @@ namespace cAlgo
                     Key = "PctilePeriodKey",
                     Label = "Pctile Period",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.PctilePeriod.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.ColoringParams.Pctile_Period.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdatePercentilePeriod(),
-                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Percentile && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                    IsVisible = () => isPctile()
                 },
-                
-                
-                // Percentage => Normalized_Emphasized 
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "LowestPctKey",
-                    Label = "Lowest(<)",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.Lowest_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateLowest_Pct(),
-                    IsVisible = () => Outside.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized
-                },
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "LowPctKey",
-                    Label = "Low",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.Low_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateLow_Pct(),
-                    IsVisible = () => Outside.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized
-                },
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "AveragePctKey",
-                    Label = "Average",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.Average_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateAverage_Pct(),
-                    IsVisible = () => Outside.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized
-                },
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "HighPctKey",
-                    Label = "High",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.High_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateHigh_Pct(),
-                    IsVisible = () => Outside.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized
-                },
-                new()
-                {
-                    Region = "Coloring",
-                    RegionOrder = 1,
-                    Key = "UltraPctKey",
-                    Label = "Ultra(>=)",
-                    InputType = ParamInputType.Text,
-                    GetDefault = p => p.Ultra_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateUltra_Pct(),
-                    IsVisible = () => Outside.StrengthFilter_Input == StrengthFilter_Data.Normalized_Emphasized
-                },
-
                 // [Debug] Show Strength
                 new()
                 {
@@ -3528,8 +3109,144 @@ namespace cAlgo
                     Key = "DebugStrengthKey",
                     Label = "Debug?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ShowStrength,
-                    OnChanged = _ => UpdateCheckbox("DebugStrengthKey", val => Outside.ShowStrengthValue = val),
+                    GetDefault = p => p.ColoringParams.ShowStrengthValue,
+                    OnChanged = _ => UpdateCheckbox("DebugStrengthKey", val => Outside.ColoringParams.ShowStrengthValue = val),
+                },
+
+                // Percentile
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "LowestPctileKey",
+                    Label = "Lowest(<)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.Lowest_PctileValue.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateLowest_Pctile(),
+                    IsVisible = () => isPctile()
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "LowPctileKey",
+                    Label = "Low",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.Low_PctileValue.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateLow_Pctile(),
+                    IsVisible = () => isPctile()
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "AveragePctileKey",
+                    Label = "Average",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.Average_PctileValue.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateAverage_Pctile(),
+                    IsVisible = () => isPctile()
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "HighPctileKey",
+                    Label = "High",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.High_PctileValue.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateHigh_Pctile(),
+                    IsVisible = () => isPctile()
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "UltraPctileKey",
+                    Label = "Ultra(>=)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.Ultra_PctileValue.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateUltra_Pctile(),
+                    IsVisible = () => isPctile()
+                },
+
+                // Percentage => Normalized_Emphasized
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "NmlzPeriodKey",
+                    Label = "Period",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.NormalizePeriod.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateNormalizePeriod(),
+                    IsVisible = () => isPct()
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "LowestPctKey",
+                    Label = "Lowest(<)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.Lowest_PctValue.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateLowest_Pct(),
+                    IsVisible = () => isPct()
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "LowPctKey",
+                    Label = "Low",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.Low_PctValue.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateLow_Pct(),
+                    IsVisible = () => isPct()
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "AveragePctKey",
+                    Label = "Average",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.Average_PctValue.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateAverage_Pct(),
+                    IsVisible = () => isPct()
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "HighPctKey",
+                    Label = "High",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.High_PctValue.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateHigh_Pct(),
+                    IsVisible = () => isPct()
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "UltraPctKey",
+                    Label = "Ultra(>=)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.Ultra_PctValue.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateUltra_Pct(),
+                    IsVisible = () => isPct()
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 1,
+                    Key = "NmlzMultipKey",
+                    Label = "Multiplier",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.NormalizeMultiplier.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateNormalizeMultiplier(),
+                    IsVisible = () => isPct()
                 },
 
                 // Fixed
@@ -3540,9 +3257,9 @@ namespace cAlgo
                     Key = "LowestFixedKey",
                     Label = "Lowest(<)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.Lowest_Fixed.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.ColoringParams.Lowest_FixedValue.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateLowest_Fixed(),
-                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Fixed && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                    IsVisible = () => isFixed()
                 },
                 new()
                 {
@@ -3551,9 +3268,9 @@ namespace cAlgo
                     Key = "LowFixedKey",
                     Label = "Low",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.Low_Fixed.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.ColoringParams.Low_FixedValue.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateLow_Fixed(),
-                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Fixed && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                    IsVisible = () => isFixed()
                 },
                 new()
                 {
@@ -3562,9 +3279,9 @@ namespace cAlgo
                     Key = "AverageFixedKey",
                     Label = "Average",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.Average_Fixed.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.ColoringParams.Average_FixedValue.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateAverage_Fixed(),
-                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Fixed && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                    IsVisible = () => isFixed()
                 },
                 new()
                 {
@@ -3573,9 +3290,9 @@ namespace cAlgo
                     Key = "HighFixedKey",
                     Label = "High",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.High_Fixed.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.ColoringParams.High_FixedValue.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateHigh_Fixed(),
-                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Fixed && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                    IsVisible = () => isFixed()
                 },
                 new()
                 {
@@ -3584,9 +3301,9 @@ namespace cAlgo
                     Key = "UltraFixedKey",
                     Label = "Ultra(>=)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.Ultra_Fixed.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.ColoringParams.Ultra_FixedValue.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateUltra_Fixed(),
-                    IsVisible = () => Outside.StrengthRatio_Input == StrengthRatio_Data.Fixed && Outside.StrengthFilter_Input != StrengthFilter_Data.Normalized_Emphasized
+                    IsVisible = () => isFixed()
                 },
 
 
@@ -3597,8 +3314,8 @@ namespace cAlgo
                     Key = "CurrentWaveKey",
                     Label = "Current?",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.ShowCurrentWave,
-                    OnChanged = _ => UpdateCheckbox("CurrentWaveKey", val => Outside.ShowCurrentWave = val),
+                    GetDefault = p => p.WavesParams.ShowCurrentWave,
+                    OnChanged = _ => UpdateCheckbox("CurrentWaveKey", val => Outside.WavesParams.ShowCurrentWave = val),
                 },
                 new()
                 {
@@ -3607,7 +3324,7 @@ namespace cAlgo
                     Key = "ShowWavesKey",
                     Label = "Waves",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.ShowWaves.ToString(),
+                    GetDefault = p => p.WavesParams.ShowWaves_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(ShowWaves_Data)),
                     OnChanged = _ => UpdateWaves(),
                 },
@@ -3618,7 +3335,7 @@ namespace cAlgo
                     Key = "OtherWavesKey",
                     Label = "Waves(misc)",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.ShowOtherWaves.ToString(),
+                    GetDefault = p => p.WavesParams.ShowOtherWaves_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(ShowOtherWaves_Data)),
                     OnChanged = _ => UpdateOtherWaves(),
                 },
@@ -3629,7 +3346,7 @@ namespace cAlgo
                     Key = "MarksKey",
                     Label = "Marks",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.ShowMarks.ToString(),
+                    GetDefault = p => p.WavesParams.ShowMarks_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(ShowMarks_Data)),
                     OnChanged = _ => UpdateMarks(),
                 },
@@ -3640,7 +3357,7 @@ namespace cAlgo
                     Key = "RatioVolumeKey",
                     Label = "Ratio(volume)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.WW_Ratio.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.WavesParams.WW_Ratio.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateVolumeRatio()
                 },
                 new()
@@ -3650,7 +3367,7 @@ namespace cAlgo
                     Key = "RatioEvsRKey",
                     Label = "Ratio(EvsR)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.EvsR_Ratio.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.WavesParams.EvsR_Ratio.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdateEvsRRatio()
                 },
                 new()
@@ -3660,10 +3377,10 @@ namespace cAlgo
                     Key = "WavesModeKey",
                     Label = "Waves(mode)",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.WavesMode.ToString(),
+                    GetDefault = p => p.WavesParams.WavesMode_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(WavesMode_Data)),
                     OnChanged = _ => UpdateWavesMode(),
-                    IsVisible = () => Outside.isRenkoChart
+                    IsVisible = () => Outside.BooleanUtils.isRenkoChart
                 },
                 //
                 new()
@@ -3673,7 +3390,7 @@ namespace cAlgo
                     Key = "YellowZZKey",
                     Label = "Last(ratio)",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.YellowZigZag.ToString(),
+                    GetDefault = p => p.WavesParams.YellowZigZag_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(YellowZigZag_Data)),
                     OnChanged = _ => UpdateYellowZZ(),
                 },
@@ -3684,9 +3401,9 @@ namespace cAlgo
                     Key = "YellowRenkoKey",
                     Label = "Ranging?(ratio)",
                     InputType = ParamInputType.Checkbox,
-                    GetDefault = p => p.YellowRenko_IgnoreRanging,
-                    OnChanged = _ => UpdateCheckbox("YellowRenkoKey", val => Outside.YellowRenko_IgnoreRanging = val),
-                    IsVisible = () => Outside.WavesMode_Input == WavesMode_Data.Reversal
+                    GetDefault = p => p.WavesParams.YellowRenko_IgnoreRanging,
+                    OnChanged = _ => UpdateCheckbox("YellowRenkoKey", val => Outside.WavesParams.YellowRenko_IgnoreRanging = val),
+                    IsVisible = () => Outside.WavesParams.WavesMode_Input == WavesMode_Data.Reversal
                 },
 
                 new()
@@ -3696,7 +3413,7 @@ namespace cAlgo
                     Key = "ZigZagModeKey",
                     Label = "Mode",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.ZigZagMode.ToString(),
+                    GetDefault = p => p.ZigZagParams.ZigZagMode_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(ZigZagMode_Data)),
                     OnChanged = _ => UpdateZigZagMode()
                 },
@@ -3707,9 +3424,9 @@ namespace cAlgo
                     Key = "PercentageZZKey",
                     Label = "Value(%)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.PercentageZZ.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.ZigZagParams.PercentageZZ.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdatePercentage(),
-                    IsVisible = () => Outside.ZigZagMode_Input == ZigZagMode_Data.Percentage
+                    IsVisible = () => Outside.ZigZagParams.ZigZagMode_Input == ZigZagMode_Data.Percentage
                 },
                 new()
                 {
@@ -3718,9 +3435,9 @@ namespace cAlgo
                     Key = "PipsZZKey",
                     Label = "Value(pips)",
                     InputType = ParamInputType.Text,
-                    GetDefault = p => p.PipsZZ.ToString("0.############################", CultureInfo.InvariantCulture),
+                    GetDefault = p => p.ZigZagParams.PipsZZ.ToString("0.############################", CultureInfo.InvariantCulture),
                     OnChanged = _ => UpdatePips(),
-                    IsVisible = () => Outside.ZigZagMode_Input == ZigZagMode_Data.Pips
+                    IsVisible = () => Outside.ZigZagParams.ZigZagMode_Input == ZigZagMode_Data.Pips
                 },
                 new()
                 {
@@ -3729,10 +3446,10 @@ namespace cAlgo
                     Key = "PriorityZZKey",
                     Label = "Priority(HH/HL)",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.Priority.ToString(),
+                    GetDefault = p => p.ZigZagParams.Priority_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(Priority_Data)),
                     OnChanged = _ => UpdatePriority(),
-                    IsVisible = () => Outside.ZigZagMode_Input == ZigZagMode_Data.NoLag_HighLow
+                    IsVisible = () => Outside.ZigZagParams.ZigZagMode_Input == ZigZagMode_Data.NoLag_HighLow
                 },
                 new()
                 {
@@ -3741,9 +3458,19 @@ namespace cAlgo
                     Key = "ZZSourceKey",
                     Label = "Source(TF)",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.ZigZagSource.ToString(),
+                    GetDefault = p => p.ZigZagParams.ZigZagSource_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(ZigZagSource_Data)),
                     OnChanged = _ => UpdateZigZagSource(),
+                },
+                new()
+                {
+                    Region = "ZigZag",
+                    RegionOrder = 3,
+                    Key = "TurningPointKey",
+                    Label = "Turning Point?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.ZigZagParams.ShowTurningPoint,
+                    OnChanged = _ => UpdateCheckbox("TurningPointKey", val => Outside.ZigZagParams.ShowTurningPoint = val)
                 },
                 new()
                 {
@@ -3752,10 +3479,10 @@ namespace cAlgo
                     Key = "MTFSourceKey",
                     Label = "MTF(source)",
                     InputType = ParamInputType.ComboBox,
-                    GetDefault = p => p.MTFSource_Panel.ToString(),
+                    GetDefault = p => p.ZigZagParams.MTFSource_Panel.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(MTF_Sources)),
                     OnChanged = _ => UpdateMTFSource(),
-                    IsVisible = () => Outside.ZigZagSource_Input == ZigZagSource_Data.MultiTF
+                    IsVisible = () => isMTF()
                 },
                 new()
                 {
@@ -3767,7 +3494,7 @@ namespace cAlgo
                     GetDefault = p => Standard_Sources.m30.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(Standard_Sources)),
                     OnChanged = _ => UpdateCandles(),
-                    IsVisible = () => Outside.ZigZagSource_Input == ZigZagSource_Data.MultiTF && (Outside.MTFSource_Panel == MTF_Sources.Standard || Outside.MTFSource_Panel == MTF_Sources.Heikin_Ash)
+                    IsVisible = () => isMTF() && (Outside.ZigZagParams.MTFSource_Panel == MTF_Sources.Standard || Outside.ZigZagParams.MTFSource_Panel == MTF_Sources.Heikin_Ash)
                 },
                 new()
                 {
@@ -3779,7 +3506,7 @@ namespace cAlgo
                     GetDefault = p => Renko_Sources.Re1.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(Renko_Sources)),
                     OnChanged = _ => UpdateRenko(),
-                    IsVisible = () => Outside.ZigZagSource_Input == ZigZagSource_Data.MultiTF && Outside.MTFSource_Panel == MTF_Sources.Renko
+                    IsVisible = () => isMTF() && Outside.ZigZagParams.MTFSource_Panel == MTF_Sources.Renko
                 },
                 new()
                 {
@@ -3791,7 +3518,7 @@ namespace cAlgo
                     GetDefault = p => Range_Sources.Ra1.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(Range_Sources)),
                     OnChanged = _ => UpdateRange(),
-                    IsVisible = () => Outside.ZigZagSource_Input == ZigZagSource_Data.MultiTF && Outside.MTFSource_Panel == MTF_Sources.Range
+                    IsVisible = () => isMTF() && Outside.ZigZagParams.MTFSource_Panel == MTF_Sources.Range
                 },
                 new()
                 {
@@ -3803,7 +3530,7 @@ namespace cAlgo
                     GetDefault = p => Tick_Sources.t100.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(Tick_Sources)),
                     OnChanged = _ => UpdateTick(),
-                    IsVisible = () => Outside.ZigZagSource_Input == ZigZagSource_Data.MultiTF && Outside.MTFSource_Panel == MTF_Sources.Tick
+                    IsVisible = () => isMTF() && Outside.ZigZagParams.MTFSource_Panel == MTF_Sources.Tick
                 },
             };
         }
@@ -3843,7 +3570,7 @@ namespace cAlgo
                 BorderThickness = "0 0 0 1",
                 Style = Styles.CreateCommonBorderStyle(),
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Width = 230, // ParamsPanel Width
+                Width = 250, // ParamsPanel Width
                 Child = grid
             };
             return border;
@@ -3884,7 +3611,7 @@ namespace cAlgo
             {
                 Margin = 10,
                 // Fix MacOS => large string increase column and hidden others
-                Width = 230, // ParamsPanel Width
+                Width = 250, // ParamsPanel Width
                 // Fix MacOS(maybe) => panel is cut short/half the size
                 VerticalAlignment = VerticalAlignment.Top,
             };
@@ -4138,18 +3865,18 @@ namespace cAlgo
         private void UpdateNumbers()
         {
             var selected = comboBoxMap["ShowNumbersKey"].SelectedItem;
-            if (Enum.TryParse(selected, out Numbers_Data numbersType) && numbersType != Outside.Numbers_Input)
+            if (Enum.TryParse(selected, out Numbers_Data numbersType) && numbersType != Outside.WyckoffParams.Numbers_Input)
             {
-                Outside.Numbers_Input = numbersType;
+                Outside.WyckoffParams.Numbers_Input = numbersType;
                 RecalculateOutsideWithMsg(numbersType == Numbers_Data.None);
             }
         }
         private void UpdateNumbersPosition()
         {
             var selected = comboBoxMap["NumbersPositionKey"].SelectedItem;
-            if (Enum.TryParse(selected, out NumbersPosition_Data positionType) && positionType != Outside.NumbersPosition_Input)
+            if (Enum.TryParse(selected, out NumbersPosition_Data positionType) && positionType != Outside.WyckoffParams.NumbersPosition_Input)
             {
-                Outside.NumbersPosition_Input = positionType;
+                Outside.WyckoffParams.NumbersPosition_Input = positionType;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -4157,27 +3884,27 @@ namespace cAlgo
         private void UpdateNumbersBothPosition()
         {
             var selected = comboBoxMap["BothPositionKey"].SelectedItem;
-            if (Enum.TryParse(selected, out NumbersBothPosition_Data positionType) && positionType != Outside.NumbersBothPosition_Input)
+            if (Enum.TryParse(selected, out NumbersBothPosition_Data positionType) && positionType != Outside.WyckoffParams.NumbersBothPosition_Input)
             {
-                Outside.NumbersBothPosition_Input = positionType;
+                Outside.WyckoffParams.NumbersBothPosition_Input = positionType;
                 RecalculateOutsideWithMsg(false);
             }
         }
         private void UpdateNumbersColoring()
         {
             var selected = comboBoxMap["NumbersColorKey"].SelectedItem;
-            if (Enum.TryParse(selected, out NumbersColor_Data colorType) && colorType != Outside.NumbersColor_Input)
+            if (Enum.TryParse(selected, out NumbersColor_Data colorType) && colorType != Outside.WyckoffParams.NumbersColor_Input)
             {
-                Outside.NumbersColor_Input = colorType;
+                Outside.WyckoffParams.NumbersColor_Input = colorType;
                 RecalculateOutsideWithMsg(false);
             }
         }
         private void UpdateBarsColoring()
         {
             var selected = comboBoxMap["BarsColorKey"].SelectedItem;
-            if (Enum.TryParse(selected, out BarsColor_Data colorType) && colorType != Outside.BarsColor_Input)
+            if (Enum.TryParse(selected, out BarsColor_Data colorType) && colorType != Outside.WyckoffParams.BarsColor_Input)
             {
-                Outside.BarsColor_Input = colorType;
+                Outside.WyckoffParams.BarsColor_Input = colorType;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -4186,9 +3913,9 @@ namespace cAlgo
         private void UpdateStrengthFilter()
         {
             var selected = comboBoxMap["StrengthFilterKey"].SelectedItem;
-            if (Enum.TryParse(selected, out StrengthFilter_Data filterType) && filterType != Outside.StrengthFilter_Input)
+            if (Enum.TryParse(selected, out StrengthFilter_Data filterType) && filterType != Outside.ColoringParams.StrengthFilter_Input)
             {
-                Outside.StrengthFilter_Input = filterType;
+                Outside.ColoringParams.StrengthFilter_Input = filterType;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -4202,9 +3929,9 @@ namespace cAlgo
                     RecalculateOutsideWithMsg();
                 }
             } else {
-                if (Enum.TryParse(selected, out MovingAverageType MAType) && MAType != Outside.MAtype)
+                if (Enum.TryParse(selected, out MovingAverageType MAType) && MAType != Outside.ColoringParams.MAtype)
                 {
-                    Outside.MAtype = MAType;
+                    Outside.ColoringParams.MAtype = MAType;
                     RecalculateOutsideWithMsg();
                 }
             }
@@ -4213,9 +3940,9 @@ namespace cAlgo
         {
             if (int.TryParse(textInputMap["MAPeriodKey"].Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0)
             {
-                if (value != Outside.MAperiod)
+                if (value != Outside.ColoringParams.MAperiod)
                 {
-                    Outside.MAperiod = value;
+                    Outside.ColoringParams.MAperiod = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4224,9 +3951,9 @@ namespace cAlgo
         {
             if (int.TryParse(textInputMap["NmlzPeriodKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.NormalizePeriod)
+                if (value != Outside.ColoringParams.NormalizePeriod)
                 {
-                    Outside.NormalizePeriod = value;
+                    Outside.ColoringParams.NormalizePeriod = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4235,9 +3962,9 @@ namespace cAlgo
         {
             if (int.TryParse(textInputMap["NmlzMultipKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.NormalizeMultiplier)
+                if (value != Outside.ColoringParams.NormalizeMultiplier)
                 {
-                    Outside.NormalizeMultiplier = value;
+                    Outside.ColoringParams.NormalizeMultiplier = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4247,9 +3974,9 @@ namespace cAlgo
         {
             if (int.TryParse(textInputMap["PctilePeriodKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.Pctile_Period)
+                if (value != Outside.ColoringParams.Pctile_Period)
                 {
-                    Outside.Pctile_Period = value;
+                    Outside.ColoringParams.Pctile_Period = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4257,9 +3984,9 @@ namespace cAlgo
         private void UpdateStrengthRatio()
         {
             var selected = comboBoxMap["StrengthRatioKey"].SelectedItem;
-            if (Enum.TryParse(selected, out StrengthRatio_Data ratioType) && ratioType != Outside.StrengthRatio_Input)
+            if (Enum.TryParse(selected, out StrengthRatio_Data ratioType) && ratioType != Outside.ColoringParams.StrengthRatio_Input)
             {
-                Outside.StrengthRatio_Input = ratioType;
+                Outside.ColoringParams.StrengthRatio_Input = ratioType;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -4270,9 +3997,9 @@ namespace cAlgo
         {
             if (int.TryParse(textInputMap["LowestPctileKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.Lowest_PctileValue)
+                if (value != Outside.ColoringParams.Lowest_PctileValue)
                 {
-                    Outside.Lowest_PctileValue = value;
+                    Outside.ColoringParams.Lowest_PctileValue = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4281,9 +4008,9 @@ namespace cAlgo
         {
             if (int.TryParse(textInputMap["LowPctileKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.Low_PctileValue)
+                if (value != Outside.ColoringParams.Low_PctileValue)
                 {
-                    Outside.Low_PctileValue = value;
+                    Outside.ColoringParams.Low_PctileValue = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4292,9 +4019,9 @@ namespace cAlgo
         {
             if (int.TryParse(textInputMap["AveragePctileKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.Average_PctileValue)
+                if (value != Outside.ColoringParams.Average_PctileValue)
                 {
-                    Outside.Average_PctileValue = value;
+                    Outside.ColoringParams.Average_PctileValue = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4303,9 +4030,9 @@ namespace cAlgo
         {
             if (int.TryParse(textInputMap["HighPctileKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.High_PctileValue)
+                if (value != Outside.ColoringParams.High_PctileValue)
                 {
-                    Outside.High_PctileValue = value;
+                    Outside.ColoringParams.High_PctileValue = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4314,9 +4041,9 @@ namespace cAlgo
         {
             if (int.TryParse(textInputMap["UltraPctileKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.Ultra_PctileValue)
+                if (value != Outside.ColoringParams.Ultra_PctileValue)
                 {
-                    Outside.Ultra_PctileValue = value;
+                    Outside.ColoringParams.Ultra_PctileValue = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4327,9 +4054,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["LowestPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.Lowest_PctValue)
+                if (value != Outside.ColoringParams.Lowest_PctValue)
                 {
-                    Outside.Lowest_PctValue = value;
+                    Outside.ColoringParams.Lowest_PctValue = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4338,9 +4065,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["LowPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.Low_PctValue)
+                if (value != Outside.ColoringParams.Low_PctValue)
                 {
-                    Outside.Low_PctValue = value;
+                    Outside.ColoringParams.Low_PctValue = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4349,9 +4076,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["AveragePctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.Average_PctValue)
+                if (value != Outside.ColoringParams.Average_PctValue)
                 {
-                    Outside.Average_PctValue = value;
+                    Outside.ColoringParams.Average_PctValue = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4360,9 +4087,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["HighPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.High_PctValue)
+                if (value != Outside.ColoringParams.High_PctValue)
                 {
-                    Outside.High_PctValue = value;
+                    Outside.ColoringParams.High_PctValue = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4371,22 +4098,22 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["UltraPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.Ultra_PctValue)
+                if (value != Outside.ColoringParams.Ultra_PctValue)
                 {
-                    Outside.Ultra_PctValue = value;
+                    Outside.ColoringParams.Ultra_PctValue = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
         }
-        
+
         // Fixed
         private void UpdateLowest_Fixed()
         {
             if (double.TryParse(textInputMap["LowestFixedKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.Lowest_FixedValue)
+                if (value != Outside.ColoringParams.Lowest_FixedValue)
                 {
-                    Outside.Lowest_FixedValue = value;
+                    Outside.ColoringParams.Lowest_FixedValue = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4395,9 +4122,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["LowFixedKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.Low_FixedValue)
+                if (value != Outside.ColoringParams.Low_FixedValue)
                 {
-                    Outside.Low_FixedValue = value;
+                    Outside.ColoringParams.Low_FixedValue = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4406,9 +4133,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["AverageFixedKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.Average_FixedValue)
+                if (value != Outside.ColoringParams.Average_FixedValue)
                 {
-                    Outside.Average_FixedValue = value;
+                    Outside.ColoringParams.Average_FixedValue = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4417,9 +4144,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["HighFixedKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.High_FixedValue)
+                if (value != Outside.ColoringParams.High_FixedValue)
                 {
-                    Outside.High_FixedValue = value;
+                    Outside.ColoringParams.High_FixedValue = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4428,9 +4155,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["UltraFixedKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.Ultra_FixedValue)
+                if (value != Outside.ColoringParams.Ultra_FixedValue)
                 {
-                    Outside.Ultra_FixedValue = value;
+                    Outside.ColoringParams.Ultra_FixedValue = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4441,27 +4168,27 @@ namespace cAlgo
         private void UpdateWaves()
         {
             var selected = comboBoxMap["ShowWavesKey"].SelectedItem;
-            if (Enum.TryParse(selected, out ShowWaves_Data wavesType) && wavesType != Outside.ShowWaves_Input)
+            if (Enum.TryParse(selected, out ShowWaves_Data wavesType) && wavesType != Outside.WavesParams.ShowWaves_Input)
             {
-                Outside.ShowWaves_Input = wavesType;
+                Outside.WavesParams.ShowWaves_Input = wavesType;
                 RecalculateOutsideWithMsg();
             }
         }
         private void UpdateOtherWaves()
         {
             var selected = comboBoxMap["OtherWavesKey"].SelectedItem;
-            if (Enum.TryParse(selected, out ShowOtherWaves_Data wavesType) && wavesType != Outside.ShowOtherWaves_Input)
+            if (Enum.TryParse(selected, out ShowOtherWaves_Data wavesType) && wavesType != Outside.WavesParams.ShowOtherWaves_Input)
             {
-                Outside.ShowOtherWaves_Input = wavesType;
+                Outside.WavesParams.ShowOtherWaves_Input = wavesType;
                 RecalculateOutsideWithMsg(wavesType == ShowOtherWaves_Data.No);
             }
         }
         private void UpdateMarks()
         {
             var selected = comboBoxMap["MarksKey"].SelectedItem;
-            if (Enum.TryParse(selected, out ShowMarks_Data markType) && markType != Outside.ShowMarks_Input)
+            if (Enum.TryParse(selected, out ShowMarks_Data markType) && markType != Outside.WavesParams.ShowMarks_Input)
             {
-                Outside.ShowMarks_Input = markType;
+                Outside.WavesParams.ShowMarks_Input = markType;
                 RecalculateOutsideWithMsg(markType == ShowMarks_Data.No);
             }
         }
@@ -4469,9 +4196,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["RatioVolumeKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.WW_Ratio)
+                if (value != Outside.WavesParams.WW_Ratio)
                 {
-                    Outside.WW_Ratio = value;
+                    Outside.WavesParams.WW_Ratio = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4480,9 +4207,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["RatioEvsRKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.EvsR_Ratio)
+                if (value != Outside.WavesParams.EvsR_Ratio)
                 {
-                    Outside.EvsR_Ratio = value;
+                    Outside.WavesParams.EvsR_Ratio = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4490,18 +4217,18 @@ namespace cAlgo
         private void UpdateWavesMode()
         {
             var selected = comboBoxMap["WavesModeKey"].SelectedItem;
-            if (Enum.TryParse(selected, out WavesMode_Data wavesType) && wavesType != Outside.WavesMode_Input)
+            if (Enum.TryParse(selected, out WavesMode_Data wavesType) && wavesType != Outside.WavesParams.WavesMode_Input)
             {
-                Outside.WavesMode_Input = wavesType;
+                Outside.WavesParams.WavesMode_Input = wavesType;
                 RecalculateOutsideWithMsg();
             }
         }
         private void UpdateYellowZZ()
         {
             var selected = comboBoxMap["YellowZZKey"].SelectedItem;
-            if (Enum.TryParse(selected, out YellowZigZag_Data yellowType) && yellowType != Outside.YellowZigZag_Input)
+            if (Enum.TryParse(selected, out YellowZigZag_Data yellowType) && yellowType != Outside.WavesParams.YellowZigZag_Input)
             {
-                Outside.YellowZigZag_Input = yellowType;
+                Outside.WavesParams.YellowZigZag_Input = yellowType;
                 RecalculateOutsideWithMsg();
             }
         }
@@ -4510,9 +4237,9 @@ namespace cAlgo
         private void UpdateZigZagMode()
         {
             var selected = comboBoxMap["ZigZagModeKey"].SelectedItem;
-            if (Enum.TryParse(selected, out ZigZagMode_Data zigzagType) && zigzagType != Outside.ZigZagMode_Input)
+            if (Enum.TryParse(selected, out ZigZagMode_Data zigzagType) && zigzagType != Outside.ZigZagParams.ZigZagMode_Input)
             {
-                Outside.ZigZagMode_Input = zigzagType;
+                Outside.ZigZagParams.ZigZagMode_Input = zigzagType;
                 RecalculateOutsideWithMsg();
             }
         }
@@ -4520,9 +4247,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["PercentageZZKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.PercentageZZ)
+                if (value != Outside.ZigZagParams.PercentageZZ)
                 {
-                    Outside.PercentageZZ = value;
+                    Outside.ZigZagParams.PercentageZZ = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4531,9 +4258,9 @@ namespace cAlgo
         {
             if (double.TryParse(textInputMap["PipsZZKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             {
-                if (value != Outside.PipsZZ)
+                if (value != Outside.ZigZagParams.PipsZZ)
                 {
-                    Outside.PipsZZ = value;
+                    Outside.ZigZagParams.PipsZZ = value;
                     ApplyBtn.IsVisible = true;
                 }
             }
@@ -4541,9 +4268,9 @@ namespace cAlgo
         private void UpdateZigZagSource()
         {
             var selected = comboBoxMap["ZZSourceKey"].SelectedItem;
-            if (Enum.TryParse(selected, out ZigZagSource_Data sourceType) && sourceType != Outside.ZigZagSource_Input)
+            if (Enum.TryParse(selected, out ZigZagSource_Data sourceType) && sourceType != Outside.ZigZagParams.ZigZagSource_Input)
             {
-                Outside.ZigZagSource_Input = sourceType;
+                Outside.ZigZagParams.ZigZagSource_Input = sourceType;
                 if (sourceType == ZigZagSource_Data.MultiTF) {
                     UpdateMTFSource();
                     return;
@@ -4556,7 +4283,7 @@ namespace cAlgo
             var selected = comboBoxMap["MTFSourceKey"].SelectedItem;
             if (Enum.TryParse(selected, out MTF_Sources sourceType))
             {
-                Outside.MTFSource_Panel = sourceType;
+                Outside.ZigZagParams.MTFSource_Panel = sourceType;
                 switch (sourceType)
                 {
                     case MTF_Sources.Tick:
@@ -4574,7 +4301,7 @@ namespace cAlgo
             var selected = comboBoxMap["MTFCandlesKey"].SelectedItem;
 
             TimeFrame value = StringToTimeframe(selected);
-            if (Outside.MTFSource_Panel == MTF_Sources.Heikin_Ash)
+            if (Outside.ZigZagParams.MTFSource_Panel == MTF_Sources.Heikin_Ash)
                 value = StringToTimeframe(selected, true);
 
             UpdateMTFInterval(value);
@@ -4598,11 +4325,11 @@ namespace cAlgo
         {
             string[] timesBased = { "Minute", "Hour", "Daily", "Day", "Weekly", "Monthly" };
             string tfName = tf.ToString();
-            bool isSelected = Outside.MTFSource_Panel == MTF_Sources.Tick && tfName.Contains("Tick") ||
-                              Outside.MTFSource_Panel == MTF_Sources.Range && tfName.Contains("Range") ||
-                              Outside.MTFSource_Panel == MTF_Sources.Renko && tfName.Contains("Renko") ||
-                              Outside.MTFSource_Panel == MTF_Sources.Heikin_Ash && tfName.Contains("Heikin") ||
-                              Outside.MTFSource_Panel == MTF_Sources.Standard && timesBased.Any(tfName.Contains);
+            bool isSelected = Outside.ZigZagParams.MTFSource_Panel == MTF_Sources.Tick && tfName.Contains("Tick") ||
+                              Outside.ZigZagParams.MTFSource_Panel == MTF_Sources.Range && tfName.Contains("Range") ||
+                              Outside.ZigZagParams.MTFSource_Panel == MTF_Sources.Renko && tfName.Contains("Renko") ||
+                              Outside.ZigZagParams.MTFSource_Panel == MTF_Sources.Heikin_Ash && tfName.Contains("Heikin") ||
+                              Outside.ZigZagParams.MTFSource_Panel == MTF_Sources.Standard && timesBased.Any(tfName.Contains);
             if (isSelected) {
                 Outside.SetMTFSource_TimeFrame(tf);
                 RecalculateOutsideWithMsg();
@@ -4611,9 +4338,9 @@ namespace cAlgo
         private void UpdatePriority()
         {
             var selected = comboBoxMap["PriorityZZKey"].SelectedItem;
-            if (Enum.TryParse(selected, out Priority_Data priorityType) && priorityType != Outside.Priority_Input)
+            if (Enum.TryParse(selected, out Priority_Data priorityType) && priorityType != Outside.ZigZagParams.Priority_Input)
             {
-                Outside.Priority_Input = priorityType;
+                Outside.ZigZagParams.Priority_Input = priorityType;
                 RecalculateOutsideWithMsg(false);
             }
         }
@@ -4866,13 +4593,13 @@ namespace cAlgo
                     comboBoxMap["MarksKey"].SelectedItem = $"{ShowMarks_Data.No}";
 
                     checkBoxMap["EnableWyckoffKey"].IsChecked = true;
-                    Outside.EnableWyckoff = true;
+                    Outside.WyckoffParams.EnableWyckoff = true;
                     checkBoxMap["CurrentWaveKey"].IsChecked = true;
-                    Outside.ShowCurrentWave = true;
+                    Outside.WavesParams.ShowCurrentWave = true;
                     checkBoxMap["FillBarsKey"].IsChecked = true;
-                    Outside.FillBars = true;
+                    Outside.WyckoffParams.FillBars = true;
                     checkBoxMap["OutlineKey"].IsChecked = false;
-                    Outside.KeepOutline = false;
+                    Outside.WyckoffParams.KeepOutline = false;
 
                     Outside.Chart.ChartType = ChartType.Candlesticks;
                     break;
@@ -4919,13 +4646,13 @@ namespace cAlgo
                     comboBoxMap["MarksKey"].SelectedItem = $"{ShowMarks_Data.Both}";
 
                     checkBoxMap["EnableWyckoffKey"].IsChecked = true;
-                    Outside.EnableWyckoff = true;
+                    Outside.WyckoffParams.EnableWyckoff = true;
                     checkBoxMap["CurrentWaveKey"].IsChecked = true;
-                    Outside.ShowCurrentWave = true;
+                    Outside.WavesParams.ShowCurrentWave = true;
                     checkBoxMap["FillBarsKey"].IsChecked = true;
-                    Outside.FillBars = true;
+                    Outside.WyckoffParams.FillBars = true;
                     checkBoxMap["OutlineKey"].IsChecked = false;
-                    Outside.KeepOutline = false;
+                    Outside.WyckoffParams.KeepOutline = false;
                     break;
                 default: break;
             }
@@ -4934,8 +4661,8 @@ namespace cAlgo
             if (Outside.Template_Input == Template_Data.Custom)
                 return;
             // Tick / Time-Based Chart (Standard Candles/Heikin-Ash)
-            if (Outside.isTickChart || !Outside.isPriceBased_Chart) {
-                if (Outside.isTickChart) {
+            if (Outside.BooleanUtils.isTickChart || !Outside.BooleanUtils.isPriceBased_Chart) {
+                if (Outside.BooleanUtils.isTickChart) {
                     comboBoxMap["StrengthFilterKey"].SelectedItem = $"{StrengthFilter_Data.Both}";
 
                     textInputMap["MAPeriodKey"].Text = "20";
@@ -4949,7 +4676,7 @@ namespace cAlgo
                 }
             }
             // Range
-            if (Outside.isPriceBased_Chart && !Outside.isRenkoChart && !Outside.isTickChart) {
+            if (Outside.BooleanUtils.isPriceBased_Chart && !Outside.BooleanUtils.isRenkoChart && !Outside.BooleanUtils.isTickChart) {
                 comboBoxMap["ShowNumbersKey"].SelectedItem = $"{Numbers_Data.Volume}";
                 comboBoxMap["StrengthFilterKey"].SelectedItem = $"{StrengthFilter_Data.MA}";
 
@@ -5215,7 +4942,7 @@ namespace cAlgo
                     Text = (_isExpanded ? "▼ " : "► ") + text, // ▼ expanded / ► collapsed
                     Padding = 0,
                     // Width = 200,
-                    Width = 230, // ParamsPanel Width
+                    Width = 250, // ParamsPanel Width
                     Height = 25,
                     Margin = "0 10 0 0",
                     Style = Styles.CreateButtonStyle(),
@@ -5357,6 +5084,274 @@ namespace cAlgo
 
             byte alpha = (byte)Math.Round(255 * opacity, MidpointRounding.AwayFromZero);
             return Color.FromArgb(alpha, baseColor);
+        }
+    }
+
+    public static class Filters 
+    {
+        public static double RollingPercentile(double[] window)
+        {
+            // generated/converted by LLM
+            if (window == null || window.Length == 0)
+                return 0.0;
+
+            double last = window[window.Length - 1];
+            int count = 0;
+
+            for (int i = 0; i < window.Length; i++)
+            {
+                if (window[i] <= last)
+                    count++;
+            }
+
+            return 100.0 * count / window.Length;
+        }
+
+        public static double L1NormStrength(double[] window)
+        {
+            // generated/converted by LLM
+            if (window == null || window.Length == 0)
+                return 0.0;
+
+            double denom = 0.0;
+
+            for (int i = 0; i < window.Length; i++)
+                denom += Math.Abs(window[i]);
+
+            return denom != 0.0
+                ? window[window.Length - 1] / denom
+                : 1.0;
+        }
+    }
+
+    public static class CustomMA
+    {
+        //  ===== CUSTOM MAS ====
+        // MAs logic generated by LLM
+        // Modified to handle multiples sources
+        // as well as specific OrderFlow() needs.
+        public static double StdDev(int index, int Period, double maValue, Dictionary<int, double> buffer)
+        {
+            double mean = maValue;
+            double sumSq = 0.0;
+            for (int i = index - Period + 1; i <= index; i++)
+            {
+                try {
+                    double diff = buffer[i] - mean;
+                    sumSq += diff * diff;
+                } catch {}
+            }
+            // Sample => (Period - 1) / Population => Period
+            return (Period > 1) ? Math.Sqrt(sumSq / (Period - 1)) : 0.0;
+        }
+
+        public static double SMA(int index, int period, Dictionary<int, double> buffer)
+        {
+            if (buffer.Count < period)
+                return double.NaN;
+
+            double sum = 0;
+            for (int i = index; i > index - period; i--) {
+                // The index may jump on Sunday Bars
+                try { sum += buffer[i]; } catch { }
+            }
+            return sum / period;
+        }
+        public static double EMA(int index, int period, Dictionary<int, double> buffer, Dictionary<int, double> emaDict)
+        {
+            if (emaDict.Count == 0) {
+                emaDict[0] = buffer[index];
+                emaDict[1] = buffer[index];
+                emaDict[index] = buffer[index];
+                return buffer[index];
+            }
+            double k = 2.0 / (period + 1);
+            double value = buffer[index] * k + emaDict[0] * (1 - k);
+
+            if (index != emaDict.Keys.LastOrDefault()) {
+                // Always 3
+                double prev = emaDict[1];
+                emaDict.Clear();
+                emaDict[0] = prev;
+                emaDict[1] = value;
+                emaDict[index] = value; // just to be identified
+            } else {
+                emaDict[1] = value;
+                emaDict[index] = value;
+            }
+            return value;
+        }
+        public static double WMA(int index, int period, Dictionary<int, double> buffer, double? overrideLast = null)
+        {
+            if (buffer.Count < period)
+            {
+                // not enough values -> average available
+                /*
+                double sumA = 0;
+                for (int i = 0; i <= index; i++) {
+                    try { sumA += buffer[i]; } catch { }
+                }
+                return sumA / available;
+                */
+                return double.NaN;
+            }
+
+            double numerator = 0;
+            double denominator = 0;
+            int w = 1;
+            int start = index - period + 1;
+            for (int i = start; i <= index; i++, w++)
+            {
+                double v = 0;
+                try { v = (i == index && overrideLast.HasValue) ? overrideLast.Value : buffer[i]; } catch { }
+                numerator += v * w;
+                denominator += w;
+            }
+            return numerator / denominator;
+        }
+        public static double TMA(int index, int period, Dictionary<int, double> buffer)
+        {
+            if (period <= 1)
+                return buffer[index];
+
+            // need at least 2*period - 1 samples to compute full triangular, otherwise fallback
+            if (buffer.Count < 2 * period - 2)
+                return double.NaN; // return SMA(index, period, buffer);
+
+            double sumSma = 0.0;
+            for (int k = index - period + 1; k <= index; k++)
+            {
+                double smaK = SMA(k, period, buffer);
+                sumSma += smaK;
+            }
+            return sumSma / period;
+        }
+        public static double Hull(int index, int period, Dictionary<int, double> buffer)
+        {
+            if (period < 2) return buffer[index];
+
+            int half = Math.Max(1, period / 2);
+            int sqrt = Math.Max(1, (int)Math.Round(Math.Sqrt(period)));
+
+            double wmaHalf = WMA(index, half, buffer);
+            double wmaFull = WMA(index, period, buffer);
+
+            double raw = 2 * wmaHalf - wmaFull;
+            return WMA(index, sqrt, buffer, raw);
+        }
+        public static double Wilder(int index, int period, Dictionary<int, double> buffer, Dictionary<int, double> wilderDict)
+        {
+            if (wilderDict.Count == 0) {
+                wilderDict[0] = buffer[index];
+                wilderDict[1] = buffer[index];
+                wilderDict[index] = buffer[index];
+                return buffer[index];
+            }
+            double value =  (wilderDict[0] * (period - 1) + buffer[index]) / period;
+
+            if (index != wilderDict.Keys.LastOrDefault()) {
+                // Always 3
+                double prev = wilderDict[1];
+                wilderDict.Clear();
+                wilderDict[0] = prev;
+                wilderDict[1] = value;
+                wilderDict[index] = value; // just to be identified
+            } else {
+                wilderDict[1] = value;
+                wilderDict[index] = value;
+            }
+            return value;
+        }
+        public static double KAMA(int index, int period, int fast, int slow, Dictionary<int, double> buffer, Dictionary<int, double> kamaDict)
+        {
+            if (kamaDict.Count == 0) {
+                kamaDict[0] = buffer[index];
+                kamaDict[1] = buffer[index];
+                kamaDict[index] = buffer[index];
+                return buffer[index];
+            }
+            if (buffer.Count < period) return SMA(index, period, buffer);
+
+            double change;
+            try { change = Math.Abs(buffer[index] - buffer[index - period]); }
+            catch {
+                int idxValue = index - period;
+                for (int i = idxValue; i < index; i++) {
+                    idxValue = i;
+                    if (buffer.ContainsKey(i)) break;
+                }
+                change = Math.Abs(buffer[index] - buffer[idxValue]);
+            }
+
+            double volatility = 0.0;
+            for (int i = index - period + 1; i <= index; i++) {
+                try { volatility += Math.Abs(buffer[i] - buffer[i - 1]); } catch { }
+            }
+
+            double er = volatility == 0 ? 0 : change / volatility;
+            double fastSC = 2.0 / (fast + 1);
+            double slowSC = 2.0 / (slow + 1);
+            double sc = Math.Pow(er * (fastSC - slowSC) + slowSC, 2);
+
+            double value = kamaDict[0] + sc * (buffer[index] - kamaDict[0]);
+
+            if (index != kamaDict.Keys.LastOrDefault()) {
+                // Always 3
+                double prev = kamaDict[1];
+                kamaDict.Clear();
+                kamaDict[0] = prev;
+                kamaDict[1] = value;
+                kamaDict[index] = value; // just to be identified
+            } else {
+                kamaDict[1] = value;
+                kamaDict[index] = value;
+            }
+            return value;
+        }
+        public static double VIDYA(int index, int period, Dictionary<int, double> buffer, Dictionary<int, double> vidyaDict)
+        {
+            if (vidyaDict.Count == 0) {
+                vidyaDict[0] = buffer[index];
+                vidyaDict[1] = buffer[index];
+                vidyaDict[index] = buffer[index];
+                return buffer[index];
+            }
+
+            double cmo = CMO(index, period, buffer);
+            // scale factor, tuneable; using 0.2 base as example
+            // cTrader uses 0.65 as default
+            double alphaBase = 0.65;
+            double k = alphaBase * Math.Abs(cmo / 100.0);
+            double value = k * buffer[index] + (1 - k) * vidyaDict[0];
+
+            if (index != vidyaDict.Keys.LastOrDefault()) {
+                // Always 3
+                double prev = vidyaDict[1];
+                vidyaDict.Clear();
+                vidyaDict[0] = prev;
+                vidyaDict[1] = value;
+                vidyaDict[index] = value; // just to be identified
+            } else {
+                vidyaDict[1] = value;
+                vidyaDict[index] = value;
+            }
+            return value;
+        }
+        public static double CMO(int index, int length, Dictionary<int, double> buffer)
+        {
+            if (index < 1 || length < 1) return 0.0;
+            int start = Math.Max(1, index - length + 1);
+            double up = 0, down = 0;
+            for (int i = start; i <= index; i++)
+            {
+                try {
+                    double diff = buffer[i] - buffer[i - 1];
+                    if (diff > 0) up += diff;
+                    else down += -diff;
+                } catch { }
+            }
+            double denom = up + down;
+            return denom == 0 ? 0.0 : 100.0 * (up - down) / denom;
         }
     }
 
