@@ -440,6 +440,13 @@ namespace cAlgo
             Profile,
         }
 
+        public enum IntensityMode_Data
+        {
+            Per_Bar,
+            Global_Lookback,
+            Global_N_Days
+        }
+
         public class GeneralParams_Info {
             public int Lookback = 1;
             public VolumeMode_Data VolumeMode_Input = VolumeMode_Data.Delta;
@@ -447,6 +454,10 @@ namespace cAlgo
 
             // Coloring region - only for VolumeView_Data.Divided
             public bool ColoringOnlyLarguest = true;
+            public bool ColoringIntensity = false;
+            public IntensityMode_Data IntensityMode_Input = IntensityMode_Data.Per_Bar;
+            public int IntensityNDays_Input = 1;
+            public Dictionary<int, double> BarMaxDeltaCache = new Dictionary<int, double>();
         }
         public GeneralParams_Info GeneralParams = new();
 
@@ -1825,8 +1836,36 @@ namespace cAlgo
             }
 
             IEnumerable<int> negativeList = new List<int>();
+            double finalMaxDelta = 1;
             if (GeneralParams.VolumeMode_Input == VolumeMode_Data.Delta)
+            {
                 negativeList = DeltaRank.Values.Where(n => n < 0);
+                
+                int posMax = DeltaRank.Values.Any(v => v > 0) ? DeltaRank.Values.Max() : 0;
+                int negMax = negativeList.Any() ? Math.Abs(negativeList.Min()) : 0;
+                double currentBarMaxDelta = Math.Max(posMax, negMax);
+                
+                GeneralParams.BarMaxDeltaCache[iStart] = currentBarMaxDelta;
+                finalMaxDelta = currentBarMaxDelta;
+
+                if (GeneralParams.IntensityMode_Input != IntensityMode_Data.Per_Bar)
+                {
+                    if (GeneralParams.IntensityMode_Input == IntensityMode_Data.Global_N_Days) {
+                        DateTime cutoffTime = Bars.OpenTimes[iStart].AddDays(-GeneralParams.IntensityNDays_Input);
+                        foreach (var kvp in GeneralParams.BarMaxDeltaCache) {
+                            if (Bars.OpenTimes[kvp.Key] >= cutoffTime && kvp.Value > finalMaxDelta) {
+                                finalMaxDelta = kvp.Value;
+                            }
+                        }
+                    } else if (GeneralParams.IntensityMode_Input == IntensityMode_Data.Global_Lookback) {
+                        foreach (var val in GeneralParams.BarMaxDeltaCache.Values) {
+                            if (val > finalMaxDelta) {
+                                finalMaxDelta = val;
+                            }
+                        }
+                    }
+                }
+            }
 
             // Manual Refactoring.
             // LLM allucinates.
@@ -2008,7 +2047,7 @@ namespace cAlgo
                     });
                 }
 
-                void DrawRectangle_Delta(int currentDelta, int positiveDeltaMax, IEnumerable<int> negativeDeltaList)
+                void DrawRectangle_Delta(int currentDelta, int positiveDeltaMax, IEnumerable<int> negativeDeltaList, double finalMaxDelta)
                 {
                     int negativeDeltaMax = negativeDeltaList.Any() ? Math.Abs(negativeDeltaList.Min()) : 0;
 
@@ -2071,6 +2110,17 @@ namespace cAlgo
                     Color sellColorWithFilter = GeneralParams.VolumeView_Input == VolumeView_Data.Divided ? sellDividedColor : SellColor;
 
                     Color colorHist = currentDelta > 0 ? buyColorWithFilter : sellColorWithFilter;
+
+                    if (GeneralParams.ColoringIntensity && finalMaxDelta > 0)
+                    {
+                        double ratio = Math.Abs((double)currentDelta) / finalMaxDelta;
+                        if (ratio > 1) ratio = 1.0;
+
+                        double minAlpha = 30; // 30/255 = ~12% minimum opacity
+                        byte newAlpha = (byte)(minAlpha + (255 - minAlpha) * ratio);
+                        colorHist = Color.FromArgb(newAlpha, colorHist.R, colorHist.G, colorHist.B);
+                    }
+
 
                     DrawOrCache(new DrawInfo
                     {
@@ -2161,7 +2211,7 @@ namespace cAlgo
                     {
                         int deltaValue = DeltaRank[priceKey];
                         if (MiscParams.ShowHist)
-                            DrawRectangle_Delta(deltaValue, maxValue, negativeList);
+                            DrawRectangle_Delta(deltaValue, maxValue, negativeList, finalMaxDelta);
 
                         if (MiscParams.ShowNumbers)
                         {
@@ -6779,6 +6829,7 @@ namespace cAlgo
             // Reset Segments
             // It's needed since TF_idx(start) changes if SegmentsInterval_Input is switched on the panel
             Segments_VP.Clear();
+            GeneralParams.BarMaxDeltaCache.Clear();
             segmentInfo.Clear(); 
             // Reset Fixed Range
             foreach (ChartRectangle rect in RangeObjs.rectangles)
@@ -6875,7 +6926,6 @@ namespace cAlgo
         public double GetLookback() {
             return GeneralParams.Lookback;
         }
-
     }
 
     // ================ PARAMS PANEL ================
@@ -6943,6 +6993,9 @@ namespace cAlgo
         private readonly Dictionary<string, RegionSection> _regionSections = new();
         private readonly Dictionary<string, object> _originalValues = new();
         private ColorTheme ApplicationTheme => Outside.Application.ColorTheme;
+
+        // For deferred inputs
+        private int _pendingIntensityNDays = 0;
 
         public ParamsPanel(OrderFlowTicksV20 indicator, IndicatorParams defaultParams)
         {
@@ -7043,10 +7096,43 @@ namespace cAlgo
                     Label = "Largest?",
                     InputType = ParamInputType.Checkbox,
                     GetDefault = p => p.GeneralParams.ColoringOnlyLarguest,
-                    OnChanged = _ => UpdateCheckbox("LargestDividedKey", val => Outside.GeneralParams.ColoringOnlyLarguest = val),
+                    OnChanged = _ => UpdateCheckbox("LargestDividedKey", val => Outside.GeneralParams.ColoringOnlyLarguest = val, true),
                     IsVisible = () => isNot_NormalMode() && Outside.GeneralParams.VolumeView_Input == VolumeView_Data.Divided && IsNot_BubblesChart() && isPanel_ODF()
                 },
-
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 2,
+                    Key = "IntensityKey",
+                    Label = "Intensity?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.GeneralParams.ColoringIntensity,
+                    OnChanged = _ => UpdateCheckbox("IntensityKey", val => Outside.GeneralParams.ColoringIntensity = val, true),
+                    IsVisible = () => isNot_NormalMode() && IsNot_BubblesChart() && isPanel_ODF()
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 2,
+                    Key = "IntensityModeKey",
+                    Label = "Intensity Mode",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.GeneralParams.IntensityMode_Input.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(IntensityMode_Data)),
+                    OnChanged = _ => UpdateIntensityMode(),
+                    IsVisible = () => isNot_NormalMode() && Outside.GeneralParams.ColoringIntensity && IsNot_BubblesChart() && isPanel_ODF()
+                },
+                new()
+                {
+                    Region = "Coloring",
+                    RegionOrder = 2,
+                    Key = "IntensityNDaysKey",
+                    Label = "Intensity(Days)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.GeneralParams.IntensityNDays_Input.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateIntensityNDays(),
+                    IsVisible = () => isNot_NormalMode() && Outside.GeneralParams.ColoringIntensity && Outside.GeneralParams.IntensityMode_Input == IntensityMode_Data.Global_N_Days && IsNot_BubblesChart() && isPanel_ODF()
+                },
                 new()
                 {
                     Region = "Volume Profile",
@@ -8672,11 +8758,15 @@ namespace cAlgo
             }
         }
 
-        private void UpdateCheckbox(string key, Action<bool> applyAction)
+        private void UpdateCheckbox(string key, Action<bool> applyAction, bool updateImmediately = false)
         {
             bool value = checkBoxMap[key].IsChecked ?? false;
             applyAction(value);
-            CheckboxHandler(key, value);
+            if (updateImmediately) {
+                RecalculateOutsideWithMsg();
+            } else {
+                CheckboxHandler(key, value);
+            }
         }
         private void CheckboxHandler(string key, bool value)
         {
@@ -8777,6 +8867,24 @@ namespace cAlgo
             {
                 Outside.GeneralParams.VolumeView_Input = viewType;
                 RecalculateOutsideWithMsg(false);
+            }
+        }
+        private void UpdateIntensityMode()
+        {
+            var selected = comboBoxMap["IntensityModeKey"].SelectedItem;
+            if (Enum.TryParse(selected, out IntensityMode_Data modeType) && modeType != Outside.GeneralParams.IntensityMode_Input)
+            {
+                Outside.GeneralParams.IntensityMode_Input = modeType;
+                RecalculateOutsideWithMsg();
+            }
+        }
+        private void UpdateIntensityNDays()
+        {
+            int value = int.TryParse(textInputMap["IntensityNDaysKey"].Text, out var n) ? n : 1;
+            if (value >= 1 && value != Outside.GeneralParams.IntensityNDays_Input)
+            {
+                _pendingIntensityNDays = value;
+                SetApplyVisibility();
             }
         }
 
@@ -9612,6 +9720,12 @@ namespace cAlgo
             // Avoid multiples calls when loading parameters from LocalStorage
             if (isLoadingParams)
                 return;
+
+            if (_pendingIntensityNDays > 0)
+            {
+                Outside.GeneralParams.IntensityNDays_Input = _pendingIntensityNDays;
+                _pendingIntensityNDays = 0;
+            }
 
             string current = ModeBtn.Text;
             ModeBtn.Text = $"{current}\nCalculating...";
