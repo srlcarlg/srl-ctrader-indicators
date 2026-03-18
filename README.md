@@ -1,22 +1,26 @@
 # srl-ctrader-indicators
 
-Contains the 7 indicators available in [cTrader's Store profile](https://ctrader.com/profile/srlcarlg)¹:
+> **The time has come...** to focus on **high-quality** products. <br>
+If you want to **support these creations** and keep the **open-source side alive...** <br>
+Check out the **links below** and **stay tuned** on the **cTrader Store** for my **next move** as a **[Seller](https://ctraderltd.pxf.io/YVRvzP)**
 
-- [Order Flow Ticks v2.0](https://ctrader.com/products/276) - Aggregated version, my flagship creation.
-- [Free Volume Profile 2.0](https://ctrader.com/products/277)
-- [TPO Profile v2.0](https://ctrader.com/products/274)
-- [Weis & Wyckoff System v2.0](https://ctrader.com/products/275)**
-- [Anchored VWAP Buttons (v2.0)](https://ctrader.com/products/365)
-- [VolumeRenkoRange (rev. 2)](https://ctrader.com/products/366)
-- [Renko Wicks (rev. 1)](https://ctrader.com/products/362)
+Contains the 7 indicators available in [cTrader's Store profile](https://ctraderltd.pxf.io/OYevQN)¹:
+
+- [Order Flow Ticks v2.0](https://ctraderltd.pxf.io/AgP1V1) - Aggregated version, my flagship creation...
+- [Free Volume Profile 2.0](https://ctraderltd.pxf.io/1G9MLd)
+- [TPO Profile v2.0](https://ctraderltd.pxf.io/VOxve3)
+- [Weis & Wyckoff System v2.0](https://ctraderltd.pxf.io/ZV6v11)**
+- [Anchored VWAP Buttons (v2.0)](https://ctraderltd.pxf.io/gROeKB)
+- [VolumeRenkoRange (rev. 2)](https://ctraderltd.pxf.io/oN4g39)
+- [Renko Wicks (rev. 1)](https://ctraderltd.pxf.io/B5nVJL)
 
 **The features of each indicator** are now fully synchronized with [srl-python-indicators](https://github.com/srlcarlg/srl-python-indicators). <br>
 Future updates will be synchronized for both languages as well. _(indicator's logic only)_
 
 **_Original Code Concepts (before revision 1) by **akutsusho** from ["Numbers Renko 数字練行足"](https://br.tradingview.com/script/9BKOIhdl-Numbers-Renko/) in PineScript/TradingView_
 
-¹ Previously available in the [forum's profile(legacy)](https://ctrader.com/users/profile/66439) through _Indicators/cBots_ sections before February 1st 2025, where they dumped the community's codebase to an unknown fate. ² <br>
-² It was a great place for learning _(and spamming!)_ in those days, but within the current state of [cTrader's Algo documentation](https://help.ctrader.com/ctrader-algo/) shows that dropping the outdated code was a good choice.
+¹ Previously available in the [forum's profile(legacy)](https://ctraderltd.pxf.io/n4XZ37) through _Indicators/cBots_ sections before February 1st 2025, where they dumped the community's codebase to an unknown fate. ² <br>
+² It was a great place for learning _(and spamming!)_ in those days, but within the current state of [cTrader's Algo documentation](https://ctraderltd.pxf.io/5k5DEN) shows that dropping the outdated code was a good choice.
 
 ## <a name="disclaimer"></a>Non-Affiliation Disclaimer
 I'm not endorsed by, directly affiliated with, maintained, authorized, or sponsored by any company previously mentioned.
