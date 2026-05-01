@@ -4,6 +4,9 @@
 If you want to **support these creations** and keep the **open-source side alive...** <br>
 Check out the **links below** and **stay tuned** on the **cTrader Store** for my **next move** as a **[Seller](https://ctraderltd.pxf.io/YVRvzP)**
 
+> The first paid product has been launched!. <br>
+**[- The Position Manager](https://ctraderltd.pxf.io/9VJLW4)** <br>
+
 Contains the 7 indicators available in [cTrader's Store profile](https://ctraderltd.pxf.io/OYevQN)¹:
 
 - [Order Flow Ticks v2.0](https://ctraderltd.pxf.io/AgP1V1) - Aggregated version, my flagship creation...
