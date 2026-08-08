@@ -26,8 +26,11 @@ What's new in rev. 1? (after ODF_AGG)
 - Concurrent Live VP Update
 - Show Any or All (Mini-VPs/Daily/Weekly/Monthly) Profiles at once!
 
-Last update => 19/01/2026
 ===========================
+
+What's new in rev. 2.1?
+- "Labels?" for [VA + POC, HVN + LVN] located at "Misc => Labels?"
+- Coloring Customization directly in params-panel instead of the standard input
 
 What's new in rev. 2? (2026)
 - HVN + LVN:
@@ -149,7 +152,7 @@ namespace cAlgo
         public Color FixedColor { get; set; }
 
 
-        [Parameter("Font Size Results:", DefaultValue = 10, MinValue = 1, MaxValue = 80, Group = "==== Results ====")]
+        [Parameter("Font Size Results:", DefaultValue = 9, MinValue = 1, MaxValue = 80, Group = "==== Results ====")]
         public int FontSizeResults { get; set; }
 
         [Parameter("Format Results?", DefaultValue = true, Group = "==== Results ====")]
@@ -164,26 +167,7 @@ namespace cAlgo
         [Parameter("Format Max Digits:", DefaultValue = FormatMaxDigits_Data.One, Group = "==== Results ====")]
         public FormatMaxDigits_Data FormatMaxDigits_Input { get; set; }
 
-
-        [Parameter("Normal Color", DefaultValue = "#B287CEEB", Group = "==== Colors Histogram ====")]
-        public Color HistColor  { get; set; }
-
-        [Parameter("Gradient Color Min. Vol:", DefaultValue = "RoyalBlue", Group = "==== Colors Histogram ====")]
-        public Color ColorGrandient_Min { get; set; }
-
-        [Parameter("Gradient Color Max. Vol:", DefaultValue = "OrangeRed", Group = "==== Colors Histogram ====")]
-        public Color ColorGrandient_Max { get; set; }
-
-        [Parameter("Color Buy:", DefaultValue = "#9900BFFF", Group = "==== Colors Histogram ====")]
-        public Color BuyColor  { get; set; }
-
-        [Parameter("Color Sell:", DefaultValue = "#99DC143C", Group = "==== Colors Histogram ====")]
-        public Color SellColor  { get; set; }
-
-        [Parameter("OHLC Bar Color:", DefaultValue = "Gray", Group = "==== Colors Histogram ====")]
-        public Color ColorOHLC { get; set; }
-
-
+        
         [Parameter("Weekly Color:", DefaultValue = "#B2FFD700", Group = "==== WM Profiles ====")]
         public Color WeeklyColor { get; set; }
 
@@ -203,75 +187,10 @@ namespace cAlgo
         public Color MonthlyGrandient_Max { get; set; }
 
 
-        [Parameter("Color POC:", DefaultValue = "D0FFD700", Group = "==== Point of Control ====")]
-        public Color ColorPOC { get; set; }
-
-        [Parameter("LineStyle POC:", DefaultValue = LineStyle.Lines, Group = "==== Point of Control ====")]
-        public LineStyle LineStylePOC { get; set; }
-
-        [Parameter("Thickness POC:", DefaultValue = 1, MinValue = 1, MaxValue = 5, Group = "==== Point of Control ====")]
-        public int ThicknessPOC { get; set; }
-
-
-        [Parameter("Color VA:", DefaultValue = "#19F0F8FF", Group = "==== Value Area ====")]
-        public Color VAColor  { get; set; }
-
-        [Parameter("Color VAH:", DefaultValue = "PowderBlue", Group = "==== Value Area ====")]
-        public Color ColorVAH { get; set; }
-
-        [Parameter("Color VAL:", DefaultValue = "PowderBlue", Group = "==== Value Area ====")]
-        public Color ColorVAL { get; set; }
-
-        [Parameter("Opacity VA", DefaultValue = 10, MinValue = 5, MaxValue = 100, Group = "==== Value Area ====")]
-        public int OpacityVA { get; set; }
-
-        [Parameter("LineStyle VA:", DefaultValue = LineStyle.LinesDots, Group = "==== Value Area ====")]
-        public LineStyle LineStyleVA { get; set; }
-
-        [Parameter("Thickness VA:", DefaultValue = 1, MinValue = 1, MaxValue = 5, Group = "==== Value Area ====")]
-        public int ThicknessVA { get; set; }
-
-        
-        [Parameter("Color HVN:", DefaultValue = "#DFFFD700" , Group = "==== HVN/LVN ====")]
-        public Color ColorHVN { get; set; }
-        
-        [Parameter("LineStyle HVN:", DefaultValue = LineStyle.LinesDots, Group = "==== HVN/LVN ====")]
-        public LineStyle LineStyleHVN { get; set; }
-
-        [Parameter("Thickness HVN:", DefaultValue = 1, MinValue = 1, MaxValue = 5, Group = "==== HVN/LVN ====")]
-        public int ThicknessHVN { get; set; }
-
-        [Parameter("Color LVN:", DefaultValue = "#DFDC143C", Group = "==== HVN/LVN ====")]
-        public Color ColorLVN { get; set; }
-
-        [Parameter("LineStyle LVN:", DefaultValue = LineStyle.LinesDots, Group = "==== HVN/LVN ====")]
-        public LineStyle LineStyleLVN { get; set; }
-
-        [Parameter("Thickness LVN:", DefaultValue = 1, MinValue = 1, MaxValue = 5, Group = "==== HVN/LVN ====")]
-        public int ThicknessLVN { get; set; }
-
-
-        [Parameter("Color Band:", DefaultValue = "#19F0F8FF",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
-        public Color ColorBand { get; set; }
-        
-        [Parameter("Color Lower:", DefaultValue = "#6CB0E0E6",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
-        public Color ColorBand_Lower { get; set; }
-
-        [Parameter("Color Upper:", DefaultValue = "#6CB0E0E6",  Group = "==== Symmetric Bands (HVN/LVN) ====")]
-        public Color ColorBand_Upper { get; set; }
-
-        [Parameter("LineStyle Bands:", DefaultValue = LineStyle.DotsVeryRare, Group = "==== Symmetric Bands (HVN/LVN) ====")]
-        public LineStyle LineStyleBands { get; set; }
-
-        [Parameter("Thickness Bands:", DefaultValue = 1, MinValue = 1, MaxValue = 5, Group = "==== Symmetric Bands (HVN/LVN) ====")]
-        public int ThicknessBands { get; set; }
-        
-
         [Parameter("Developed for cTrader/C#", DefaultValue = "by srlcarlg", Group = "==== Credits ====")]
         public string Credits { get; set; }
 
         // Moved from cTrader Input to Params Panel
-
         // ==== General ====
         public enum VolumeMode_Data
         {
@@ -434,6 +353,7 @@ namespace cAlgo
         }
 
         public class ResultParams_Info {
+            public bool ShowLabels = true;
             public bool ShowResults = true;
 
             public OperatorBuySell_Data OperatorBuySell_Input = OperatorBuySell_Data.Subtraction;
@@ -452,6 +372,57 @@ namespace cAlgo
             Monthly
         }
         public SegmentsInterval_Data SegmentsInterval_Input = SegmentsInterval_Data.Monthly;
+
+        public class ColoringParams_Info 
+        {
+            // Histograms
+            public Color HistColor = Color.FromHex("#B287CEEB");
+            public Color ColorGrandient_Min = Color.FromName("RoyalBlue");
+            public Color ColorGrandient_Max = Color.FromName("OrangeRed");
+            public Color BuyColor = Color.FromHex("#9900BFFF");
+            public Color SellColor = Color.FromHex("#99DC143C");
+
+            // OHLC Bar
+            public Color ColorOHLC = Color.FromName("Gray");
+
+            // WM Profiles - NOT IN USE
+            public Color WeeklyColor = Color.FromHex("#B2FFD700");
+            public Color MonthlyColor = Color.FromHex("#920071C1");
+            public Color WeeklyGrandient_Min = Color.FromHex("#FFFF9900");
+            public Color WeeklyGrandient_Max = Color.FromHex("#FFE42226");
+            public Color MonthlyGrandient_Min = Color.FromHex("#FF090979");
+            public Color MonthlyGrandient_Max = Color.FromHex("#FF33C1F3");
+
+            // POC
+            public Color ColorPOC = Color.FromHex("D0FFD700");
+            public LineStyle LineStylePOC = LineStyle.Lines;
+            public int ThicknessPOC = 1;
+
+            // VA
+            public Color VAColor = Color.FromHex("#19F0F8FF");
+            public Color ColorVAH = Color.FromName("PowderBlue");
+            public Color ColorVAL = Color.FromName("PowderBlue");
+            public int OpacityVA = 10;
+            public LineStyle LineStyleVA = LineStyle.LinesDots;
+            public int ThicknessVA = 1;
+
+            // Volume Nodes
+            public Color ColorHVN = Color.FromHex("#DFFFD700");
+            public LineStyle LineStyleHVN { get; set; }
+            public int ThicknessHVN = 1;
+
+            public Color ColorLVN = Color.FromHex("#DFDC143C");
+            public LineStyle LineStyleLVN = LineStyle.LinesDots;
+            public int ThicknessLVN = 1;
+
+            // Symmetric Bands (HVN/LVN)
+            public Color ColorBand = Color.FromHex("#19F0F8FF");
+            public Color ColorBand_Lower = Color.FromHex("#6CB0E0E6");
+            public Color ColorBand_Upper = Color.FromHex("#6CB0E0E6");
+            public LineStyle LineStyleBands = LineStyle.DotsVeryRare;
+            public int ThicknessBands = 1;
+        }
+        public ColoringParams_Info ColoringParams = new();
 
         // ======================================================
 
@@ -642,6 +613,7 @@ namespace cAlgo
             public VAParams_Info VAParams { get; set; }
             public NodesParams_Info NodesParams { get; set; }
             public ResultParams_Info ResultParams { get; set; }
+            public ColoringParams_Info ColoringParams { get; set; }
         }
 
         private void AddHiddenButton(Panel panel, Color btnColor)
@@ -798,6 +770,13 @@ namespace cAlgo
                     break;
             }
 
+            ColoringParams.WeeklyColor = WeeklyColor;
+            ColoringParams.MonthlyColor = MonthlyColor;
+            ColoringParams.WeeklyGrandient_Min = WeeklyGrandient_Min;
+            ColoringParams.WeeklyGrandient_Max = WeeklyGrandient_Max;
+            ColoringParams.MonthlyGrandient_Min = MonthlyGrandient_Min;
+            ColoringParams.MonthlyGrandient_Max = MonthlyGrandient_Max;
+            
             IndicatorParams DefaultParams = new()
             {
                 GeneralParams = GeneralParams,
@@ -806,6 +785,8 @@ namespace cAlgo
                 VAParams = VAParams,
                 NodesParams = NodesParams,
                 ResultParams = ResultParams,
+
+                ColoringParams = ColoringParams
             };
 
             ParamsPanel ParamPanel = new(this, DefaultParams);
@@ -1217,25 +1198,25 @@ namespace cAlgo
 
                     Color histogramColor = extraProfiles switch
                     {
-                        ExtraProfiles.Monthly => MonthlyColor,
-                        ExtraProfiles.Weekly => WeeklyColor,
-                        _ => HistColor,
+                        ExtraProfiles.Monthly => ColoringParams.MonthlyColor,
+                        ExtraProfiles.Weekly => ColoringParams.WeeklyColor,
+                        _ => ColoringParams.HistColor,
                     };
 
                     if (ProfileParams.EnableGradient)
                     {
                         Color minColor = extraProfiles switch
                         {
-                            ExtraProfiles.Monthly => MonthlyGrandient_Min,
-                            ExtraProfiles.Weekly => WeeklyGrandient_Min,
-                            _ => ColorGrandient_Min,
+                            ExtraProfiles.Monthly => ColoringParams.MonthlyGrandient_Min,
+                            ExtraProfiles.Weekly => ColoringParams.WeeklyGrandient_Min,
+                            _ => ColoringParams.ColorGrandient_Min,
                         };
 
                         Color maxColor = extraProfiles switch
                         {
-                            ExtraProfiles.Monthly => MonthlyGrandient_Max,
-                            ExtraProfiles.Weekly => WeeklyGrandient_Max,
-                            _ => ColorGrandient_Max,
+                            ExtraProfiles.Monthly => ColoringParams.MonthlyGrandient_Max,
+                            ExtraProfiles.Weekly => ColoringParams.WeeklyGrandient_Max,
+                            _ => ColoringParams.ColorGrandient_Max,
                         };
 
                         double Intensity = (currentVolume * 100 / maxVolume) / 100;
@@ -1352,8 +1333,8 @@ namespace cAlgo
                     DateTime x2_Buy = x1_Start.AddMilliseconds(dynLengthBuy);
 
                     ChartRectangle buyHist, sellHist;
-                    sellHist = Chart.DrawRectangle($"{prefix}_{i}_VP_{extraProfiles}_Sell", x1_Start, lowerSegmentY1, x2_Sell, upperSegmentY2, SellColor);
-                    buyHist = Chart.DrawRectangle($"{prefix}_{i}_VP_{extraProfiles}_Buy", x1_Start, lowerSegmentY1, x2_Buy, upperSegmentY2, BuyColor);
+                    sellHist = Chart.DrawRectangle($"{prefix}_{i}_VP_{extraProfiles}_Sell", x1_Start, lowerSegmentY1, x2_Sell, upperSegmentY2, ColoringParams.SellColor);
+                    buyHist = Chart.DrawRectangle($"{prefix}_{i}_VP_{extraProfiles}_Buy", x1_Start, lowerSegmentY1, x2_Buy, upperSegmentY2, ColoringParams.BuyColor);
                     if (ProfileParams.FillHist_VP)
                     {
                         buyHist.IsFilled = true;
@@ -1389,7 +1370,7 @@ namespace cAlgo
                         DateTime x1 = dateOffset_Subt;
                         DateTime x2 = x1.AddMilliseconds(dynLength);
 
-                        Color colorHist = dynLength > 0 ? BuyColor : SellColor;
+                        Color colorHist = dynLength > 0 ? ColoringParams.BuyColor : ColoringParams.SellColor;
                         ChartRectangle subtHist = Chart.DrawRectangle($"{iStart}_{i}_VP_Subt", x1, lowerSegmentY1, x2, upperSegmentY2, colorHist);
 
                         dynLength = -Math.Abs(dynLength);
@@ -1439,7 +1420,7 @@ namespace cAlgo
                     double proportion_Delta = Math.Abs(currentDelta) * proportion_VP;
                     double dynLength_Delta = proportion_Delta / deltaMax;
 
-                    Color colorHist = currentDelta >= 0 ? BuyColor : SellColor;
+                    Color colorHist = currentDelta >= 0 ? ColoringParams.BuyColor : ColoringParams.SellColor;
                     DateTime x2 = x1_Start.AddMilliseconds(dynLength_Delta);
 
                     ChartRectangle deltaHist = Chart.DrawRectangle($"{prefix}_{i}_VP_{extraProfiles}_Delta", x1_Start, lowerSegmentY1, x2, upperSegmentY2, colorHist);
@@ -1473,7 +1454,7 @@ namespace cAlgo
                             proportion_Delta = currentDelta * maxLength_Intraday;
                         dynLength_Delta = proportion_Delta / deltaMax;
 
-                        colorHist = dynLength_Delta > 0 ? BuyColor : SellColor;
+                        colorHist = dynLength_Delta > 0 ? ColoringParams.BuyColor : ColoringParams.SellColor;
                         dynLength_Delta = Math.Abs(dynLength_Delta); // Profile view only
 
                         // Set 'X'
@@ -1562,7 +1543,7 @@ namespace cAlgo
                         double sum = Math.Round(vpNormal.Values.Sum());
                         string strValue = FormatResults ? FormatBigNumber(sum) : $"{sum}";
 
-                        ChartText Center = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Normal_Result", $"\n{strValue}", x1_Start, y1_lowest, ProfileParams.EnableGradient ? ColorGrandient_Min : HistColor);
+                        ChartText Center = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Normal_Result", $"\n{strValue}", x1_Start, y1_lowest, ProfileParams.EnableGradient ? ColoringParams.ColorGrandient_Min : ColoringParams.HistColor);
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
                         Center.FontSize = FontSizeResults - 1;
 
@@ -1587,8 +1568,8 @@ namespace cAlgo
                         percentSell = Math.Round(percentSell);
 
                         ChartText Left, Right;
-                        Left = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Sell_Sum", $"{percentSell}%", x1_Start, y1_lowest, SellColor);
-                        Right = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Buy_Sum", $"{percentBuy}%", x1_Start, y1_lowest, BuyColor);
+                        Left = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Sell_Sum", $"{percentSell}%", x1_Start, y1_lowest, ColoringParams.SellColor);
+                        Right = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Buy_Sum", $"{percentBuy}%", x1_Start, y1_lowest, ColoringParams.BuyColor);
                         Left.HorizontalAlignment = HorizontalAlignment.Left;
                         Right.HorizontalAlignment = HorizontalAlignment.Right;
                         Left.FontSize = FontSizeResults;
@@ -1608,7 +1589,7 @@ namespace cAlgo
                         string strFormated = ResultParams.OperatorBuySell_Input == OperatorBuySell_Data.Sum ? sumFmtd :
                                              ResultParams.OperatorBuySell_Input == OperatorBuySell_Data.Subtraction ? subtractFmtd : $"{divide}";
 
-                        Color centerColor = Math.Round(percentBuy) > Math.Round(percentSell) ? BuyColor : SellColor;
+                        Color centerColor = Math.Round(percentBuy) > Math.Round(percentSell) ? ColoringParams.BuyColor : ColoringParams.SellColor;
 
                         Center = Chart.DrawText($"{prefix}_VP_{extraProfiles}_BuySell_Result", $"\n{strFormated}", x1_Start, y1_lowest, centerColor);
                         Center.HorizontalAlignment = HorizontalAlignment.Center;
@@ -1643,8 +1624,8 @@ namespace cAlgo
                         percentSell = Math.Round(percentSell);
 
                         ChartText Left, Right;
-                        Right = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_BuySum", $"{percentBuy}%", x1_Start, y1_lowest, BuyColor);
-                        Left = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_SellSum", $"{percentSell}%", x1_Start, y1_lowest, SellColor);
+                        Right = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_BuySum", $"{percentBuy}%", x1_Start, y1_lowest, ColoringParams.BuyColor);
+                        Left = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_SellSum", $"{percentSell}%", x1_Start, y1_lowest, ColoringParams.SellColor);
                         Left.HorizontalAlignment = HorizontalAlignment.Left; Left.FontSize = FontSizeResults;
                         Right.HorizontalAlignment = HorizontalAlignment.Right; Right.FontSize = FontSizeResults;
                         
@@ -1652,7 +1633,7 @@ namespace cAlgo
                         string totalDeltaFmtd = totalDelta > 0 ? FormatBigNumber(totalDelta) : $"-{FormatBigNumber(Math.Abs(totalDelta))}";
                         string totalDeltaString = FormatResults ? totalDeltaFmtd : $"{totalDelta}";
 
-                        Color centerColor = totalDelta > 0 ? BuyColor : SellColor;
+                        Color centerColor = totalDelta > 0 ? ColoringParams.BuyColor : ColoringParams.SellColor;
                         Center = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_Result", $"\n{totalDeltaString}", x1_Start, y1_lowest, centerColor);
                         Center.HorizontalAlignment = HorizontalAlignment.Center; Center.FontSize = FontSizeResults - 1;
 
@@ -1714,17 +1695,17 @@ namespace cAlgo
 
             DateTime OHLC_Date = TF_Bars.OpenTimes[TF_idx];
 
-            ChartText iconOpenSession =  Chart.DrawText($"{OHLC_Date}_OHLC_Start", "▂", OHLC_Date, TF_Bars.OpenPrices[TF_idx], ColorOHLC);
+            ChartText iconOpenSession =  Chart.DrawText($"{OHLC_Date}_OHLC_Start", "▂", OHLC_Date, TF_Bars.OpenPrices[TF_idx], ColoringParams.ColorOHLC);
             iconOpenSession.VerticalAlignment = VerticalAlignment.Center;
             iconOpenSession.HorizontalAlignment = HorizontalAlignment.Left;
             iconOpenSession.FontSize = 14;
 
-            ChartText iconCloseSession =  Chart.DrawText($"{OHLC_Date}_OHLC_End", "▂", OHLC_Date, TF_Bars.ClosePrices[TF_idx], ColorOHLC);
+            ChartText iconCloseSession =  Chart.DrawText($"{OHLC_Date}_OHLC_End", "▂", OHLC_Date, TF_Bars.ClosePrices[TF_idx], ColoringParams.ColorOHLC);
             iconCloseSession.VerticalAlignment = VerticalAlignment.Center;
             iconCloseSession.HorizontalAlignment = HorizontalAlignment.Right;
             iconCloseSession.FontSize = 14;
 
-            ChartTrendLine Session = Chart.DrawTrendLine($"{OHLC_Date}_OHLC_Body", OHLC_Date, lowest, OHLC_Date, highest, ColorOHLC);
+            ChartTrendLine Session = Chart.DrawTrendLine($"{OHLC_Date}_OHLC_Body", OHLC_Date, lowest, OHLC_Date, highest, ColoringParams.ColorOHLC);
             Session.Thickness = 3;
 
             void Draw_MinMaxDelta(ExtraProfiles extraProfiles, string fixedKey, double lowest, DateTime x1_Start, DateTime xBar, bool isIntraday, string prefix)
@@ -1752,12 +1733,12 @@ namespace cAlgo
                 string maxDeltaString = FormatResults ? maxDeltaFmtd : $"{maxDelta}";
                 string subDeltaString = FormatResults ? subDeltaFmtd : $"{subDelta}";
 
-                Color subColor = subDelta > 0 ? BuyColor : SellColor;
+                Color subColor = subDelta > 0 ? ColoringParams.BuyColor : ColoringParams.SellColor;
 
                 if (!ResultParams.ShowOnlySubtDelta)
                 {
-                    MinText = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_MinResult", $"\n\nMin: {minDeltaString}", x1_Start, lowest, SellColor);
-                    MaxText = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_MaxResult", $"\n\n\nMax: {maxDeltaString}", x1_Start, lowest, BuyColor);
+                    MinText = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_MinResult", $"\n\nMin: {minDeltaString}", x1_Start, lowest, ColoringParams.SellColor);
+                    MaxText = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_MaxResult", $"\n\n\nMax: {maxDeltaString}", x1_Start, lowest, ColoringParams.BuyColor);
                     SubText = Chart.DrawText($"{prefix}_VP_{extraProfiles}_Delta_SubResult", $"\n\n\n\nSub: {subDeltaString}", x1_Start, lowest, subColor);
                     MinText.HorizontalAlignment = HorizontalAlignment.Center;
                     MaxText.HorizontalAlignment = HorizontalAlignment.Center;
@@ -3126,9 +3107,12 @@ namespace cAlgo
                 Chart.RemoveObject($"{fixedKey}_HVN_{i}_Fixed");
                 Chart.RemoveObject($"{fixedKey}_HVN_High_{i}_Fixed");
                 Chart.RemoveObject($"{fixedKey}_HVN_Band_{i}_Fixed");
+
+                Chart.RemoveObject($"{fixedKey}_HVN_Text_{i}_Fixed");
+                Chart.RemoveObject($"{fixedKey}_LVN_Text_{i}_Fixed");
             }
 
-            string[] objsNames = new string[14] {
+            string[] objsNames = new string[17] {
                 $"{fixedKey}_VP_Fixed_Normal_Result",
 
                 $"{fixedKey}_VP_Fixed_Sell_Sum",
@@ -3147,6 +3131,10 @@ namespace cAlgo
                 $"{fixedKey}_VAH_Fixed",
                 $"{fixedKey}_VAL_Fixed",
                 $"{fixedKey}_RectVA_Fixed",
+                
+                $"{fixedKey}_textPOC_Fixed",
+                $"{fixedKey}_textVAH_Fixed",
+                $"{fixedKey}_textVAL_Fixed",
             };
 
             foreach (string name in objsNames)
@@ -3283,16 +3271,16 @@ namespace cAlgo
                 if (!VAL_VAH_POC.Any())
                     return;
 
-                ChartTrendLine poc = Chart.DrawTrendLine($"{prefix}_POC_{extraVP}", x1_Start, VAL_VAH_POC[2] - rowHeight, xBar, VAL_VAH_POC[2] - rowHeight, ColorPOC);
-                ChartTrendLine vah = Chart.DrawTrendLine($"{prefix}_VAH_{extraVP}", x1_Start, VAL_VAH_POC[1] + rowHeight, xBar, VAL_VAH_POC[1] + rowHeight, ColorVAH);
-                ChartTrendLine val = Chart.DrawTrendLine($"{prefix}_VAL_{extraVP}", x1_Start, VAL_VAH_POC[0], xBar, VAL_VAH_POC[0], ColorVAL);
+                ChartTrendLine poc = Chart.DrawTrendLine($"{prefix}_POC_{extraVP}", x1_Start, VAL_VAH_POC[2] - rowHeight, xBar, VAL_VAH_POC[2] - rowHeight, ColoringParams.ColorPOC);
+                ChartTrendLine vah = Chart.DrawTrendLine($"{prefix}_VAH_{extraVP}", x1_Start, VAL_VAH_POC[1] + rowHeight, xBar, VAL_VAH_POC[1] + rowHeight, ColoringParams.ColorVAH);
+                ChartTrendLine val = Chart.DrawTrendLine($"{prefix}_VAL_{extraVP}", x1_Start, VAL_VAH_POC[0], xBar, VAL_VAH_POC[0], ColoringParams.ColorVAL);
 
-                poc.LineStyle = LineStylePOC; poc.Thickness = ThicknessPOC; poc.Comment = "POC";
-                vah.LineStyle = LineStyleVA; vah.Thickness = ThicknessVA; vah.Comment = "VAH";
-                val.LineStyle = LineStyleVA; val.Thickness = ThicknessVA; val.Comment = "VAL";
+                poc.LineStyle = ColoringParams.LineStylePOC; poc.Thickness = ColoringParams.ThicknessPOC; poc.Comment = "POC";
+                vah.LineStyle = ColoringParams.LineStyleVA; vah.Thickness = ColoringParams.ThicknessVA; vah.Comment = "VAH";
+                val.LineStyle = ColoringParams.LineStyleVA; val.Thickness = ColoringParams.ThicknessVA; val.Comment = "VAL";
 
                 ChartRectangle rectVA;
-                rectVA = Chart.DrawRectangle($"{prefix}_RectVA_{extraVP}", x1_Start, VAL_VAH_POC[0], xBar, VAL_VAH_POC[1] + rowHeight, VAColor);
+                rectVA = Chart.DrawRectangle($"{prefix}_RectVA_{extraVP}", x1_Start, VAL_VAH_POC[0], xBar, VAL_VAH_POC[1] + rowHeight, ColoringParams.VAColor);
                 rectVA.IsFilled = true;
 
                 DateTime extDate = extraVP == ExtraProfiles.Fixed ? Bars[Bars.OpenTimes.GetIndexByTime(Server.Time)].OpenTime : extendDate();
@@ -3310,6 +3298,23 @@ namespace cAlgo
                     val.Time1 = intraX1;
                     rectVA.Time1 = intraX1;
                 }
+
+                if (ResultParams.ShowLabels) {
+                    ChartText textPOC = Chart.DrawText($"{prefix}_textPOC_{extraVP}", "POC", poc.Time2, poc.Y2, ColoringParams.ColorPOC);
+                    textPOC.HorizontalAlignment = HorizontalAlignment.Left;
+                    textPOC.VerticalAlignment = VerticalAlignment.Bottom;
+                    textPOC.FontSize = FontSizeResults - 1;
+                    
+                    ChartText textVAH = Chart.DrawText($"{prefix}_textVAH_{extraVP}", "VAH", vah.Time2, vah.Y2, ColoringParams.ColorVAH);
+                    textVAH.HorizontalAlignment = HorizontalAlignment.Left;
+                    textVAH.VerticalAlignment = VerticalAlignment.Bottom;
+                    textVAH.FontSize = FontSizeResults - 1;
+                    
+                    ChartText textVAL = Chart.DrawText($"{prefix}_textVAL_{extraVP}", "VAL", val.Time2, val.Y2, ColoringParams.ColorVAL);
+                    textVAL.HorizontalAlignment = HorizontalAlignment.Left;
+                    textVAL.VerticalAlignment = VerticalAlignment.Top;
+                    textVAL.FontSize = FontSizeResults - 1;
+                }
             }
             else if (!VAParams.ShowVA && VAParams.KeepPOC)
             {
@@ -3324,14 +3329,20 @@ namespace cAlgo
                 {
                     if (Math.Abs(kv.Value) == largestVOL) { priceLVOL = kv.Key; break; }
                 }
-                ChartTrendLine poc = Chart.DrawTrendLine($"{prefix}_POC_{extraVP}", x1_Start, priceLVOL - rowHeight, xBar, priceLVOL - rowHeight, ColorPOC);
-                poc.LineStyle = LineStylePOC; poc.Thickness = ThicknessPOC; poc.Comment = "POC";
+                ChartTrendLine poc = Chart.DrawTrendLine($"{prefix}_POC_{extraVP}", x1_Start, priceLVOL - rowHeight, xBar, priceLVOL - rowHeight, ColoringParams.ColorPOC);
+                poc.LineStyle = ColoringParams.LineStylePOC; poc.Thickness = ColoringParams.ThicknessPOC; poc.Comment = "POC";
 
                 if (VAParams.ExtendPOC)
                     poc.Time2 = extraVP == ExtraProfiles.Fixed ? Bars[Bars.OpenTimes.GetIndexByTime(Server.Time)].OpenTime : extendDate();
 
                 if (isIntraday && extraVP != ExtraProfiles.MiniVP)
                     poc.Time1 = intraX1;
+                
+                if (ResultParams.ShowLabels) {
+                    ChartText textPOC = Chart.DrawText($"{prefix}_textPOC_{extraVP}", $"POC", poc.Time2, poc.Y2, ColoringParams.ColorPOC);
+                    textPOC.HorizontalAlignment = HorizontalAlignment.Right;
+                    textPOC.FontSize = FontSizeResults - 1;
+                }
             }
 
             DateTime extendDate() {
@@ -3624,7 +3635,7 @@ namespace cAlgo
                 
                 if (isBands)
                 {
-                    Color _nodeColor = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColorHVN : ColorLVN;
+                    Color _nodeColor = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColoringParams.ColorHVN : ColoringParams.ColorLVN;
 
                     var hvnsGroups = NodesAnalizer.GroupConsecutiveIndexes(hvnsRaw);
                     var lvnsGroups = NodesAnalizer.GroupConsecutiveIndexes(lvnsRaw);
@@ -3641,10 +3652,10 @@ namespace cAlgo
                         double centerPrice = profilePrices[idxCenter];
                         double highPrice = profilePrices[idxHigh];
                         
-                        ChartTrendLine low = Chart.DrawTrendLine($"{prefix}_{nodeName}_Low_{idxLow}_{extraTPO}", x1_Start, lowPrice, xBar, lowPrice, ColorBand_Lower);
+                        ChartTrendLine low = Chart.DrawTrendLine($"{prefix}_{nodeName}_Low_{idxLow}_{extraTPO}", x1_Start, lowPrice, xBar, lowPrice, ColoringParams.ColorBand_Lower);
                         ChartTrendLine center = Chart.DrawTrendLine($"{prefix}_{nodeName}_{idxCenter}_{extraTPO}", x1_Start, centerPrice, xBar, centerPrice, _nodeColor);
-                        ChartTrendLine high = Chart.DrawTrendLine($"{prefix}_{nodeName}_High_{idxHigh}_{extraTPO}", x1_Start, highPrice, xBar, highPrice, ColorBand_Upper);   
-                        ChartRectangle rectBand = Chart.DrawRectangle($"{prefix}_{nodeName}_Band_{idxCenter}_{extraTPO}", x1_Start,  lowPrice, xBar, highPrice, ColorBand);
+                        ChartTrendLine high = Chart.DrawTrendLine($"{prefix}_{nodeName}_High_{idxHigh}_{extraTPO}", x1_Start, highPrice, xBar, highPrice, ColoringParams.ColorBand_Upper);   
+                        ChartRectangle rectBand = Chart.DrawRectangle($"{prefix}_{nodeName}_Band_{idxCenter}_{extraTPO}", x1_Start,  lowPrice, xBar, highPrice, ColoringParams.ColorBand);
                         
                         FinalizeBands(low, center, high, rectBand);
                     }
@@ -3727,7 +3738,7 @@ namespace cAlgo
             ClearOldNodes();
 
             string node = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? "HVN" : "LVN";
-            Color nodeColor = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColorHVN : ColorLVN;
+            Color nodeColor = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColoringParams.ColorHVN : ColoringParams.ColorLVN;
             
             var nodeLvls = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnLevels : lvnLevels;
             var nodeIdxes = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? hvnIndexes : lvnIndexes;
@@ -3737,25 +3748,31 @@ namespace cAlgo
                 var level = nodeLvls[i];
                 var index = nodeIdxes[i];
                 
-                ChartTrendLine low = Chart.DrawTrendLine($"{prefix}_{node}_Low_{index.Low}_{extraTPO}", x1_Start, level.Low, xBar, level.Low, ColorBand_Lower);   
+                ChartTrendLine low = Chart.DrawTrendLine($"{prefix}_{node}_Low_{index.Low}_{extraTPO}", x1_Start, level.Low, xBar, level.Low, ColoringParams.ColorBand_Lower);   
                 ChartTrendLine center = Chart.DrawTrendLine($"{prefix}_{node}_{index.Center}_{extraTPO}", x1_Start, level.Center, xBar, level.Center, nodeColor);   
-                ChartTrendLine high = Chart.DrawTrendLine($"{prefix}_{node}_High_{index.High}_{extraTPO}", x1_Start, level.High, xBar, level.High, ColorBand_Upper);   
-                ChartRectangle rectBand = Chart.DrawRectangle($"{prefix}_{node}_Band_{index.Center}_{extraTPO}", x1_Start, level.Low, xBar, level.High, ColorBand);
+                ChartTrendLine high = Chart.DrawTrendLine($"{prefix}_{node}_High_{index.High}_{extraTPO}", x1_Start, level.High, xBar, level.High, ColoringParams.ColorBand_Upper);   
+                ChartRectangle rectBand = Chart.DrawRectangle($"{prefix}_{node}_Band_{index.Center}_{extraTPO}", x1_Start, level.Low, xBar, level.High, ColoringParams.ColorBand);
                 
+                if (ResultParams.ShowLabels) {
+                    ChartText textNode = Chart.DrawText($"{prefix}_{node}_Text_{index.Center}_{extraTPO}", $"{node}", center.Time2, center.Y2, nodeColor);
+                    textNode.HorizontalAlignment = HorizontalAlignment.Left;
+                    textNode.VerticalAlignment = VerticalAlignment.Bottom;
+                    textNode.FontSize = FontSizeResults - 1;
+                }
                 FinalizeBands(low, center, high, rectBand);
             }
             
             // Local
             void FinalizeBands(ChartTrendLine low, ChartTrendLine center, ChartTrendLine high, ChartRectangle rectBand) 
             {
-                LineStyle nodeStyle = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? LineStyleHVN : LineStyleLVN;
-                int  nodeThick = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ThicknessHVN : ThicknessLVN;
+                LineStyle nodeStyle = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColoringParams.LineStyleHVN : ColoringParams.LineStyleLVN;
+                int  nodeThick = NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ? ColoringParams.ThicknessHVN : ColoringParams.ThicknessLVN;
             
                 rectBand.IsFilled = true; 
                 
-                low.LineStyle = LineStyleBands; high.Thickness = ThicknessBands;
+                low.LineStyle = ColoringParams.LineStyleBands; high.Thickness = ColoringParams.ThicknessBands;
                 center.LineStyle = nodeStyle; center.Thickness = nodeThick;
-                high.LineStyle = LineStyleBands; high.Thickness = ThicknessBands;
+                high.LineStyle = ColoringParams.LineStyleBands; high.Thickness = ColoringParams.ThicknessBands;
 
                 DateTime extDate = extraTPO == ExtraProfiles.Fixed ? Bars[Bars.OpenTimes.GetIndexByTime(Server.Time)].OpenTime : extendDate();
                 if (NodesParams.extendNodes) 
@@ -3787,9 +3804,9 @@ namespace cAlgo
                 string nodeRaw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? "HVN" : "LVN";
                 List<int> nodeIndexes = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? hvnsRaw : lvnsRaw;
                 
-                LineStyle nodeStyle_Raw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? LineStyleHVN : LineStyleLVN;
-                int  nodeThick_Raw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? ThicknessHVN : ThicknessLVN;
-                Color nodeColor_Raw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? ColorHVN : ColorLVN;
+                LineStyle nodeStyle_Raw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? ColoringParams.LineStyleHVN : ColoringParams.LineStyleLVN;
+                int  nodeThick_Raw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? ColoringParams.ThicknessHVN : ColoringParams.ThicknessLVN;
+                Color nodeColor_Raw = NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw ? ColoringParams.ColorHVN : ColoringParams.ColorLVN;
 
                 foreach (int idx in nodeIndexes) 
                 {
@@ -3806,6 +3823,13 @@ namespace cAlgo
                     
                     if (isIntraday && extraTPO != ExtraProfiles.MiniVP)
                         center.Time1 = intraX1;
+                    
+                    if (ResultParams.ShowLabels) {
+                        ChartText textNode = Chart.DrawText($"{prefix}_{nodeRaw}_Text_{idx}_{extraTPO}", $"{nodeRaw}", center.Time2, center.Y2, nodeColor_Raw);
+                        textNode.HorizontalAlignment = HorizontalAlignment.Left;
+                        textNode.VerticalAlignment = VerticalAlignment.Bottom;
+                        textNode.FontSize = FontSizeResults - 1;
+                    }
                 }
             }
             void ClearOldNodes() {
@@ -3822,6 +3846,9 @@ namespace cAlgo
                     Chart.RemoveObject($"{prefix}_HVN_{i}_{extraTPO}");
                     Chart.RemoveObject($"{prefix}_HVN_High_{i}_{extraTPO}");
                     Chart.RemoveObject($"{prefix}_HVN_Band_{i}_{extraTPO}");
+                    
+                    Chart.RemoveObject($"{prefix}_HVN_Text_{i}_{extraTPO}");
+                    Chart.RemoveObject($"{prefix}_LVN_Text_{i}_{extraTPO}");
                 }
             }
             DateTime extendDate() {
@@ -3927,7 +3954,7 @@ namespace cAlgo
 
                 try { if (ProfileParams.EnableMainVP) VolumeProfile(startIndex, index); } catch { }
                 
-                CreateMiniVPs(index);
+                try { CreateMiniVPs(index); } catch { }
             }
 
             configHasChanged = true;
@@ -4146,7 +4173,7 @@ namespace cAlgo
         Add "VA + POC"
     */
 
-    public enum ParamInputType { Text, Checkbox, ComboBox }
+    public enum ParamInputType { Text, Checkbox, ComboBox, ColorBox }
 
     public class ParamDefinition
     {
@@ -4187,6 +4214,9 @@ namespace cAlgo
         private readonly Dictionary<string, ComboBox> comboBoxMap = new();
         private readonly Dictionary<string, TextBlock> comboBoxTextMap = new();
 
+        private readonly Dictionary<string, TextBlock> colorBoxTextMap = new();
+        private readonly Dictionary<string, ColorPicker> colorBoxMap = new();
+
         private readonly List<ParamDefinition> _paramDefinitions;
         private readonly Dictionary<string, RegionSection> _regionSections = new();
         private readonly Dictionary<string, object> _originalValues = new();
@@ -4226,6 +4256,18 @@ namespace cAlgo
                 (Outside.NodesParams.ShowNode_Input == ShowNode_Data.LVN_With_Bands || Outside.NodesParams.ShowNode_Input == ShowNode_Data.LVN_Raw)
             );
 
+            bool isBuySell() => Outside.GeneralParams.VolumeMode_Input == VolumeMode_Data.Buy_Sell;
+
+            bool isVAorPOC() => Outside.VAParams.ShowVA || Outside.VAParams.KeepPOC;
+            bool isVA() => Outside.VAParams.ShowVA;
+
+            bool isHVN() => Outside.NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands ||
+                         Outside.NodesParams.ShowNode_Input == ShowNode_Data.HVN_Raw;
+            bool isLVN() => Outside.NodesParams.ShowNode_Input == ShowNode_Data.LVN_With_Bands ||
+                         Outside.NodesParams.ShowNode_Input == ShowNode_Data.LVN_Raw;
+            bool isBands() => Outside.NodesParams.ShowNode_Input == ShowNode_Data.HVN_With_Bands || 
+                              Outside.NodesParams.ShowNode_Input == ShowNode_Data.LVN_With_Bands;
+
             return new List<ParamDefinition>
             {
                 new()
@@ -4236,7 +4278,7 @@ namespace cAlgo
                     Label = "Lookback",
                     InputType = ParamInputType.Text,
                     GetDefault = p => p.GeneralParams.Lookback,
-                    OnChanged = _ => UpdateLookback()
+                    OnChanged = _ => UpdateLookback("LookbackKey")
                 },
                 new()
                 {
@@ -4246,7 +4288,7 @@ namespace cAlgo
                     Label = "Row(pips)",
                     InputType = ParamInputType.Text,
                     GetDefault = p => p.RowHeightInPips.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateRowHeight()
+                    OnChanged = _ => UpdateRowHeight("RowHeightKey")
                 },
                 new()
                 {
@@ -4257,7 +4299,7 @@ namespace cAlgo
                     InputType = ParamInputType.ComboBox,
                     GetDefault = p => p.GeneralParams.VPInterval_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(VPInterval_Data)),
-                    OnChanged = _ => UpdateVPInterval(),
+                    OnChanged = _ => UpdateVPInterval("VPIntervalKey"),
                 },
 
                 new()
@@ -4311,7 +4353,7 @@ namespace cAlgo
                     InputType = ParamInputType.ComboBox,
                     GetDefault = p => p.ProfileParams.HistogramSide_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(HistSide_Data)),
-                    OnChanged = _ => UpdateSideVP(),
+                    OnChanged = _ => UpdateSideVP("SideVPKey"),
                 },
                 new()
                 {
@@ -4322,7 +4364,7 @@ namespace cAlgo
                     InputType = ParamInputType.ComboBox,
                     GetDefault = p => p.ProfileParams.HistogramWidth_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(HistWidth_Data)),
-                    OnChanged = _ => UpdateWidthVP(),
+                    OnChanged = _ => UpdateWidthVP("WidthVPKey"),
                 },
                 new()
                 {
@@ -4342,7 +4384,7 @@ namespace cAlgo
                     Label = "Offset(bars)",
                     InputType = ParamInputType.Text,
                     GetDefault = p => p.ProfileParams.OffsetBarsInput.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateIntradayOffset(),
+                    OnChanged = _ => UpdateIntradayOffset("IntraOffsetKey"),
                     IsVisible = () => Outside.ProfileParams.ShowIntradayProfile
                 },
                 new()
@@ -4354,7 +4396,7 @@ namespace cAlgo
                     InputType = ParamInputType.ComboBox,
                     GetDefault = p => p.ProfileParams.OffsetTimeframeInput.ShortName,
                     EnumOptions = () => Enum.GetNames(typeof(Supported_Timeframes)),
-                    OnChanged = _ => UpdateIntradayTimeframe(),
+                    OnChanged = _ => UpdateIntradayTimeframe("IntraTFKey"),
                     IsVisible = () => Outside.ProfileParams.ShowIntradayProfile && Outside.isPriceBased_Chart
                 },
                 new()
@@ -4376,7 +4418,7 @@ namespace cAlgo
                     InputType = ParamInputType.ComboBox,
                     GetDefault = p => p.ProfileParams.SegmentsFixedRange_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(SegmentsFixedRange_Data)),
-                    OnChanged = _ => UpdateRangeSegments(),
+                    OnChanged = _ => UpdateRangeSegments("FixedSegmentsKey"),
                     IsVisible = () => Outside.ProfileParams.EnableFixedRange
                 },
                 new()
@@ -4414,6 +4456,73 @@ namespace cAlgo
 
                 new()
                 {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "ColorOHLCKey",
+                    Label = "OHLC(body)",
+                    InputType = ParamInputType.ColorBox,
+                    GetDefault = p => p.ColoringParams.ColorOHLC,
+                    OnChanged = _ =>  UpdateColorBox("ColorOHLCKey", val => Outside.ColoringParams.ColorOHLC = val),
+                    IsVisible = () => Outside.ProfileParams.ShowOHLC
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "ColorHistKey",
+                    Label = "Histogram",
+                    InputType = ParamInputType.ColorBox,
+                    GetDefault = p => p.ColoringParams.HistColor,
+                    OnChanged = _ =>  UpdateColorBox("ColorHistKey", val => Outside.ColoringParams.HistColor = val),
+                    IsVisible = () => !Outside.ProfileParams.EnableGradient
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "ColorGradMinKey",
+                    Label = "Gradient(min)",
+                    InputType = ParamInputType.ColorBox,
+                    GetDefault = p => p.ColoringParams.ColorGrandient_Min,
+                    OnChanged = _ =>  UpdateColorBox("ColorGradMinKey", val => Outside.ColoringParams.ColorGrandient_Min = val),
+                    IsVisible = () => Outside.ProfileParams.EnableGradient
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "ColorGradMaxKey",
+                    Label = "Gradient(max)",
+                    InputType = ParamInputType.ColorBox,
+                    GetDefault = p => p.ColoringParams.ColorGrandient_Max,
+                    OnChanged = _ =>  UpdateColorBox("ColorGradMaxKey", val => Outside.ColoringParams.ColorGrandient_Max = val),
+                    IsVisible = () => Outside.ProfileParams.EnableGradient
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "ColorBuyKey",
+                    Label = "Buy",
+                    InputType = ParamInputType.ColorBox,
+                    GetDefault = p => p.ColoringParams.BuyColor,
+                    OnChanged = _ =>  UpdateColorBox("ColorBuyKey", val => Outside.ColoringParams.BuyColor = val),
+                    IsVisible = () => isBuySell()
+                },
+                new()
+                {
+                    Region = "Volume Profile",
+                    RegionOrder = 2,
+                    Key = "ColorSellKey",
+                    Label = "Sell",
+                    InputType = ParamInputType.ColorBox,
+                    GetDefault = p => p.ColoringParams.SellColor,
+                    OnChanged = _ =>  UpdateColorBox("ColorSellKey", val => Outside.ColoringParams.SellColor = val),
+                    IsVisible = () => isBuySell()
+                },
+
+                new()
+                {
                     Region = "Mini VPs",
                     RegionOrder = 3,
                     Key = "MiniVPsKey",
@@ -4431,7 +4540,7 @@ namespace cAlgo
                     InputType = ParamInputType.ComboBox,
                     GetDefault = p => p.ProfileParams.MiniVPs_Timeframe.ShortName.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(Supported_Timeframes)),
-                    OnChanged = _ => UpdateMiniVPTimeframe()
+                    OnChanged = _ => UpdateMiniVPTimeframe("MiniTFKey")
                 },
                 new()
                 {
@@ -4462,7 +4571,7 @@ namespace cAlgo
                     Label = "VA(%)",
                     InputType = ParamInputType.Text,
                     GetDefault = p => p.VAParams.PercentVA.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdatePercentVA(),
+                    OnChanged = _ => UpdatePercentVA("VAValueKey"),
                     IsVisible = () => Outside.VAParams.ShowVA
                 },
                 new()
@@ -4493,7 +4602,7 @@ namespace cAlgo
                     Label = "Extend(count))",
                     InputType = ParamInputType.Text,
                     GetDefault = p => p.VAParams.ExtendCount.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateExtendCount(),
+                    OnChanged = _ => UpdateExtendCount("ExtendCountKey"),
                     IsVisible = () => Outside.VAParams.ExtendVA || Outside.VAParams.ExtendPOC
                 },
                 new()
@@ -4506,6 +4615,109 @@ namespace cAlgo
                     GetDefault = p => p.VAParams.ExtendPOC,
                     OnChanged = _ => UpdateCheckbox("ExtendPOCKey", val => Outside.VAParams.ExtendPOC = val)
                 },
+                
+                new()
+                {
+                    Region = "VA + POC",
+                    RegionOrder = 4,
+                    Key = "ColorPOCKey",
+                    Label = "POC",
+                    InputType = ParamInputType.ColorBox,
+                    GetDefault = p => p.ColoringParams.ColorPOC,
+                    OnChanged = _ =>  UpdateColorBox("ColorPOCKey", val => Outside.ColoringParams.ColorPOC = val),
+                    IsVisible = () => isVAorPOC()
+                },
+                new()
+                {
+                    Region = "VA + POC",
+                    RegionOrder = 4,
+                    Key = "LineStylePOCKey",
+                    Label = "LineStyle",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.ColoringParams.LineStylePOC.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(LineStyle)),
+                    OnChanged = _ => UpdateLineStyle_POC("LineStylePOCKey"),
+                    IsVisible = () => isVAorPOC()
+                },
+                new()
+                {
+                    Region = "VA + POC",
+                    RegionOrder = 4,
+                    Key = "ThicknessPOCKey",
+                    Label = "Thickness",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.ThicknessPOC.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateThickness_POC("ThicknessPOCKey"),
+                    IsVisible = () => isVAorPOC()
+                },
+                new()
+                {
+                    Region = "VA + POC",
+                    RegionOrder = 4,
+                    Key = "ColorVAKey",
+                    Label = "VA",
+                    InputType = ParamInputType.ColorBox,
+                    GetDefault = p => p.ColoringParams.VAColor,
+                    OnChanged = _ =>  UpdateColorBox("ColorVAKey", val => Outside.ColoringParams.VAColor = val),
+                    IsVisible = () => isVA()
+                },
+                new()
+                {
+                    Region = "VA + POC",
+                    RegionOrder = 4,
+                    Key = "ColorVAHKey",
+                    Label = "VAH(line)",
+                    InputType = ParamInputType.ColorBox,
+                    GetDefault = p => p.ColoringParams.ColorVAH,
+                    OnChanged = _ =>  UpdateColorBox("ColorVAHKey", val => Outside.ColoringParams.ColorVAH = val),
+                    IsVisible = () => isVA()
+                },
+                new()
+                {
+                    Region = "VA + POC",
+                    RegionOrder = 4,
+                    Key = "ColorVALKey",
+                    Label = "VAL(line)",
+                    InputType = ParamInputType.ColorBox,
+                    GetDefault = p => p.ColoringParams.ColorVAL,
+                    OnChanged = _ =>  UpdateColorBox("ColorVALKey", val => Outside.ColoringParams.ColorVAL = val),
+                    IsVisible = () => isVA()
+                },
+                new()
+                {
+                    Region = "VA + POC",
+                    RegionOrder = 4,
+                    Key = "OpacityVAKey",
+                    Label = "Opacity(1-100)",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.OpacityVA.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateOpacity_VA("OpacityVAKey"),
+                    IsVisible = () => isVA()
+                },
+                new()
+                {
+                    Region = "VA + POC",
+                    RegionOrder = 4,
+                    Key = "LineStyleVAKey",
+                    Label = "LineStyle",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.ColoringParams.LineStyleVA.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(LineStyle)),
+                    OnChanged = _ => UpdateLineStyle_VA("LineStyleVAKey"),
+                    IsVisible = () => isVA()
+                },
+                new()
+                {
+                    Region = "VA + POC",
+                    RegionOrder = 4,
+                    Key = "ThicknessVAKey",
+                    Label = "Thickness",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.ThicknessVA.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateThickness_VA("ThicknessVAKey"),
+                    IsVisible = () => isVA()
+                },
+
 
                 new()
                 {
@@ -4526,7 +4738,7 @@ namespace cAlgo
                     InputType = ParamInputType.ComboBox,
                     GetDefault = p => p.NodesParams.ProfileSmooth_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(ProfileSmooth_Data)),
-                    OnChanged = _ => UpdateNodeSmooth()
+                    OnChanged = _ => UpdateNodeSmooth("NodeSmoothKey")
                 },
                 new()
                 {
@@ -4537,7 +4749,7 @@ namespace cAlgo
                     InputType = ParamInputType.ComboBox,
                     GetDefault = p => p.NodesParams.ProfileNode_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(ProfileNode_Data)),
-                    OnChanged = _ => UpdateNodeType()
+                    OnChanged = _ => UpdateNodeType("NodeTypeKey")
                 },
                 new()
                 {
@@ -4548,7 +4760,7 @@ namespace cAlgo
                     InputType = ParamInputType.ComboBox,
                     GetDefault = p => p.NodesParams.ShowNode_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(ShowNode_Data)),
-                    OnChanged = _ => UpdateShowNode(),
+                    OnChanged = _ => UpdateShowNode("ShowNodeKey"),
                 },
                 new()
                 {
@@ -4558,7 +4770,7 @@ namespace cAlgo
                     Label = "HVN Band(%)",
                     InputType = ParamInputType.Text,
                     GetDefault = p => p.NodesParams.bandHVN_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateHVN_Band(),
+                    OnChanged = _ => UpdateHVN_Band("HvnBandPctKey"),
                     IsVisible = () => isNodeBand()
                 },
                 new()
@@ -4569,7 +4781,7 @@ namespace cAlgo
                     Label = "LVN Band(%)",
                     InputType = ParamInputType.Text,
                     GetDefault = p => p.NodesParams.bandLVN_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateLVN_Band(),
+                    OnChanged = _ => UpdateLVN_Band("LvnBandPctKey"),
                     IsVisible = () => isNodeBand()
                 },
                 new()
@@ -4591,7 +4803,7 @@ namespace cAlgo
                     Label = "(%) >= POC",
                     InputType = ParamInputType.Text,
                     GetDefault = p => p.NodesParams.strongHVN_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateHVN_Strong(),
+                    OnChanged = _ => UpdateHVN_Strong("StrongHvnPctKey"),
                     IsVisible = () => Outside.NodesParams.onlyStrongNodes && isStrongHVN()
                 },
                 // 'Strong LVN' should be used by HVN_With_Bands, since the POCs are derived from LVN Split.
@@ -4604,7 +4816,7 @@ namespace cAlgo
                     Label = "(%) <= POC",
                     InputType = ParamInputType.Text,
                     GetDefault = p => p.NodesParams.strongLVN_Pct.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateLVN_Strong(),
+                    OnChanged = _ => UpdateLVN_Strong("StrongLvnPctKey"),
                     IsVisible = () => Outside.NodesParams.onlyStrongNodes && isStrongLVN()
                 },
                 new()
@@ -4625,7 +4837,7 @@ namespace cAlgo
                     Label = "Extend(count)",
                     InputType = ParamInputType.Text,
                     GetDefault = p => p.NodesParams.extendNodes_Count.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateExtendNodesCount(),
+                    OnChanged = _ => UpdateExtendNodesCount("ExtNodesCountKey"),
                     IsVisible = () => Outside.NodesParams.extendNodes
                 },
                 new()
@@ -4647,7 +4859,7 @@ namespace cAlgo
                     Label = "HVN(%)",
                     InputType = ParamInputType.Text,
                     GetDefault = p => p.NodesParams.pctileHVN_Value.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateHVN_Pctile(),
+                    OnChanged = _ => UpdateHVN_Pctile("HvnPctileKey"),
                     IsVisible = () => Outside.NodesParams.ProfileNode_Input == ProfileNode_Data.Percentile
                 },
                 new()
@@ -4658,7 +4870,7 @@ namespace cAlgo
                     Label = "LVN(%)",
                     InputType = ParamInputType.Text,
                     GetDefault = p => p.NodesParams.pctileLVN_Value.ToString("0.############################", CultureInfo.InvariantCulture),
-                    OnChanged = _ => UpdateLVN_Pctile(),
+                    OnChanged = _ => UpdateLVN_Pctile("LvnPctileKey"),
                     IsVisible = () => Outside.NodesParams.ProfileNode_Input == ProfileNode_Data.Percentile
                 },
                 new()
@@ -4672,6 +4884,135 @@ namespace cAlgo
                     OnChanged = _ => UpdateCheckbox("ExtNodeStartKey", val => Outside.NodesParams.extendNodes_FromStart = val),
                     IsVisible = () => Outside.NodesParams.extendNodes
                 },
+                
+                
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 5,
+                    Key = "ColorHVNKey",
+                    Label = "HVN",
+                    InputType = ParamInputType.ColorBox,
+                    GetDefault = p => p.ColoringParams.ColorHVN,
+                    OnChanged = _ =>  UpdateColorBox("ColorHVNKey", val => Outside.ColoringParams.ColorHVN = val),
+                    IsVisible = () => isHVN()
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 5,
+                    Key = "LineStyleHVNKey",
+                    Label = "LineStyle",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.ColoringParams.LineStyleHVN.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(LineStyle)),
+                    OnChanged = _ => UpdateLineStyle_HVN("LineStyleHVNKey"),
+                    IsVisible = () => isHVN()
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 5,
+                    Key = "ThicknessHVNKey",
+                    Label = "Thickness",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.ThicknessHVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateThickness_HVN("ThicknessHVNKey"),
+                    IsVisible = () => isHVN()
+                },
+
+                
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 5,
+                    Key = "ColorLVNKey",
+                    Label = "LVN",
+                    InputType = ParamInputType.ColorBox,
+                    GetDefault = p => p.ColoringParams.ColorLVN,
+                    OnChanged = _ =>  UpdateColorBox("ColorLVNKey", val => Outside.ColoringParams.ColorLVN = val),
+                    IsVisible = () => isLVN()
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 5,
+                    Key = "LineStyleLVNKey",
+                    Label = "LineStyle",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.ColoringParams.LineStyleLVN.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(LineStyle)),
+                    OnChanged = _ => UpdateLineStyle_LVN("LineStyleLVNKey"),
+                    IsVisible = () => isLVN()
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 5,
+                    Key = "ThicknessLVNKey",
+                    Label = "Thickness",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.ThicknessLVN.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateThickness_LVN("ThicknessLVNKey"),
+                    IsVisible = () => isLVN()
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 5,
+                    Key = "ColorBandKey",
+                    Label = "Band",
+                    InputType = ParamInputType.ColorBox,
+                    GetDefault = p => p.ColoringParams.ColorBand,
+                    OnChanged = _ =>  UpdateColorBox("ColorBandKey", val => Outside.ColoringParams.ColorBand = val),
+                    IsVisible = () => isBands()
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 5,
+                    Key = "ColorBandUpperKey",
+                    Label = "Upper(line)",
+                    InputType = ParamInputType.ColorBox,
+                    GetDefault = p => p.ColoringParams.ColorBand_Upper,
+                    OnChanged = _ =>  UpdateColorBox("ColorBandUpperKey", val => Outside.ColoringParams.ColorBand_Upper = val),
+                    IsVisible = () => isBands()
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 5,
+                    Key = "ColorBandLowerKey",
+                    Label = "Lower(line)",
+                    InputType = ParamInputType.ColorBox,
+                    GetDefault = p => p.ColoringParams.ColorBand_Lower,
+                    OnChanged = _ =>  UpdateColorBox("ColorBandLowerKey", val => Outside.ColoringParams.ColorBand_Lower = val),
+                    IsVisible = () => isBands()
+                },
+                
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 5,
+                    Key = "LineStyleBandsKey",
+                    Label = "LineStyle",
+                    InputType = ParamInputType.ComboBox,
+                    GetDefault = p => p.ColoringParams.LineStyleBands.ToString(),
+                    EnumOptions = () => Enum.GetNames(typeof(LineStyle)),
+                    OnChanged = _ => UpdateLineStyle_Bands("LineStyleBandsKey"),
+                    IsVisible = () => isBands()
+                },
+                new()
+                {
+                    Region = "HVN + LVN",
+                    RegionOrder = 5,
+                    Key = "ThicknessBandKey",
+                    Label = "Thickness",
+                    InputType = ParamInputType.Text,
+                    GetDefault = p => p.ColoringParams.ThicknessBands.ToString("0.############################", CultureInfo.InvariantCulture),
+                    OnChanged = _ => UpdateThickness_Bands("ThicknessBandKey"),
+                    IsVisible = () => isBands()
+                },
 
                 new()
                 {
@@ -4682,7 +5023,7 @@ namespace cAlgo
                     InputType = ParamInputType.ComboBox,
                     GetDefault = p => p.ProfileParams.UpdateProfile_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(UpdateProfile_Data)),
-                    OnChanged = _ => UpdateVP(),
+                    OnChanged = _ => UpdateVP("UpdateVPKey"),
                 },
                 new()
                 {
@@ -4693,7 +5034,7 @@ namespace cAlgo
                     InputType = ParamInputType.ComboBox,
                     GetDefault = p => "m1",
                     EnumOptions = () => Enum.GetNames(typeof(Supported_Sources)),
-                    OnChanged = _ => UpdateSourceVP(),
+                    OnChanged = _ => UpdateSourceVP("SourceVPKey"),
                 },
                 new()
                 {
@@ -4704,9 +5045,19 @@ namespace cAlgo
                     InputType = ParamInputType.ComboBox,
                     GetDefault = p => p.ProfileParams.Distribution_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(Distribution_Data)),
-                    OnChanged = _ => UpdateDistribution(),
+                    OnChanged = _ => UpdateDistribution("DistributionKey"),
                 },
 
+                new()
+                {
+                    Region = "Misc",
+                    RegionOrder = 6,
+                    Key = "ShowLabelsKey",
+                    Label = "Labels?",
+                    InputType = ParamInputType.Checkbox,
+                    GetDefault = p => p.ResultParams.ShowLabels,
+                    OnChanged = _ => UpdateCheckbox("ShowLabelsKey", val => Outside.ResultParams.ShowLabels = val),
+                },
                 new()
                 {
                     Region = "Misc",
@@ -4748,7 +5099,7 @@ namespace cAlgo
                     InputType = ParamInputType.ComboBox,
                     GetDefault = p => p.ResultParams.OperatorBuySell_Input.ToString(),
                     EnumOptions = () => Enum.GetNames(typeof(OperatorBuySell_Data)),
-                    OnChanged = _ => UpdateOperator(),
+                    OnChanged = _ => UpdateOperator("OperatorKey"),
                     IsVisible = () => isOperator()
                 },
             };
@@ -4862,7 +5213,7 @@ namespace cAlgo
                 _regionSections[group.Key] = section;
 
                 // param grid inside section
-                var groupGrid = new Grid(6, 5);
+                var groupGrid = new Grid(10, 5);
                 groupGrid.Columns[1].SetWidthInPixels(5);
                 groupGrid.Columns[3].SetWidthInPixels(5);
 
@@ -4896,6 +5247,7 @@ namespace cAlgo
                 ParamInputType.Text => CreateInputWithLabel(param.Label, param.GetDefault(FirstParams).ToString(), param.Key, param.OnChanged),
                 ParamInputType.Checkbox => CreateCheckboxWithLabel(param.Label, (bool)param.GetDefault(FirstParams), param.Key, param.OnChanged),
                 ParamInputType.ComboBox => CreateComboBoxWithLabel(param.Label, param.Key, (string)param.GetDefault(FirstParams), param.EnumOptions(), param.OnChanged),
+                ParamInputType.ColorBox => CreateColorBoxWithLabel(param.Label, (Color)param.GetDefault(FirstParams), param.Key, param.OnChanged),
                 _ => throw new NotSupportedException()
             };
         }
@@ -5063,6 +5415,30 @@ namespace cAlgo
 
             return stack;
         }
+        private ControlBase CreateColorBoxWithLabel(string label, Color defaultValue, string key, Action<string> onChanged)
+        {
+            var colorbox = new ColorPicker {
+                Margin = "0 0 0 0",
+                SelectedColor = defaultValue,
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            colorbox.SelectedColorChanged += _ => onChanged?.Invoke(key);
+            colorBoxMap[key] = colorbox;
+
+            var text = new TextBlock { Text = label, TextAlignment = TextAlignment.Center };
+            colorBoxTextMap[key] = text;
+
+            var stack = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                Margin = "0 10 0 10",
+            };
+
+            stack.AddChild(text);
+            stack.AddChild(colorbox);
+
+            return stack;
+        }
 
         private void ResetParamsEvent() => ChangeParams(FirstParams);
 
@@ -5080,6 +5456,9 @@ namespace cAlgo
                         break;
                     case ParamInputType.ComboBox:
                         comboBoxMap[param.Key].SelectedItem = param.GetDefault(p).ToString();
+                        break;
+                    case ParamInputType.ColorBox:
+                        colorBoxMap[param.Key].SelectedColor = (Color)param.GetDefault(p);
                         break;
                 }
             }
@@ -5125,24 +5504,27 @@ namespace cAlgo
                 case "ExtNodeStartKey":
                     RecalculateOutsideWithMsg(false);
                     return;
+                case "ShowLabelsKey":
+                    RecalculateOutsideWithMsg(false);
+                    return;
             }
 
             RecalculateOutsideWithMsg();
         }
 
         // ==== General ====
-        private void UpdateLookback()
+        private void UpdateLookback(string key)
         {
-            int value = int.TryParse(textInputMap["LookbackKey"].Text, out var n) ? n : -2;
+            int value = int.TryParse(textInputMap[key].Text, out var n) ? n : -2;
             if (value >= -1 && value != Outside.GetLookback())
             {
                 Outside.SetLookback(value);
                 SetApplyVisibility();
             }
         }
-        private void UpdateRowHeight()
+        private void UpdateRowHeight(string key)
         {
-            if (double.TryParse(textInputMap["RowHeightKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.1)
+            if (double.TryParse(textInputMap[key].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.1)
             {
                 double height = Outside.Symbol.PipSize * value;
                 if (height != Outside.GetRowHeight())
@@ -5152,9 +5534,9 @@ namespace cAlgo
                 }
             }
         }
-        private void UpdateVPInterval()
+        private void UpdateVPInterval(string key)
         {
-            var selected = comboBoxMap["VPIntervalKey"].SelectedItem;
+            var selected = comboBoxMap[key].SelectedItem;
             if (Enum.TryParse(selected, out VPInterval_Data intervalType) && intervalType != Outside.GeneralParams.VPInterval_Input)
             {
                 Outside.GeneralParams.VPInterval_Input = intervalType;
@@ -5164,36 +5546,36 @@ namespace cAlgo
         }
 
         // ==== Volume Profile ====
-        private void UpdateSideVP()
+        private void UpdateSideVP(string key)
         {
-            var selected = comboBoxMap["SideVPKey"].SelectedItem;
+            var selected = comboBoxMap[key].SelectedItem;
             if (Enum.TryParse(selected, out HistSide_Data sideType) && sideType != Outside.ProfileParams.HistogramSide_Input)
             {
                 Outside.ProfileParams.HistogramSide_Input = sideType;
                 RecalculateOutsideWithMsg(false);
             }
         }
-        private void UpdateWidthVP()
+        private void UpdateWidthVP(string key)
         {
-            var selected = comboBoxMap["WidthVPKey"].SelectedItem;
+            var selected = comboBoxMap[key].SelectedItem;
             if (Enum.TryParse(selected, out HistWidth_Data widthType) && widthType != Outside.ProfileParams.HistogramWidth_Input)
             {
                 Outside.ProfileParams.HistogramWidth_Input = widthType;
                 RecalculateOutsideWithMsg(false);
             }
         }
-        private void UpdateIntradayOffset()
+        private void UpdateIntradayOffset(string key)
         {
-            int value = int.TryParse(textInputMap["IntraOffsetKey"].Text, out var n) ? n : -1;
+            int value = int.TryParse(textInputMap[key].Text, out var n) ? n : -1;
             if (value > 0 && value != Outside.ProfileParams.OffsetBarsInput)
             {
                 Outside.ProfileParams.OffsetBarsInput = value;
                 RecalculateOutsideWithMsg(false);
             }
         }
-        private void UpdateIntradayTimeframe()
+        private void UpdateIntradayTimeframe(string key)
         {
-            var selected = comboBoxMap["IntraTFKey"].SelectedItem;
+            var selected = comboBoxMap[key].SelectedItem;
             TimeFrame value = StringToTimeframe(selected);
             if (value != TimeFrame.Minute && value != Outside.ProfileParams.OffsetTimeframeInput)
             {
@@ -5201,17 +5583,17 @@ namespace cAlgo
                 RecalculateOutsideWithMsg(false);
             }
         }
-        private void UpdateRangeSegments() {
-            var selected = comboBoxMap["FixedSegmentsKey"].SelectedItem;
+        private void UpdateRangeSegments(string key) {
+            var selected = comboBoxMap[key].SelectedItem;
             if (Enum.TryParse(selected, out SegmentsFixedRange_Data segmentsType) && segmentsType != Outside.ProfileParams.SegmentsFixedRange_Input)
             {
                 Outside.ProfileParams.SegmentsFixedRange_Input = segmentsType;
                 RecalculateOutsideWithMsg(false);
             }
         }
-        private void UpdateMiniVPTimeframe()
+        private void UpdateMiniVPTimeframe(string key)
         {
-            var selected = comboBoxMap["MiniTFKey"].SelectedItem;
+            var selected = comboBoxMap[key].SelectedItem;
             TimeFrame value = StringToTimeframe(selected);
             if (value != TimeFrame.Minute && value != Outside.ProfileParams.MiniVPs_Timeframe)
             {
@@ -5258,18 +5640,18 @@ namespace cAlgo
         }
 
         // ==== POC + VA ====
-        private void UpdatePercentVA()
+        private void UpdatePercentVA(string key)
         {
-            int value = int.TryParse(textInputMap["VAValueKey"].Text, out var n) ? n : -1;
+            int value = int.TryParse(textInputMap[key].Text, out var n) ? n : -1;
             if (value > 0 && value <= 100 && value != Outside.VAParams.PercentVA)
             {
                 Outside.VAParams.PercentVA = value;
                 SetApplyVisibility();
             }
         }
-        private void UpdateExtendCount()
+        private void UpdateExtendCount(string key)
         {
-            int value = int.TryParse(textInputMap["ExtendCountKey"].Text, out var n) ? n : -1;
+            int value = int.TryParse(textInputMap[key].Text, out var n) ? n : -1;
             if (value > 0 && value != Outside.VAParams.ExtendCount)
             {
                 Outside.VAParams.ExtendCount = value;
@@ -5278,9 +5660,9 @@ namespace cAlgo
         }
 
         // ==== Results ====
-        private void UpdateOperator()
+        private void UpdateOperator(string key)
         {
-            var selected = comboBoxMap["OperatorKey"].SelectedItem;
+            var selected = comboBoxMap[key].SelectedItem;
             if (Enum.TryParse(selected, out OperatorBuySell_Data op) && op != Outside.ResultParams.OperatorBuySell_Input)
             {
                 Outside.ResultParams.OperatorBuySell_Input = op;
@@ -5289,9 +5671,9 @@ namespace cAlgo
         }
 
         // ==== HVN + LVN ====
-        private void UpdateNodeSmooth()
+        private void UpdateNodeSmooth(string key)
         {
-            var selected = comboBoxMap["NodeSmoothKey"].SelectedItem;
+            var selected = comboBoxMap[key].SelectedItem;
             if (Enum.TryParse(selected, out ProfileSmooth_Data smoothType) && smoothType != Outside.NodesParams.ProfileSmooth_Input)
             {
                 Outside.NodesParams.ProfileSmooth_Input = smoothType;
@@ -5299,27 +5681,27 @@ namespace cAlgo
                 RecalculateOutsideWithMsg(false);
             }
         }
-        private void UpdateNodeType()
+        private void UpdateNodeType(string key)
         {
-            var selected = comboBoxMap["NodeTypeKey"].SelectedItem;
+            var selected = comboBoxMap[key].SelectedItem;
             if (Enum.TryParse(selected, out ProfileNode_Data nodeType) && nodeType != Outside.NodesParams.ProfileNode_Input)
             {
                 Outside.NodesParams.ProfileNode_Input = nodeType;
                 RecalculateOutsideWithMsg(false);
             }
         }
-        private void UpdateShowNode()
+        private void UpdateShowNode(string key)
         {
-            var selected = comboBoxMap["ShowNodeKey"].SelectedItem;
+            var selected = comboBoxMap[key].SelectedItem;
             if (Enum.TryParse(selected, out ShowNode_Data showNodeType) && showNodeType != Outside.NodesParams.ShowNode_Input)
             {
                 Outside.NodesParams.ShowNode_Input = showNodeType;
                 RecalculateOutsideWithMsg(false);
             }
         }
-        private void UpdateHVN_Band()
+        private void UpdateHVN_Band(string key)
         {
-            if (double.TryParse(textInputMap["HvnBandPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
+            if (double.TryParse(textInputMap[key].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
             {
                 if (value != Outside.NodesParams.bandHVN_Pct)
                 {
@@ -5328,9 +5710,9 @@ namespace cAlgo
                 }
             }
         }
-        private void UpdateLVN_Band()
+        private void UpdateLVN_Band(string key)
         {
-            if (double.TryParse(textInputMap["LvnBandPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
+            if (double.TryParse(textInputMap[key].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
             {
                 if (value != Outside.NodesParams.bandLVN_Pct)
                 {
@@ -5339,9 +5721,9 @@ namespace cAlgo
                 }
             }
         }
-        private void UpdateHVN_Strong()
+        private void UpdateHVN_Strong(string key)
         {
-            if (double.TryParse(textInputMap["StrongHvnPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
+            if (double.TryParse(textInputMap[key].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
             {
                 if (value != Outside.NodesParams.strongHVN_Pct)
                 {
@@ -5350,9 +5732,9 @@ namespace cAlgo
                 }
             }
         }
-        private void UpdateLVN_Strong()
+        private void UpdateLVN_Strong(string key)
         {
-            if (double.TryParse(textInputMap["StrongLvnPctKey"].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
+            if (double.TryParse(textInputMap[key].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0.9)
             {
                 if (value != Outside.NodesParams.strongLVN_Pct)
                 {
@@ -5361,27 +5743,27 @@ namespace cAlgo
                 }
             }
         }
-        private void UpdateExtendNodesCount() 
+        private void UpdateExtendNodesCount(string key) 
         {
-            int value = int.TryParse(textInputMap["ExtNodesCountKey"].Text, out var n) ? n : -1;
+            int value = int.TryParse(textInputMap[key].Text, out var n) ? n : -1;
             if (value > 0 && value != Outside.NodesParams.extendNodes_Count)
             {
                 Outside.NodesParams.extendNodes_Count = value;
                 RecalculateOutsideWithMsg(false);
             }
         }
-        private void UpdateHVN_Pctile()
+        private void UpdateHVN_Pctile(string key)
         {
-            int value = int.TryParse(textInputMap["HvnPctileKey"].Text, out var n) ? n : -1;
+            int value = int.TryParse(textInputMap[key].Text, out var n) ? n : -1;
             if (value > 0 && value != Outside.NodesParams.pctileHVN_Value)
             {
                 Outside.NodesParams.pctileHVN_Value = value;
                 SetApplyVisibility();
             }
         }
-        private void UpdateLVN_Pctile()
+        private void UpdateLVN_Pctile(string key)
         {
-            int value = int.TryParse(textInputMap["LvnPctileKey"].Text, out var n) ? n : -1;
+            int value = int.TryParse(textInputMap[key].Text, out var n) ? n : -1;
             if (value > 0 && value != Outside.NodesParams.pctileLVN_Value)
             {
                 Outside.NodesParams.pctileLVN_Value = value;
@@ -5389,8 +5771,121 @@ namespace cAlgo
             }
         }
 
+        // ==== Coloring ====
+        private void UpdateColorBox(string key, Action<Color> applyAction)
+        {
+            Color value = colorBoxMap[key].SelectedColor;
+            applyAction(value);
+            // Static Update => Always
+            RecalculateOutsideWithMsg(false);
+        }
+        // ==== Coloring/LineStyles ====
+        private void UpdateLineStyle_POC(string key)
+        {
+            var selected = comboBoxMap[key].SelectedItem;
+            if (Enum.TryParse(selected, out LineStyle updateType) && updateType != Outside.ColoringParams.LineStylePOC)
+            {
+                Outside.ColoringParams.LineStylePOC = updateType;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
+        private void UpdateLineStyle_VA(string key)
+        {
+            var selected = comboBoxMap[key].SelectedItem;
+            if (Enum.TryParse(selected, out LineStyle updateType) && updateType != Outside.ColoringParams.LineStyleVA)
+            {
+                Outside.ColoringParams.LineStyleVA = updateType;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
+        
+        private void UpdateLineStyle_HVN(string key)
+        {
+            var selected = comboBoxMap[key].SelectedItem;
+            if (Enum.TryParse(selected, out LineStyle updateType) && updateType != Outside.ColoringParams.LineStyleHVN)
+            {
+                Outside.ColoringParams.LineStyleHVN = updateType;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
+        private void UpdateLineStyle_LVN(string key)
+        {
+            var selected = comboBoxMap[key].SelectedItem;
+            if (Enum.TryParse(selected, out LineStyle updateType) && updateType != Outside.ColoringParams.LineStyleLVN)
+            {
+                Outside.ColoringParams.LineStyleLVN = updateType;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
+        private void UpdateLineStyle_Bands(string key)
+        {
+            var selected = comboBoxMap[key].SelectedItem;
+            if (Enum.TryParse(selected, out LineStyle updateType) && updateType != Outside.ColoringParams.LineStyleBands)
+            {
+                Outside.ColoringParams.LineStyleBands = updateType;
+                RecalculateOutsideWithMsg(false);
+            }
+        }
+        
+        // ==== Coloring/Thickness ====
+        private void UpdateThickness_POC(string key)
+        {
+            int value = int.TryParse(textInputMap[key].Text, out var n) ? n : -1;
+            if (value > 0 && value != Outside.ColoringParams.ThicknessPOC)
+            {
+                Outside.ColoringParams.ThicknessPOC = value;
+                SetApplyVisibility();
+            }
+        }
+        private void UpdateOpacity_VA(string key)
+        {
+            int value = int.TryParse(textInputMap[key].Text, out var n) ? n : -1;
+            if (value > 0 && value != Outside.ColoringParams.OpacityVA)
+            {
+                Outside.ColoringParams.OpacityVA = value;
+                SetApplyVisibility();
+            }
+        }
+        private void UpdateThickness_VA(string key)
+        {
+            int value = int.TryParse(textInputMap[key].Text, out var n) ? n : -1;
+            if (value > 0 && value != Outside.ColoringParams.ThicknessVA)
+            {
+                Outside.ColoringParams.ThicknessVA = value;
+                SetApplyVisibility();
+            }
+        }
+
+        private void UpdateThickness_HVN(string key)
+        {
+            int value = int.TryParse(textInputMap[key].Text, out var n) ? n : -1;
+            if (value > 0 && value != Outside.ColoringParams.ThicknessHVN)
+            {
+                Outside.ColoringParams.ThicknessHVN = value;
+                SetApplyVisibility();
+            }
+        }
+        private void UpdateThickness_LVN(string key)
+        {
+            int value = int.TryParse(textInputMap[key].Text, out var n) ? n : -1;
+            if (value > 0 && value != Outside.ColoringParams.ThicknessLVN)
+            {
+                Outside.ColoringParams.ThicknessLVN = value;
+                SetApplyVisibility();
+            }
+        }
+        private void UpdateThickness_Bands(string key)
+        {
+            int value = int.TryParse(textInputMap[key].Text, out var n) ? n : -1;
+            if (value > 0 && value != Outside.ColoringParams.ThicknessBands)
+            {
+                Outside.ColoringParams.ThicknessBands = value;
+                SetApplyVisibility();
+            }
+        }
+
         // ==== Misc ====
-        private void UpdateVP()
+        private void UpdateVP(string key)
         {
             var selected = comboBoxMap["UpdateVPKey"].SelectedItem;
             if (Enum.TryParse(selected, out UpdateProfile_Data updateType) && updateType != Outside.ProfileParams.UpdateProfile_Input)
@@ -5399,7 +5894,7 @@ namespace cAlgo
                 RecalculateOutsideWithMsg(false);
             }
         }
-        private void UpdateSourceVP()
+        private void UpdateSourceVP(string key)
         {
             var selected = comboBoxMap["SourceVPKey"].SelectedItem;
             TimeFrame value = StringToTimeframe(selected);
@@ -5410,7 +5905,7 @@ namespace cAlgo
                 RecalculateOutsideWithMsg();
             }
         }
-        private void UpdateDistribution()
+        private void UpdateDistribution(string key)
         {
             var selected = comboBoxMap["DistributionKey"].SelectedItem;
             if (Enum.TryParse(selected, out Distribution_Data distributionType) && distributionType != Outside.ProfileParams.Distribution_Input)
@@ -5520,6 +6015,10 @@ namespace cAlgo
                         checkBoxMap[param.Key].IsVisible = isVisible;
                         checkBoxTextMap[param.Key].IsVisible = isVisible;
                         break;
+                    case ParamInputType.ColorBox:
+                        colorBoxMap[param.Key].IsVisible = isVisible;
+                        colorBoxTextMap[param.Key].IsVisible = isVisible;
+                        break;
                 }
             }
 
@@ -5533,6 +6032,7 @@ namespace cAlgo
                         ParamInputType.Text => textInputMap[p.Key].IsVisible || textInputLabelMap[p.Key].IsVisible,
                         ParamInputType.ComboBox => comboBoxMap[p.Key].IsVisible || comboBoxTextMap[p.Key].IsVisible,
                         ParamInputType.Checkbox => checkBoxMap[p.Key].IsVisible || checkBoxTextMap[p.Key].IsVisible,
+                        ParamInputType.ColorBox => colorBoxMap[p.Key].IsVisible || colorBoxTextMap[p.Key].IsVisible,
                         _ => false
                     };
                 });
@@ -5555,6 +6055,7 @@ namespace cAlgo
                     ParamInputType.Text => (object)textInputMap[param.Key].Text,
                     ParamInputType.Checkbox => (object)(checkBoxMap[param.Key].IsChecked ?? false),
                     ParamInputType.ComboBox => (object)comboBoxMap[param.Key].SelectedItem,
+                    ParamInputType.ColorBox => (object)colorBoxMap[param.Key].SelectedColor,
                     _ => null
                 };
 
@@ -5590,6 +6091,9 @@ namespace cAlgo
                     case ParamInputType.ComboBox:
                         comboBoxTextMap[param.Key].FontStyle = fontStyle;
                         comboBoxMap[param.Key].FontStyle = fontStyle;
+                        break;
+                    case ParamInputType.ColorBox:
+                        colorBoxTextMap[param.Key].FontStyle = fontStyle;
                         break;
                 }
             }
@@ -5645,6 +6149,7 @@ namespace cAlgo
                     ParamInputType.Text => textInputMap[param.Key].Text,
                     ParamInputType.Checkbox => checkBoxMap[param.Key].IsChecked ?? false,
                     ParamInputType.ComboBox => comboBoxMap[param.Key].SelectedItem,
+                    ParamInputType.ColorBox => colorBoxMap[param.Key].SelectedColor.ToHexString(),
                     _ => null
                 };
 
@@ -5705,6 +6210,11 @@ namespace cAlgo
                     case ParamInputType.ComboBox:
                         if (comboBoxMap.ContainsKey(param.Key))
                             comboBoxMap[param.Key].SelectedItem = storedValue.ToString();
+                        param.OnChanged?.Invoke(param.Key);
+                        break;
+                    case ParamInputType.ColorBox:
+                        if (storedValue is string c)
+                            colorBoxMap[param.Key].SelectedColor = Color.FromHex(c);
                         param.OnChanged?.Invoke(param.Key);
                         break;
                 }
