@@ -4982,10 +4982,10 @@ namespace cAlgo
             SymbolPrefix = SymbolPrefix.ToUpperInvariant();
 
             string dynamicKey = Outside.StorageKeyConfig_Input switch {
-                StorageKeyConfig_Data.Symbol => $"AnchVWAP {SymbolPrefix}",
-                StorageKeyConfig_Data.Symbol_Timeframe => $"AnchVWAP {SymbolPrefix} {TimeframePrefix}",
-                StorageKeyConfig_Data.Broker_Symbol => $"AnchVWAP {BrokerPrefix} {SymbolPrefix}",
-                _ => $"AnchVWAP {BrokerPrefix} {SymbolPrefix} {TimeframePrefix}",
+                StorageKeyConfig_Data.Symbol => $"WWS {SymbolPrefix}",
+                StorageKeyConfig_Data.Symbol_Timeframe => $"WWS {SymbolPrefix} {TimeframePrefix}",
+                StorageKeyConfig_Data.Broker_Symbol => $"WWS {BrokerPrefix} {SymbolPrefix}",
+                _ => $"WWS {BrokerPrefix} {SymbolPrefix} {TimeframePrefix}",
             };
             return dynamicKey;
         }
