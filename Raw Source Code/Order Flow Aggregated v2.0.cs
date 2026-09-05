@@ -27,6 +27,7 @@ From srl-python-indicators/notebooks/REAME.MD:
 ===========================
 
 What's new in rev. 2.1?
+- Improve Performance Drawing (live-drawing)
 - Coloring Customization directly in params-panel instead of the standard input.
 - (ODF) Bubbles Chart => Add "View" option [asEllipse, asText]
 - (Fix) Bubbles Chart => [Subtract_Delta, Sum_Delta] sources always display "0"(zero)
@@ -1104,31 +1105,16 @@ namespace cAlgo
               - DrawInfo is the current Bar object info.
             */
             public Dictionary<int, Dictionary<string, DrawInfo>> redrawInfos = new();
-            /*
-              For real-time market:
-              - intKey is always [0]
-              - stringKey is the DrawInfo.Id (object name)
-              - DrawInfo is the current Bar object info.
-            */
-            public Dictionary<int, Dictionary<string, DrawInfo>> currentToRedraw = new();
 
             // It's fine to just keep the objects name as keys,
             // since hiddenInfos is populated/updated at each drawing.
             public Dictionary<string, ChartObject> hiddenInfos = new();
-            /*
-              For real-time market:
-              - intKey is always [0]
-              - stringKey is the DrawInfo.Id (object name)
-              - DrawInfo is the current Bar object.
-            */
-            public Dictionary<int, Dictionary<string, ChartObject>> currentToHidden = new();
+
             public ChartStaticText staticText_DebugPerfDraw;
 
             public void ClearAll() {
                 hiddenInfos.Clear();
                 redrawInfos.Clear();
-                currentToHidden.Clear();
-                currentToRedraw.Clear();
             }
         }
         private readonly PerfDrawingObjs_Info PerfDrawingObjs = new();
@@ -1310,7 +1296,6 @@ namespace cAlgo
             // Performance Drawing
             Chart.ZoomChanged += PerformanceDrawing;
             Chart.ScrollChanged += PerformanceDrawing;
-            Bars.BarOpened += LiveDrawing;
 
             // Required to recalculate the histograms in Live Market
             string currentTimeframe = Chart.TimeFrame.ToString();
@@ -2194,13 +2179,8 @@ namespace cAlgo
                             Color spikeBySideColor = deltaValue > 0 ? ColoringParams.BuyColor : ColoringParams.SellColor;
                             
                             // For real-time - "repaint/update" the spike price level.
-                            if (IsLastBar) {
+                            if (IsLastBar)
                                 Chart.RemoveObject($"{iStart}_{i}_Spike");
-                                if (DrawingStrategy_Input == DrawingStrategy_Data.Redraw_Fastest)
-                                    PerfDrawingObjs.currentToRedraw.Clear();
-                                else 
-                                    PerfDrawingObjs.currentToHidden.Clear();
-                            }
 
                             bool isSpikeAverage = rowStrength > lowValue;
                             if (isSpikeAverage || SpikeFilterParams.EnableSpikeChart)
@@ -6210,11 +6190,7 @@ namespace cAlgo
                     PerfDrawingObjs.hiddenInfos[info.Id] = obj;
                 } else {
                     ChartObject obj = CreateDraw(info);
-                    // Replace current obj
-                    if (!PerfDrawingObjs.currentToHidden.ContainsKey(0))
-                        PerfDrawingObjs.currentToHidden[0] = new Dictionary<string, ChartObject>();
-                    else
-                        PerfDrawingObjs.currentToHidden[0][info.Id] = obj;
+                    PerfDrawingObjs.hiddenInfos[obj.Name] = obj;
                 }
             }
             else
@@ -6230,32 +6206,10 @@ namespace cAlgo
                     else {
                         // Create drawing and replace current infos
                         CreateDraw(info);
-                        if (!PerfDrawingObjs.currentToRedraw.ContainsKey(0))
-                            PerfDrawingObjs.currentToRedraw[0] = new Dictionary<string, DrawInfo>();
-                        else
-                            PerfDrawingObjs.currentToRedraw[0][info.Id] = info;
+                        
+                        PerfDrawingObjs.redrawInfos[info.BarIndex][info.Id] = info;
                     }
                 }
-            }
-        }
-        private void LiveDrawing(BarOpenedEventArgs obj) {
-            // Working with Lists in Calculate() is painful.
-
-            if (DrawingStrategy_Input == DrawingStrategy_Data.Hidden_Slowest) {
-                List<ChartObject> objList = PerfDrawingObjs.currentToHidden[0].Values.ToList();
-
-                foreach (var drawObj in objList)
-                    PerfDrawingObjs.hiddenInfos[drawObj.Name] = drawObj;
-
-                PerfDrawingObjs.currentToHidden.Clear();
-            }
-            else {
-                List<DrawInfo> drawList = PerfDrawingObjs.currentToRedraw[0].Values.ToList();
-                foreach (DrawInfo info in drawList) {
-                    PerfDrawingObjs.redrawInfos[drawList.FirstOrDefault().BarIndex][info.Id] = info;
-                }
-
-                PerfDrawingObjs.currentToRedraw.Clear();
             }
         }
 
